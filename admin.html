@@ -324,6 +324,52 @@
 
             <!-- TAB 3: DEPOSITS -->
             <div id="tab-deposits" class="hidden">
+                <!-- DYNAMIC PAYMENT DETAILS MANAGER (UPI / QR / USDT / ARPAY) -->
+                <div class="card" style="border:1px solid #d9ac4f; margin-bottom:16px;">
+                    <div class="card-title" style="color:#fae59f; display:flex; justify-content:space-between; align-items:center;">
+                        <span>💳 Deposit Payment Details (UPI ID / Custom QR / USDT)</span>
+                        <span id="pay-cfg-badge" style="font-size:12px; padding:4px 8px; border-radius:4px; background:#065f46; color:#34d399;">Live Synced</span>
+                    </div>
+                    <p style="font-size:12px; color:#cbd5e1; margin:8px 0 12px; line-height:1.5;">
+                        Yahan jo bhi <strong>UPI ID</strong>, <strong>QR Code</strong> ya <strong>USDT Address</strong> save karenge, wo turant sabhi players ke <strong>Deposit</strong> page par live dikhega!
+                    </p>
+                    <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(210px, 1fr)); gap:10px; margin-bottom:10px;">
+                        <div>
+                            <label style="font-size:11px; color:#94a3b8; display:block; margin-bottom:4px;">Official UPI ID (Required)</label>
+                            <input type="text" id="admin-pay-upi" class="input-text" style="width:100%; margin:0;" placeholder="e.g. yourname@ybl or merchant@okaxis">
+                        </div>
+                        <div>
+                            <label style="font-size:11px; color:#94a3b8; display:block; margin-bottom:4px;">Payee / Account Name</label>
+                            <input type="text" id="admin-pay-name" class="input-text" style="width:100%; margin:0;" placeholder="e.g. ASGames">
+                        </div>
+                        <div>
+                            <label style="font-size:11px; color:#94a3b8; display:block; margin-bottom:4px;">ARPay / Backup UPI ID (Optional)</label>
+                            <input type="text" id="admin-pay-arpay" class="input-text" style="width:100%; margin:0;" placeholder="Leave blank to use Official UPI">
+                        </div>
+                        <div>
+                            <label style="font-size:11px; color:#94a3b8; display:block; margin-bottom:4px;">USDT (TRC20) Wallet Address</label>
+                            <input type="text" id="admin-pay-usdt" class="input-text" style="width:100%; margin:0;" placeholder="T... TRC20 address">
+                        </div>
+                    </div>
+
+                    <div style="display:flex; gap:12px; flex-wrap:wrap; align-items:center; background:#0f172a; padding:12px; border-radius:8px; border:1px solid #334155; margin-bottom:10px;">
+                        <div style="flex:1; min-width:220px;">
+                            <label style="font-size:11px; color:#fae59f; font-weight:700; display:block; margin-bottom:6px;">📷 Custom UPI QR Image (Optional — PhonePe / GPay / Paytm QR)</label>
+                            <input type="file" id="admin-pay-qr-file" accept="image/*" style="font-size:12px; color:#cbd5e1; margin-bottom:8px;" onchange="handleAdminQrUpload(this)">
+                            <input type="text" id="admin-pay-qr-url" class="input-text" style="width:100%; margin:0; font-size:12px;" placeholder="Or paste QR Image URL (blank = Auto-Generated UPI QR)" oninput="updateAdminQrPreview()">
+                        </div>
+                        <div style="text-align:center;">
+                            <img id="admin-pay-qr-preview" src="" alt="QR Preview" style="width:92px; height:92px; border-radius:8px; background:#fff; padding:4px; object-fit:contain; display:block; margin:0 auto 6px;">
+                            <button type="button" class="btn-action" style="background:#475569; color:#fff; font-size:11px; padding:4px 8px;" onclick="clearAdminCustomQr()">Use Auto QR</button>
+                        </div>
+                    </div>
+
+                    <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+                        <button class="btn-primary" style="background:linear-gradient(90deg, #fae59f, #c4933f); color:#3b2608; font-weight:800; width:auto; padding:10px 22px; font-size:13px;" onclick="saveAdminPaymentDetails()">💾 Save Payment Details</button>
+                        <span id="pay-save-status" style="font-size:12px; font-weight:600;"></span>
+                    </div>
+                </div>
+
                 <div class="card">
                     <div class="card-title">Pending Recharge Requests (Approve / Reject)</div>
                     <table>
@@ -722,6 +768,7 @@
         }
 
         async function loadDeposits() {
+            loadAdminPaymentDetails();
             const res = await fetch('/api/admin/deposits', { headers: { 'x-admin-key': adminKey } });
             const d = await res.json();
             const tbody = document.getElementById('deposits-tbody');
@@ -929,6 +976,104 @@
             } catch (e) {
                 st.style.color = '#ef4444';
                 st.textContent = '✗ Failed to create gift code.';
+            }
+        }
+
+        async function loadAdminPaymentDetails() {
+            try {
+                const res = await fetch('/api/payment-details');
+                const d = await res.json();
+                if (!d.success) return;
+                const upiInp = document.getElementById('admin-pay-upi');
+                const nameInp = document.getElementById('admin-pay-name');
+                const arInp = document.getElementById('admin-pay-arpay');
+                const usdtInp = document.getElementById('admin-pay-usdt');
+                const qrInp = document.getElementById('admin-pay-qr-url');
+                if (upiInp) upiInp.value = d.upi_id || '';
+                if (nameInp) nameInp.value = d.upi_name || 'ASGames';
+                if (arInp) arInp.value = (d.arpay_upi && d.arpay_upi !== d.upi_id) ? d.arpay_upi : '';
+                if (usdtInp) usdtInp.value = d.usdt_address || '';
+                if (qrInp) qrInp.value = d.qr_url || '';
+                updateAdminQrPreview();
+            } catch (e) {}
+        }
+
+        function updateAdminQrPreview() {
+            const prev = document.getElementById('admin-pay-qr-preview');
+            if (!prev) return;
+            const customQr = (document.getElementById('admin-pay-qr-url')?.value || '').trim();
+            const upi = (document.getElementById('admin-pay-upi')?.value || 'asgames@upi').trim();
+            const name = (document.getElementById('admin-pay-name')?.value || 'ASGames').trim();
+            if (customQr) {
+                prev.src = customQr;
+            } else {
+                const upiUri = `upi://pay?pa=${upi}&pn=${name}&cu=INR`;
+                prev.src = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&margin=4&data=${encodeURIComponent(upiUri)}`;
+            }
+        }
+
+        function clearAdminCustomQr() {
+            const qrInp = document.getElementById('admin-pay-qr-url');
+            const fInp = document.getElementById('admin-pay-qr-file');
+            if (qrInp) qrInp.value = '';
+            if (fInp) fInp.value = '';
+            updateAdminQrPreview();
+        }
+
+        function handleAdminQrUpload(input) {
+            const file = input.files && input.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const img = new Image();
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    const maxDim = 280;
+                    const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+                    canvas.width = Math.round(img.width * scale);
+                    canvas.height = Math.round(img.height * scale);
+                    const ctx = canvas.getContext('2d');
+                    ctx.fillStyle = '#ffffff';
+                    ctx.fillRect(0, 0, canvas.width, canvas.height);
+                    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                    const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+                    const qrInp = document.getElementById('admin-pay-qr-url');
+                    if (qrInp) qrInp.value = dataUrl;
+                    updateAdminQrPreview();
+                };
+                img.src = e.target.result;
+            };
+            reader.readAsDataURL(file);
+        }
+
+        async function saveAdminPaymentDetails() {
+            const upi_id = (document.getElementById('admin-pay-upi')?.value || '').trim();
+            const upi_name = (document.getElementById('admin-pay-name')?.value || 'ASGames').trim();
+            const arpay_upi = (document.getElementById('admin-pay-arpay')?.value || '').trim();
+            const usdt_address = (document.getElementById('admin-pay-usdt')?.value || '').trim();
+            const qr_url = (document.getElementById('admin-pay-qr-url')?.value || '').trim();
+            const st = document.getElementById('pay-save-status');
+
+            if (!upi_id) {
+                st.style.color = '#ef4444';
+                st.textContent = '✗ Please enter your Official UPI ID first!';
+                return;
+            }
+            st.style.color = '#38bdf8';
+            st.textContent = 'Saving payment details...';
+            try {
+                const res = await fetch('/api/admin/payment-details', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'x-admin-key': adminKey },
+                    body: JSON.stringify({ upi_id, upi_name, arpay_upi, usdt_address, qr_url })
+                });
+                const d = await res.json();
+                st.style.color = d.success ? '#10b981' : '#ef4444';
+                st.textContent = (d.success ? '✓ ' : '✗ ') + d.message;
+                updateAdminQrPreview();
+            } catch (e) {
+                st.style.color = '#ef4444';
+                st.textContent = '✗ Failed to save payment details.';
             }
         }
 

@@ -84,8 +84,8 @@ async function sendGmailOTP(toEmail, otpCode, purpose) {
 const app = express();
 const PORT = process.env.PORT || 10000;
 
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: '5mb' }));
+app.use(express.urlencoded({ extended: true, limit: '5mb' }));
 app.use(express.static(path.join(__dirname)));
 
 // ========================================================
@@ -971,6 +971,43 @@ app.post('/api/admin/gmail-settings', requireAdmin, async (req, res) => {
             await DB.run('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ['email_webhook_url', email_webhook_url]);
         }
         res.json({ success: true, message: 'Gmail OTP settings saved! Live inbox OTP delivery is ready.' });
+    } catch (e) {
+        res.status(500).json({ success: false, message: e.message });
+    }
+});
+
+// ========================================================
+// DYNAMIC PAYMENT & DEPOSIT DETAILS APIS (ADMIN -> PLAYERS)
+// ========================================================
+app.get('/api/payment-details', async (req, res) => {
+    const s = DB.data.settings || {};
+    res.json({
+        success: true,
+        upi_id: s.deposit_upi_id || 'asgames@upi',
+        upi_name: s.deposit_upi_name || 'ASGames',
+        arpay_upi: s.deposit_arpay_upi || s.deposit_upi_id || 'asgames@upi',
+        usdt_address: s.deposit_usdt_address || 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t',
+        qr_url: s.deposit_qr_url || ''
+    });
+});
+
+app.post('/api/admin/payment-details', requireAdmin, async (req, res) => {
+    try {
+        const upi_id = String(req.body.upi_id || '').trim();
+        const upi_name = String(req.body.upi_name || 'ASGames').trim();
+        const arpay_upi = String(req.body.arpay_upi || '').trim();
+        const usdt_address = String(req.body.usdt_address || '').trim();
+        const qr_url = String(req.body.qr_url || '').trim();
+
+        if (!upi_id) return res.json({ success: false, message: 'Official UPI ID is required.' });
+
+        await DB.run('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ['deposit_upi_id', upi_id]);
+        await DB.run('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ['deposit_upi_name', upi_name || 'ASGames']);
+        await DB.run('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ['deposit_arpay_upi', arpay_upi]);
+        await DB.run('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ['deposit_usdt_address', usdt_address]);
+        await DB.run('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ['deposit_qr_url', qr_url]);
+
+        res.json({ success: true, message: 'Payment details updated! All players will now see your new UPI/QR/USDT details.' });
     } catch (e) {
         res.status(500).json({ success: false, message: e.message });
     }

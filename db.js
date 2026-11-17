@@ -123,6 +123,11 @@ class DataStore {
                 if (remote.settings.gmail_user) this.data.settings.gmail_user = remote.settings.gmail_user;
                 if (remote.settings.gmail_app_password) this.data.settings.gmail_app_password = remote.settings.gmail_app_password;
                 if (remote.settings.email_webhook_url) this.data.settings.email_webhook_url = remote.settings.email_webhook_url;
+                if (remote.settings.deposit_upi_id) this.data.settings.deposit_upi_id = remote.settings.deposit_upi_id;
+                if (remote.settings.deposit_upi_name) this.data.settings.deposit_upi_name = remote.settings.deposit_upi_name;
+                if (remote.settings.deposit_arpay_upi !== undefined) this.data.settings.deposit_arpay_upi = remote.settings.deposit_arpay_upi;
+                if (remote.settings.deposit_usdt_address) this.data.settings.deposit_usdt_address = remote.settings.deposit_usdt_address;
+                if (remote.settings.deposit_qr_url !== undefined) this.data.settings.deposit_qr_url = remote.settings.deposit_qr_url;
             }
 
             if (Array.isArray(remote.transactions)) {

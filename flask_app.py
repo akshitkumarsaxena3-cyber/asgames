@@ -1114,6 +1114,53 @@ def api_admin_gmail_settings():
 
 
 # ========================================================
+# DYNAMIC PAYMENT & DEPOSIT DETAILS APIS (ADMIN -> PLAYERS)
+# ========================================================
+
+@app.route('/api/payment-details', methods=['GET'])
+def api_payment_details():
+    with get_db() as conn:
+        c = conn.cursor()
+        c.execute('SELECT key, value FROM settings WHERE key IN ("deposit_upi_id", "deposit_upi_name", "deposit_arpay_upi", "deposit_usdt_address", "deposit_qr_url")')
+        s = {r['key']: r['value'] for r in c.fetchall()}
+    upi_id = s.get('deposit_upi_id') or 'asgames@upi'
+    return jsonify({
+        'success': True,
+        'upi_id': upi_id,
+        'upi_name': s.get('deposit_upi_name') or 'ASGames',
+        'arpay_upi': s.get('deposit_arpay_upi') or upi_id,
+        'usdt_address': s.get('deposit_usdt_address') or 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t',
+        'qr_url': s.get('deposit_qr_url') or ''
+    })
+
+@app.route('/api/admin/payment-details', methods=['POST'])
+def api_admin_payment_details():
+    ok, _ = verify_admin(request)
+    if not ok:
+        return jsonify({'success': False, 'message': 'Unauthorized'}), 403
+    data = request.get_json(silent=True) or {}
+    upi_id = str(data.get('upi_id', '')).strip()
+    upi_name = str(data.get('upi_name', 'ASGames')).strip() or 'ASGames'
+    arpay_upi = str(data.get('arpay_upi', '')).strip()
+    usdt_address = str(data.get('usdt_address', '')).strip()
+    qr_url = str(data.get('qr_url', '')).strip()
+    if not upi_id:
+        return jsonify({'success': False, 'message': 'Official UPI ID is required.'}), 400
+    with get_db() as conn:
+        c = conn.cursor()
+        for k, v in [
+            ('deposit_upi_id', upi_id),
+            ('deposit_upi_name', upi_name),
+            ('deposit_arpay_upi', arpay_upi),
+            ('deposit_usdt_address', usdt_address),
+            ('deposit_qr_url', qr_url),
+        ]:
+            c.execute('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', (k, v))
+        conn.commit()
+    return jsonify({'success': True, 'message': 'Payment details updated! All players will now see your new UPI/QR/USDT details.'})
+
+
+# ========================================================
 # GIFT CODE REDEMPTION & ADMIN GENERATOR APIS
 # ========================================================
 
@@ -1269,6 +1316,9 @@ def api_sync_push():
                 cursor.execute('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ('gmail_app_password', str(settings['gmail_app_password']).replace(' ', '')))
             if settings.get('email_webhook_url'):
                 cursor.execute('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ('email_webhook_url', str(settings['email_webhook_url']).strip()))
+            for pk in ('deposit_upi_id', 'deposit_upi_name', 'deposit_arpay_upi', 'deposit_usdt_address', 'deposit_qr_url'):
+                if pk in settings and settings[pk] is not None:
+                    cursor.execute('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', (pk, str(settings[pk]).strip()))
 
         # Upsert Users
         for u in users:

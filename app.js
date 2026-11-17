@@ -545,6 +545,7 @@ class StateManager {
     openRechargeModal() {
         const modal = document.getElementById('recharge-modal');
         if (modal) modal.classList.remove('hidden');
+        if (typeof fetchLivePaymentDetails === 'function') fetchLivePaymentDetails();
         if (typeof updateDepositButtonState === 'function') updateDepositButtonState();
         if (typeof loadDepositPageHistory === 'function') loadDepositPageHistory();
         if (window.sound) window.sound.click();
@@ -1799,7 +1800,32 @@ function clearDepositAmount() {
     updateDepositButtonState();
 }
 
-function openDepositCheckoutSheet() {
+window._livePaymentDetails = {
+    upi_id: 'asgames@upi',
+    upi_name: 'ASGames',
+    arpay_upi: 'asgames@upi',
+    usdt_address: 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t',
+    qr_url: ''
+};
+
+async function fetchLivePaymentDetails() {
+    try {
+        const res = await fetch('/api/payment-details');
+        const d = await res.json();
+        if (d.success) {
+            window._livePaymentDetails = {
+                upi_id: d.upi_id || 'asgames@upi',
+                upi_name: d.upi_name || 'ASGames',
+                arpay_upi: d.arpay_upi || d.upi_id || 'asgames@upi',
+                usdt_address: d.usdt_address || 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t',
+                qr_url: d.qr_url || ''
+            };
+        }
+    } catch (e) {}
+    return window._livePaymentDetails;
+}
+
+async function openDepositCheckoutSheet() {
     const sm = window.stateManager;
     if (!sm || !sm.token) {
         if (sm) sm.showToast('Please login first to deposit funds!', 'warning');
@@ -1813,12 +1839,18 @@ function openDepositCheckoutSheet() {
         return;
     }
 
+    const pay = await fetchLivePaymentDetails();
     const ch = window._selectedDepositChannel || window._selectedDepositMethod || 'UPI-QR';
     const isUsdt = window._selectedDepositMethod === 'USDT';
-    const payAddr = isUsdt ? 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t' : 'asgames@upi';
+    const isArPay = window._selectedDepositMethod === 'ARPay';
+
+    const payAddr = isUsdt
+        ? (pay.usdt_address || 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t')
+        : (isArPay ? (pay.arpay_upi || pay.upi_id) : pay.upi_id);
+
     const qrPayload = isUsdt
         ? payAddr
-        : `upi://pay?pa=asgames@upi&pn=ASGames&am=${amt.toFixed(2)}&cu=INR`;
+        : `upi://pay?pa=${payAddr}&pn=${encodeURIComponent(pay.upi_name || 'ASGames')}&am=${amt.toFixed(2)}&cu=INR`;
 
     const chLbl = document.getElementById('dep-pay-channel-lbl');
     const amtLbl = document.getElementById('dep-pay-amount-lbl');
@@ -1828,9 +1860,15 @@ function openDepositCheckoutSheet() {
 
     if (chLbl) chLbl.textContent = ch;
     if (amtLbl) amtLbl.textContent = `₹${amt.toFixed(2)}`;
-    if (idLbl) idLbl.textContent = isUsdt ? 'Official USDT (TRC20) Address' : 'Official Deposit UPI ID';
+    if (idLbl) idLbl.textContent = isUsdt ? 'Official USDT (TRC20) Address' : `Official Deposit UPI (${pay.upi_name || 'ASGames'})`;
     if (idVal) idVal.textContent = payAddr;
-    if (qrImg) qrImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&margin=6&data=${encodeURIComponent(qrPayload)}`;
+    if (qrImg) {
+        if (!isUsdt && pay.qr_url) {
+            qrImg.src = pay.qr_url;
+        } else {
+            qrImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&margin=6&data=${encodeURIComponent(qrPayload)}`;
+        }
+    }
 
     const sheet = document.getElementById('dep-checkout-sheet');
     if (sheet) sheet.classList.remove('hidden');
