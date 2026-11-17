@@ -1,137 +1,410 @@
-// ASGames Database Layer - SQLite3 with JSON persistence fallback
+// ASGames Production-Ready Embedded Database Engine
+// Pure JavaScript, zero native C++ compilation dependencies, 100% resilient on Render & Windows.
+
 const fs = require('fs');
 const path = require('path');
 
-let sqlite3;
-try {
-    sqlite3 = require('sqlite3').verbose();
-} catch (e) {
-    sqlite3 = null;
-    console.log('Running with JSON-backed storage mode');
-}
+const DATA_FILE = path.join(__dirname, 'asgames_data.json');
 
-const DB_FILE = path.join(__dirname, 'asgames.db');
-let db = null;
-
-if (sqlite3) {
-    db = new sqlite3.Database(DB_FILE, (err) => {
-        if (err) {
-            console.error('SQLite connection error, falling back to JSON storage:', err.message);
-            db = null;
-        } else {
-            console.log('Connected to SQLite database: asgames.db');
-            initTables();
-        }
-    });
-}
-
-function initTables() {
-    db.serialize(() => {
-        // Users
-        db.run(`CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            phone TEXT UNIQUE,
-            password TEXT,
-            balance REAL DEFAULT 100.0,
-            invite_code TEXT UNIQUE,
-            referred_by TEXT,
-            vip_level INTEGER DEFAULT 1,
-            is_banned INTEGER DEFAULT 0,
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-        )`);
-
-        // Game Rounds
-        db.run(`CREATE TABLE IF NOT EXISTS game_rounds (
-            period_id TEXT PRIMARY KEY,
-            game_mode TEXT,
-            winning_number INTEGER,
-            winning_color TEXT,
-            winning_size TEXT,
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-        )`);
-
-        // Bets
-        db.run(`CREATE TABLE IF NOT EXISTS bets (
-            id TEXT PRIMARY KEY,
-            user_id INTEGER,
-            period_id TEXT,
-            game_mode TEXT,
-            select_type TEXT,
-            select_value TEXT,
-            amount REAL,
-            payout REAL DEFAULT 0,
-            status TEXT DEFAULT 'pending',
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-        )`);
-
-        // Transactions (Deposit / Withdrawal / Commission)
-        db.run(`CREATE TABLE IF NOT EXISTS transactions (
-            id TEXT PRIMARY KEY,
-            user_id INTEGER,
-            type TEXT,
-            amount REAL,
-            status TEXT DEFAULT 'pending',
-            details TEXT,
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-        )`);
-
-        // Referral Commissions
-        db.run(`CREATE TABLE IF NOT EXISTS commissions (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER,
-            downline_id INTEGER,
-            tier INTEGER,
-            bet_amount REAL,
-            commission REAL,
-            claimed INTEGER DEFAULT 0,
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-        )`);
-
-        // Admin Settings
-        db.run(`CREATE TABLE IF NOT EXISTS settings (
-            key TEXT PRIMARY KEY,
-            value TEXT
-        )`);
-
-        // Default admin password & controls
-        db.run(`INSERT OR IGNORE INTO settings (key, value) VALUES ('admin_password', 'admin123')`);
-        db.run(`INSERT OR IGNORE INTO settings (key, value) VALUES ('game_mode', 'random')`);
-        db.run(`INSERT OR IGNORE INTO settings (key, value) VALUES ('manual_number', '')`);
-        db.run(`INSERT OR IGNORE INTO settings (key, value) VALUES ('upi_id', 'asgames@upi')`);
-        db.run(`INSERT OR IGNORE INTO settings (key, value) VALUES ('upi_name', 'ASGames Official')`);
-        db.run(`INSERT OR IGNORE INTO settings (key, value) VALUES ('min_deposit', '100')`);
-        db.run(`INSERT OR IGNORE INTO settings (key, value) VALUES ('min_withdraw', '110')`);
-    });
-}
-
-// Promisified Helper Methods
-const DB = {
-    get(sql, params = []) {
-        return new Promise((resolve, reject) => {
-            db.get(sql, params, (err, row) => {
-                if (err) reject(err);
-                else resolve(row);
-            });
-        });
-    },
-
-    all(sql, params = []) {
-        return new Promise((resolve, reject) => {
-            db.all(sql, params, (err, rows) => {
-                if (err) reject(err);
-                else resolve(rows || []);
-            });
-        });
-    },
-
-    run(sql, params = []) {
-        return new Promise((resolve, reject) => {
-            db.run(sql, params, function (err) {
-                if (err) reject(err);
-                else resolve({ id: this.lastID, changes: this.changes });
-            });
-        });
+class DataStore {
+    constructor() {
+        this.data = {
+            users: [],
+            game_rounds: [],
+            bets: [],
+            transactions: [],
+            commissions: [],
+            settings: {
+                admin_password: 'admin123',
+                game_mode: 'random',
+                manual_number: '',
+                upi_id: 'asgames@upi',
+                upi_name: 'ASGames Official',
+                min_deposit: '100',
+                min_withdraw: '110'
+            },
+            nextUserId: 1,
+            nextCommissionId: 1
+        };
+        this.load();
     }
-};
 
-module.exports = DB;
+    load() {
+        if (fs.existsSync(DATA_FILE)) {
+            try {
+                const content = fs.readFileSync(DATA_FILE, 'utf-8');
+                const parsed = JSON.parse(content);
+                this.data = Object.assign(this.data, parsed);
+                if (this.data.users.length > 0) {
+                    const maxId = Math.max(...this.data.users.map(u => u.id || 0));
+                    this.data.nextUserId = Math.max(this.data.nextUserId, maxId + 1);
+                }
+                if (this.data.commissions.length > 0) {
+                    const maxCommId = Math.max(...this.data.commissions.map(c => c.id || 0));
+                    this.data.nextCommissionId = Math.max(this.data.nextCommissionId, maxCommId + 1);
+                }
+                console.log(`Loaded ASGames database: ${this.data.users.length} users, ${this.data.game_rounds.length} rounds.`);
+            } catch (e) {
+                console.error('Error loading asgames_data.json, starting fresh:', e.message);
+            }
+        } else {
+            this.save();
+            console.log('Created fresh ASGames database file: asgames_data.json');
+        }
+    }
+
+    save() {
+        try {
+            fs.writeFileSync(DATA_FILE, JSON.stringify(this.data, null, 2), 'utf-8');
+        } catch (e) {
+            console.error('Error saving asgames_data.json:', e.message);
+        }
+    }
+
+    async get(sql, params = []) {
+        sql = sql.trim();
+
+        // 1. Settings
+        if (sql.includes('FROM settings WHERE key =')) {
+            const key = params[0];
+            return { value: this.data.settings[key] !== undefined ? this.data.settings[key] : '' };
+        }
+
+        // 2. User by id
+        if (sql.includes('FROM users WHERE id =')) {
+            const id = parseInt(params[0]);
+            return this.data.users.find(u => u.id === id) || null;
+        }
+
+        // 3. User by phone
+        if (sql.includes('FROM users WHERE phone =')) {
+            const phone = String(params[0]).trim();
+            return this.data.users.find(u => u.phone === phone) || null;
+        }
+
+        // 4. User by invite_code
+        if (sql.includes('FROM users WHERE invite_code =')) {
+            const code = String(params[0]).trim();
+            return this.data.users.find(u => u.invite_code === code) || null;
+        }
+
+        // 5. User referred_by
+        if (sql.includes('SELECT referred_by FROM users WHERE id =')) {
+            const id = parseInt(params[0]);
+            const u = this.data.users.find(u => u.id === id);
+            return u ? { referred_by: u.referred_by } : null;
+        }
+
+        // 6. User id, referred_by by invite_code
+        if (sql.includes('SELECT id, referred_by FROM users WHERE invite_code =')) {
+            const code = String(params[0]).trim();
+            const u = this.data.users.find(u => u.invite_code === code);
+            return u ? { id: u.id, referred_by: u.referred_by } : null;
+        }
+
+        // 7. Transaction by id
+        if (sql.includes('FROM transactions WHERE id =')) {
+            const id = String(params[0]);
+            return this.data.transactions.find(t => t.id === id) || null;
+        }
+
+        // 8. Stats: Count users
+        if (sql.includes('COUNT(*) as count FROM users') || sql.includes('COUNT(*) as cnt FROM users')) {
+            return { count: this.data.users.length, cnt: this.data.users.length };
+        }
+
+        // 9. Stats: Sum balance
+        if (sql.includes('SUM(balance) as total FROM users')) {
+            const total = this.data.users.reduce((sum, u) => sum + (u.balance || 0), 0);
+            return { total };
+        }
+
+        // 10. Stats: Pending deposits count
+        if (sql.includes("type = 'deposit'") || sql.includes("type='deposit'")) {
+            const count = this.data.transactions.filter(t => t.type === 'deposit' && t.status === 'pending').length;
+            return { count };
+        }
+
+        // 11. Stats: Pending withdrawals count
+        if (sql.includes("type = 'withdraw'") || sql.includes("type='withdraw'")) {
+            const count = this.data.transactions.filter(t => t.type === 'withdraw' && t.status === 'pending').length;
+            return { count };
+        }
+
+        // 12. Game rounds count
+        if (sql.includes('COUNT(*) as cnt FROM game_rounds')) {
+            return { cnt: this.data.game_rounds.length };
+        }
+
+        console.warn('Unhandled GET SQL:', sql, params);
+        return null;
+    }
+
+    async all(sql, params = []) {
+        sql = sql.trim();
+
+        // 1. Bets by period and status
+        if (sql.includes('FROM bets WHERE period_id = ? AND status = ?')) {
+            const [period, status] = params;
+            return this.data.bets.filter(b => b.period_id === String(period) && b.status === status);
+        }
+
+        // 2. Game rounds history
+        if (sql.includes('FROM game_rounds ORDER BY created_at DESC')) {
+            return [...this.data.game_rounds].reverse().slice(0, 30);
+        }
+
+        // 3. User bets
+        if (sql.includes('FROM bets WHERE user_id = ? ORDER BY created_at DESC')) {
+            const uid = parseInt(params[0]);
+            return this.data.bets.filter(b => b.user_id === uid).reverse().slice(0, 30);
+        }
+
+        // 4. Downline users
+        if (sql.includes('FROM users WHERE referred_by = ?')) {
+            const code = String(params[0]).trim();
+            return this.data.users.filter(u => u.referred_by === code);
+        }
+
+        // 5. Commissions for user
+        if (sql.includes('FROM commissions WHERE user_id = ? AND claimed = 0')) {
+            const uid = parseInt(params[0]);
+            return this.data.commissions.filter(c => c.user_id === uid && c.claimed === 0);
+        }
+        if (sql.includes('FROM commissions WHERE user_id = ?')) {
+            const uid = parseInt(params[0]);
+            return this.data.commissions.filter(c => c.user_id === uid);
+        }
+
+        // 6. User transactions
+        if (sql.includes('FROM transactions WHERE user_id = ? ORDER BY created_at DESC')) {
+            const uid = parseInt(params[0]);
+            return this.data.transactions.filter(t => t.user_id === uid).reverse().slice(0, 40);
+        }
+
+        // 7. Admin: All users
+        if (sql.includes('FROM users ORDER BY id DESC')) {
+            return [...this.data.users].reverse().slice(0, 100);
+        }
+
+        // 8. Admin: Pending deposits
+        if (sql.includes("type = 'deposit' AND t.status = 'pending'") || sql.includes("type='deposit' AND status='pending'")) {
+            return this.data.transactions
+                .filter(t => t.type === 'deposit' && t.status === 'pending')
+                .map(t => {
+                    const u = this.data.users.find(u => u.id === t.user_id);
+                    return Object.assign({}, t, { phone: u ? u.phone : 'Unknown' });
+                })
+                .reverse();
+        }
+
+        // 9. Admin: Pending withdrawals
+        if (sql.includes("type = 'withdraw' AND t.status = 'pending'") || sql.includes("type='withdraw' AND status='pending'")) {
+            return this.data.transactions
+                .filter(t => t.type === 'withdraw' && t.status === 'pending')
+                .map(t => {
+                    const u = this.data.users.find(u => u.id === t.user_id);
+                    return Object.assign({}, t, { phone: u ? u.phone : 'Unknown' });
+                })
+                .reverse();
+        }
+
+        console.warn('Unhandled ALL SQL:', sql, params);
+        return [];
+    }
+
+    async run(sql, params = []) {
+        sql = sql.trim();
+
+        // 1. Update settings
+        if (sql.includes('UPDATE settings SET value = ? WHERE key = ?')) {
+            const [val, key] = params;
+            this.data.settings[key] = val;
+            this.save();
+            return { changes: 1 };
+        }
+
+        // 2. Insert Game Round
+        if (sql.includes('INSERT') && sql.includes('game_rounds')) {
+            const [period_id, game_mode, winning_number, winning_color, winning_size] = params;
+            const existingIdx = this.data.game_rounds.findIndex(g => g.period_id === String(period_id));
+            const roundObj = {
+                period_id: String(period_id),
+                game_mode,
+                winning_number: parseInt(winning_number),
+                winning_color,
+                winning_size,
+                created_at: new Date().toISOString()
+            };
+            if (existingIdx >= 0) {
+                this.data.game_rounds[existingIdx] = roundObj;
+            } else {
+                this.data.game_rounds.push(roundObj);
+            }
+            if (this.data.game_rounds.length > 100) this.data.game_rounds.shift();
+            this.save();
+            return { changes: 1 };
+        }
+
+        // 3. Update Bets (Won/Lost)
+        if (sql.includes('UPDATE bets SET status = ?, payout = ? WHERE id = ?')) {
+            const [status, payout, id] = params;
+            const bet = this.data.bets.find(b => b.id === id);
+            if (bet) {
+                bet.status = status;
+                bet.payout = parseFloat(payout);
+                this.save();
+            }
+            return { changes: 1 };
+        }
+
+        // 4. Update User Balance (+ or -)
+        if (sql.includes('UPDATE users SET balance = balance + ? WHERE id = ?')) {
+            const [amt, id] = params;
+            const user = this.data.users.find(u => u.id === parseInt(id));
+            if (user) {
+                user.balance += parseFloat(amt);
+                this.save();
+            }
+            return { changes: 1 };
+        }
+        if (sql.includes('UPDATE users SET balance = balance - ? WHERE id = ?')) {
+            const [amt, id] = params;
+            const user = this.data.users.find(u => u.id === parseInt(id));
+            if (user) {
+                user.balance = Math.max(0, user.balance - parseFloat(amt));
+                this.save();
+            }
+            return { changes: 1 };
+        }
+        if (sql.includes('UPDATE users SET balance = MAX(0, balance + ?) WHERE id = ?')) {
+            const [amt, id] = params;
+            const user = this.data.users.find(u => u.id === parseInt(id));
+            if (user) {
+                user.balance = Math.max(0, user.balance + parseFloat(amt));
+                this.save();
+            }
+            return { changes: 1 };
+        }
+
+        // 5. Update User Ban
+        if (sql.includes('UPDATE users SET is_banned = ? WHERE id = ?')) {
+            const [banned, id] = params;
+            const user = this.data.users.find(u => u.id === parseInt(id));
+            if (user) {
+                user.is_banned = parseInt(banned);
+                this.save();
+            }
+            return { changes: 1 };
+        }
+
+        // 6. Insert User
+        if (sql.includes('INSERT INTO users')) {
+            const [phone, password, invite_code, referred_by] = params;
+            const newId = this.data.nextUserId++;
+            const user = {
+                id: newId,
+                phone: String(phone).trim(),
+                password: String(password).trim(),
+                balance: 100.0,
+                invite_code: String(invite_code).trim(),
+                referred_by: referred_by ? String(referred_by).trim() : null,
+                vip_level: 1,
+                is_banned: 0,
+                created_at: new Date().toISOString()
+            };
+            this.data.users.push(user);
+            this.save();
+            return { id: newId, changes: 1 };
+        }
+
+        // 7. Insert Bet
+        if (sql.includes('INSERT INTO bets')) {
+            const [id, user_id, period_id, select_type, select_value, amount] = params;
+            const bet = {
+                id: String(id),
+                user_id: parseInt(user_id),
+                period_id: String(period_id),
+                game_mode: '30s',
+                select_type,
+                select_value: String(select_value),
+                amount: parseFloat(amount),
+                payout: 0,
+                status: 'pending',
+                created_at: new Date().toISOString()
+            };
+            this.data.bets.push(bet);
+            this.save();
+            return { changes: 1 };
+        }
+
+        // 8. Insert Transaction
+        if (sql.includes('INSERT INTO transactions')) {
+            const [id, user_id, type, amount, status, details] = params;
+            const tx = {
+                id: String(id),
+                user_id: parseInt(user_id),
+                type,
+                amount: parseFloat(amount),
+                status: status || 'pending',
+                details: details || '',
+                created_at: new Date().toISOString()
+            };
+            this.data.transactions.push(tx);
+            this.save();
+            return { changes: 1 };
+        }
+
+        // 9. Insert Commission
+        if (sql.includes('INSERT INTO commissions')) {
+            const [user_id, downline_id, tier, bet_amount, commission] = params;
+            const comm = {
+                id: this.data.nextCommissionId++,
+                user_id: parseInt(user_id),
+                downline_id: parseInt(downline_id),
+                tier: parseInt(tier),
+                bet_amount: parseFloat(bet_amount),
+                commission: parseFloat(commission),
+                claimed: 0,
+                created_at: new Date().toISOString()
+            };
+            this.data.commissions.push(comm);
+            this.save();
+            return { changes: 1 };
+        }
+
+        // 10. Update Commissions Claimed
+        if (sql.includes('UPDATE commissions SET claimed = 1 WHERE user_id = ?')) {
+            const uid = parseInt(params[0]);
+            this.data.commissions.forEach(c => {
+                if (c.user_id === uid) c.claimed = 1;
+            });
+            this.save();
+            return { changes: 1 };
+        }
+
+        // 11. Update Transaction Status
+        if (sql.includes('UPDATE transactions SET status =')) {
+            if (sql.includes("'approved'")) {
+                const txId = params[0];
+                const tx = this.data.transactions.find(t => t.id === txId);
+                if (tx) tx.status = 'approved';
+                this.save();
+                return { changes: 1 };
+            }
+            if (sql.includes("'rejected'")) {
+                const txId = params[0];
+                const tx = this.data.transactions.find(t => t.id === txId);
+                if (tx) tx.status = 'rejected';
+                this.save();
+                return { changes: 1 };
+            }
+        }
+
+        console.warn('Unhandled RUN SQL:', sql, params);
+        return { changes: 0 };
+    }
+}
+
+const instance = new DataStore();
+module.exports = instance;

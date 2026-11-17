@@ -1,6 +1,7 @@
 # Node / Python / OS artifacts
 node_modules/
 *.db
+asgames_data.json
 .DS_Store
 Thumbs.db
 *.log
