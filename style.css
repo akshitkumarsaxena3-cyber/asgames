@@ -5216,3 +5216,294 @@ body {
     justify-content: space-between;
     align-items: center;
 }
+
+/* ======================================================== */
+/* FULL-SCREEN BDG WITHDRAW PAGE (#/wallet/Withdraw)        */
+/* ======================================================== */
+.wd-arpay-banner {
+    background: #2b2b30;
+    border-radius: 10px;
+    padding: 14px 14px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    cursor: pointer;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    transition: all 0.2s;
+}
+
+.wd-arpay-banner.active {
+    background: linear-gradient(135deg, #f3d78a 0%, #c6913a 100%);
+    border-color: #fce7a8;
+    box-shadow: 0 6px 18px rgba(212, 161, 67, 0.35);
+}
+
+.wd-arpay-logo {
+    width: 42px;
+    height: 42px;
+    border-radius: 10px;
+    background: linear-gradient(135deg, #fde047, #d97706);
+    color: #18181b;
+    font-size: 24px;
+    font-weight: 900;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.wd-arpay-banner.active .wd-arpay-logo {
+    background: #ffffff;
+    color: #d97706;
+}
+
+.wd-arpay-title {
+    color: #ffffff;
+    font-size: 14px;
+    font-weight: 700;
+    margin-bottom: 2px;
+}
+
+.wd-arpay-desc {
+    color: #a1a1aa;
+    font-size: 11.5px;
+    line-height: 1.35;
+}
+
+.wd-arpay-banner.active .wd-arpay-title,
+.wd-arpay-banner.active .wd-arpay-desc {
+    color: #5c3c0e;
+}
+
+.wd-methods-3grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+}
+
+.wd-method-tile {
+    background: #2b2b30;
+    border-radius: 10px;
+    padding: 16px 8px 12px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    cursor: pointer;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    transition: all 0.2s;
+}
+
+.wd-method-tile.active {
+    background: linear-gradient(145deg, #f3d78a 0%, #c6913a 100%);
+    border-color: #fce7a8;
+    box-shadow: 0 6px 16px rgba(212, 161, 67, 0.35);
+}
+
+.wd-method-ico {
+    font-size: 26px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.wd-ico-upi span {
+    border: 1.5px solid #a1a1aa;
+    border-radius: 6px;
+    padding: 3px 8px;
+    font-size: 12px;
+    font-weight: 800;
+    color: #e4e4e7;
+}
+
+.wd-method-tile.active .wd-ico-upi span {
+    border-color: #5c3c0e;
+    color: #5c3c0e;
+}
+
+.wd-method-lbl {
+    color: #a1a1aa;
+    font-size: 11.5px;
+    font-weight: 700;
+}
+
+.wd-method-tile.active .wd-method-lbl {
+    color: #5c3c0e;
+}
+
+.wd-arpay-rules-row {
+    background: #2b2b30;
+    border-radius: 10px;
+    padding: 13px 14px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    cursor: pointer;
+}
+
+.wd-arpay-activate-card {
+    background: #2b2b30;
+    border-radius: 10px;
+    padding: 16px 14px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.wd-arpay-logo-sm {
+    width: 34px;
+    height: 34px;
+    border-radius: 8px;
+    background: linear-gradient(135deg, #fde047, #d97706);
+    color: #18181b;
+    font-weight: 900;
+    font-size: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.wd-arpay-act-btn {
+    background: linear-gradient(135deg, #f3d78a, #c6913a);
+    color: #4a2f08;
+    border: none;
+    border-radius: 6px;
+    padding: 9px 18px;
+    font-size: 12.5px;
+    font-weight: 700;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+.wd-add-beneficiary-card {
+    background: #2b2b30;
+    border-radius: 10px;
+    padding: 20px 16px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    cursor: pointer;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.wd-dashed-plus {
+    width: 38px;
+    height: 38px;
+    margin: 0 auto 12px;
+    border: 1.5px dashed #71717a;
+    border-radius: 6px;
+    color: #a1a1aa;
+    font-size: 24px;
+    font-weight: 400;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.wd-beneficiary-ph {
+    color: #71717a;
+    font-size: 12.5px;
+    font-weight: 500;
+}
+
+.wd-red-warn {
+    text-align: center;
+    color: #ef4444;
+    font-size: 11.5px;
+    font-weight: 500;
+    margin-top: -4px;
+}
+
+.wd-amt-input-pill {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: #1d1d21;
+    border-radius: 26px;
+    height: 46px;
+    padding: 0 18px;
+    margin-bottom: 14px;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.wd-amt-rs {
+    color: #d9ac4f;
+    font-size: 18px;
+    font-weight: 800;
+}
+
+.wd-amt-input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    color: #ffffff;
+    font-size: 14px;
+    font-weight: 600;
+    outline: none;
+}
+
+.wd-amt-input::placeholder {
+    color: #d9ac4f;
+    opacity: 0.9;
+    font-weight: 500;
+}
+
+.wd-bal-row,
+.wd-recv-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 12.5px;
+    color: #a1a1aa;
+    margin-bottom: 10px;
+}
+
+.wd-all-btn {
+    background: transparent;
+    border: 1px solid #d9ac4f;
+    color: #d9ac4f;
+    border-radius: 6px;
+    padding: 3px 22px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.wd-submit-pill {
+    width: 100%;
+    height: 44px;
+    border-radius: 24px;
+    border: none;
+    background: #71778a;
+    color: #cbd5e1;
+    font-size: 14.5px;
+    font-weight: 700;
+    margin-top: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.wd-submit-pill.ready {
+    background: linear-gradient(90deg, #fae59f 0%, #d4a143 100%);
+    color: #4a2f08;
+    box-shadow: 0 6px 18px rgba(212, 161, 67, 0.45);
+}
+
+.wd-all-history-pill {
+    width: 100%;
+    height: 44px;
+    border-radius: 24px;
+    background: transparent;
+    border: 1px solid #c99d4b;
+    color: #e6c67f;
+    font-size: 14px;
+    font-weight: 700;
+    margin-top: 12px;
+    cursor: pointer;
+}

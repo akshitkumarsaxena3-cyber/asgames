@@ -575,27 +575,187 @@
             </div>
         </div>
 
-        <!-- Withdraw Modal -->
-        <div id="withdraw-modal" class="center-modal hidden">
-            <div class="modal-dialog">
-                <div class="modal-header">
-                    <h3 style="color:#fae59f; font-size:16px; font-weight:700;">Withdraw Funds</h3>
-                    <button id="withdraw-modal-close" class="btn-drawer-close">&times;</button>
+        <!-- Full-Screen BDG-Style Withdraw Page (#/wallet/Withdraw) -->
+        <div id="withdraw-modal" class="bdg-auth-overlay hidden">
+            <div class="bdg-auth-shell dep-page-shell">
+                <!-- Sticky Dark Header -->
+                <div class="dep-topbar">
+                    <button id="withdraw-modal-close" class="bdg-back-btn" style="color:#fff;">&#8249;</button>
+                    <span class="dep-topbar-title">Withdraw</span>
+                    <button type="button" class="dep-topbar-hist" onclick="document.getElementById('wd-history-section')?.scrollIntoView({behavior:'smooth'})">Withdrawal history</button>
                 </div>
-                <div class="input-group">
-                    <label class="input-label">Available Balance</label>
-                    <div class="user-balance-val" style="font-size:18px; font-weight:700; color:#ffd875;">₹100.00</div>
+
+                <!-- Scrollable Withdraw Body -->
+                <div class="dep-scroll-body" style="padding-bottom:36px;">
+                    <!-- Metallic Gold Available Balance Card -->
+                    <div class="dep-gold-card">
+                        <div class="dep-gold-top">
+                            <span class="dep-gold-lbl">💳 Available balance</span>
+                        </div>
+                        <div class="dep-gold-amt-row">
+                            <span class="dep-gold-amt user-balance-val">₹0.00</span>
+                            <button type="button" class="dep-gold-refresh" onclick="window.stateManager.fetchUserProfile(); window.stateManager.showToast('Balance refreshed','info');" title="Refresh Balance">↻</button>
+                        </div>
+                        <div class="dep-gold-bottom">
+                            <div class="dep-card-chip"></div>
+                            <div class="dep-card-dots">**** &nbsp;&nbsp; ****</div>
+                        </div>
+                    </div>
+
+                    <!-- Full-Width ARPay Banner Tile -->
+                    <div id="wd-tile-arpay" class="wd-arpay-banner" onclick="selectWithdrawMethod('ARPay')">
+                        <div class="wd-arpay-logo">A</div>
+                        <div class="wd-arpay-text">
+                            <div class="wd-arpay-title">ARPay</div>
+                            <div class="wd-arpay-desc">Supports UPI for fast payment, and bonuses for withdrawals</div>
+                        </div>
+                    </div>
+
+                    <!-- 3-Column Method Tiles: BANK CARD / USDT / UPI -->
+                    <div class="wd-methods-3grid">
+                        <div id="wd-tile-bank" class="wd-method-tile active" onclick="selectWithdrawMethod('BANK')">
+                            <div class="wd-method-ico wd-ico-bank">💳</div>
+                            <div class="wd-method-lbl">BANK CARD</div>
+                        </div>
+                        <div id="wd-tile-usdt" class="wd-method-tile" onclick="selectWithdrawMethod('USDT')">
+                            <div class="wd-method-ico dep-ico-usdt">₮</div>
+                            <div class="wd-method-lbl">USDT</div>
+                        </div>
+                        <div id="wd-tile-upi" class="wd-method-tile" onclick="selectWithdrawMethod('UPI')">
+                            <div class="wd-method-ico wd-ico-upi"><span>UPI</span></div>
+                            <div class="wd-method-lbl">UPI</div>
+                        </div>
+                    </div>
+
+                    <!-- ARPay Info & Activation Panel (Shown when ARPay is selected — Exact Screenshot 1) -->
+                    <div id="wd-arpay-panel" class="hidden" style="display:flex; flex-direction:column; gap:12px;">
+                        <div class="wd-arpay-rules-row" onclick="alert('AR Pay Transaction Rules:\n1. Instant 0-fee UPI & ARB settlement.\n2. +1% extra withdrawal bonus.\n3. Available 24/7 (Min ₹110).')">
+                            <div style="display:flex; align-items:center; gap:10px;">
+                                <span class="bdg-gold-ico">📑</span>
+                                <span style="color:#a1a1aa; font-size:13px;">AR Pay transaction rules</span>
+                            </div>
+                            <span style="color:#a1a1aa; font-size:12px;">Check ›</span>
+                        </div>
+
+                        <div class="wd-arpay-activate-card">
+                            <div style="display:flex; align-items:center; gap:12px;">
+                                <div class="wd-arpay-logo-sm">A</div>
+                                <div id="wd-arpay-status-txt" style="color:#a1a1aa; font-size:12.5px; line-height:1.4;">Your AR wallet has not been activated yet</div>
+                            </div>
+                            <button type="button" id="wd-arpay-activate-btn" class="wd-arpay-act-btn" onclick="activateArWallet()">Activate</button>
+                        </div>
+
+                        <div class="dep-section-card">
+                            <div class="dep-sec-hdr"><span class="bdg-gold-ico">🅰️</span> <span>AR Wallet</span></div>
+                            <p style="color:#d4d4d8; font-size:12.5px; line-height:1.6;">
+                                AR Wallet is a third-party payment service platform that facilitates fast payments on the platform using ARB (digital currency).
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- Standard Withdraw Form (BANK CARD / USDT / UPI — Exact Screenshots 2, 3, 4) -->
+                    <div id="wd-standard-panel" style="display:flex; flex-direction:column; gap:12px;">
+                        <!-- Add Beneficiary Dashed Box -->
+                        <div class="wd-add-beneficiary-card" onclick="openAddBeneficiarySheet()">
+                            <div id="wd-beneficiary-empty">
+                                <div class="wd-dashed-plus">+</div>
+                                <div id="wd-beneficiary-placeholder" class="wd-beneficiary-ph">Add a bank account number</div>
+                            </div>
+                            <div id="wd-beneficiary-saved" class="hidden" style="width:100%; display:flex; justify-content:space-between; align-items:center; text-align:left;">
+                                <div>
+                                    <div id="wd-saved-title" style="color:#fae59f; font-weight:700; font-size:13px;"></div>
+                                    <div id="wd-saved-sub" style="color:#d4d4d8; font-size:12px; margin-top:2px;"></div>
+                                </div>
+                                <span style="color:#d9ac4f; font-size:12px; font-weight:700; border:1px solid #d9ac4f; padding:4px 10px; border-radius:6px;">Change</span>
+                            </div>
+                        </div>
+
+                        <!-- Hidden bridged input so existing #withdraw-account-input works seamlessly -->
+                        <input type="hidden" id="withdraw-account-input" value="">
+
+                        <div id="wd-beneficiary-warn" class="wd-red-warn">Need to add beneficiary information to be able to withdraw money</div>
+
+                        <!-- Withdrawal Amount & Rules Card -->
+                        <div class="dep-section-card" style="padding:16px 14px;">
+                            <div class="wd-amt-input-pill">
+                                <span class="wd-amt-rs">₹</span>
+                                <input type="number" id="withdraw-amount-input" class="wd-amt-input" placeholder="Please enter the amount" oninput="updateWithdrawSummary()">
+                            </div>
+
+                            <div class="wd-bal-row">
+                                <span>Withdrawable balance <strong id="wd-withdrawable-val" style="color:#d9ac4f;">₹0.00</strong></span>
+                                <button type="button" class="wd-all-btn" onclick="fillAllWithdrawBalance()">All</button>
+                            </div>
+
+                            <div class="wd-recv-row">
+                                <span>Withdrawal amount received</span>
+                                <strong id="wd-received-val" style="color:#d9ac4f; font-size:15px;">₹0.00</strong>
+                            </div>
+
+                            <button type="button" id="btn-submit-withdraw" class="wd-submit-pill">Withdraw</button>
+
+                            <!-- Exact 6 Diamond Rules Box (Screenshots 3 & 4) -->
+                            <div class="rg-notes-box" style="margin-top:18px;">
+                                <div class="rg-note-row"><span class="rg-diamond">◆</span><span>Need to bet <strong style="color:#ef4444;">₹0.00</strong> to be able to withdraw</span></div>
+                                <div class="rg-note-row"><span class="rg-diamond">◆</span><span>Withdraw time <strong style="color:#ef4444;">00:00-23:59</strong></span></div>
+                                <div class="rg-note-row"><span class="rg-diamond">◆</span><span>Inday Remaining Withdrawal Times<strong style="color:#ef4444;">3</strong></span></div>
+                                <div class="rg-note-row"><span class="rg-diamond">◆</span><span>Withdrawal amount range <strong style="color:#ef4444;">₹110.00-₹50,000.00</strong></span></div>
+                                <div class="rg-note-row"><span class="rg-diamond">◆</span><span>Please check your registered bank information again before making a withdrawal. If your registered bank information is incorrect, our company will not be responsible for any losses you may incur.</span></div>
+                                <div class="rg-note-row"><span class="rg-diamond">◆</span><span>If your registered bank information is incorrect, please contact customer service.</span></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Withdrawal History Section (Screenshot 4) -->
+                    <div id="wd-history-section" class="dep-section-card" style="background:transparent; border:none; padding:6px 2px;">
+                        <div class="dep-sec-hdr"><span class="bdg-gold-ico">📄</span> <span>Withdrawal history</span></div>
+                        <div id="wd-history-list">
+                            <div class="bdg-no-data" style="padding:28px 10px;">
+                                <div style="font-size:46px; opacity:0.35; margin-bottom:6px;">📜</div>
+                                <div>No data</div>
+                            </div>
+                        </div>
+                        <button type="button" class="wd-all-history-pill" onclick="loadWithdrawPageHistory(true)">All history</button>
+                    </div>
                 </div>
-                <div class="input-group">
-                    <label class="input-label">Withdrawal Amount (Min ₹110)</label>
-                    <input type="number" id="withdraw-amount-input" class="form-input" placeholder="Enter amount to withdraw">
+
+                <!-- Add Beneficiary Modal Sheet (Bank Card / USDT / UPI) -->
+                <div id="wd-add-beneficiary-sheet" class="dep-checkout-overlay hidden">
+                    <div class="dep-checkout-card">
+                        <div class="dep-checkout-hdr">
+                            <span id="wd-ben-modal-title" style="color:#fae59f; font-weight:800; font-size:15px;">Add Bank Account</span>
+                            <button type="button" class="btn-drawer-close" onclick="closeAddBeneficiarySheet()">&times;</button>
+                        </div>
+
+                        <div id="wd-ben-bank-fields">
+                            <div class="input-group" style="margin-bottom:10px;">
+                                <label class="input-label">Bank Name</label>
+                                <input type="text" id="wd-bank-name" class="rg-input" placeholder="e.g. State Bank of India / HDFC">
+                            </div>
+                            <div class="input-group" style="margin-bottom:10px;">
+                                <label class="input-label">Account Holder Name</label>
+                                <input type="text" id="wd-bank-holder" class="rg-input" placeholder="Full name as on bank account">
+                            </div>
+                            <div class="input-group" style="margin-bottom:10px;">
+                                <label class="input-label">Bank Account Number</label>
+                                <input type="text" id="wd-bank-number" class="rg-input" placeholder="Enter bank account number">
+                            </div>
+                            <div class="input-group" style="margin-bottom:12px;">
+                                <label class="input-label">IFSC Code</label>
+                                <input type="text" id="wd-bank-ifsc" class="rg-input" placeholder="e.g. SBIN0001234" style="text-transform:uppercase;">
+                            </div>
+                        </div>
+
+                        <div id="wd-ben-single-field" class="hidden">
+                            <div class="input-group" style="margin-bottom:12px;">
+                                <label id="wd-single-label" class="input-label">Enter UPI ID</label>
+                                <input type="text" id="wd-single-input" class="rg-input" placeholder="e.g. 9876543210@paytm">
+                            </div>
+                        </div>
+
+                        <button type="button" class="bdg-btn-gold" style="margin:6px 0 0;" onclick="saveWithdrawBeneficiary()">Save Beneficiary</button>
+                    </div>
                 </div>
-                <div class="input-group">
-                    <label class="input-label">Bank Account / UPI ID</label>
-                    <input type="text" id="withdraw-account-input" class="form-input" placeholder="e.g. 9876543210@paytm or IFSC + Acc">
-                </div>
-                <p style="font-size:11px; color:#94a3b8; margin-bottom:14px;">* Admin verifies and processes payouts within 1-24 hours.</p>
-                <button id="btn-submit-withdraw" class="btn-full btn-gold">REQUEST WITHDRAWAL</button>
             </div>
         </div>
 

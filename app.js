@@ -391,8 +391,10 @@ class StateManager {
                     const d = await res.json();
                     if (d.success) {
                         this.showToast('Withdrawal submitted! Admin will verify and process.', 'success');
-                        this.closeWithdrawModal();
+                        if (amtInput) amtInput.value = '';
                         this.fetchUserProfile();
+                        if (typeof updateWithdrawSummary === 'function') updateWithdrawSummary();
+                        if (typeof loadWithdrawPageHistory === 'function') loadWithdrawPageHistory();
                     } else {
                         this.showToast(d.message, 'error');
                     }
@@ -554,12 +556,16 @@ class StateManager {
     openWithdrawModal() {
         const modal = document.getElementById('withdraw-modal');
         if (modal) modal.classList.remove('hidden');
+        if (typeof selectWithdrawMethod === 'function') selectWithdrawMethod(window._selectedWithdrawMethod || 'BANK');
+        if (typeof updateWithdrawSummary === 'function') updateWithdrawSummary();
+        if (typeof loadWithdrawPageHistory === 'function') loadWithdrawPageHistory();
         if (window.sound) window.sound.click();
     }
 
     closeWithdrawModal() {
         const modal = document.getElementById('withdraw-modal');
         if (modal) modal.classList.add('hidden');
+        if (typeof closeAddBeneficiarySheet === 'function') closeAddBeneficiarySheet();
     }
 
     startWinningTicker() {
@@ -1859,6 +1865,220 @@ async function loadDepositPageHistory() {
                     <div>
                         <div style="color:#fff; font-weight:700; font-size:13px;">₹${parseFloat(t.amount || 0).toFixed(2)}</div>
                         <div style="color:#94a3b8; font-size:11px;">${t.details || 'Deposit'}</div>
+                        <div style="color:#71717a; font-size:10px;">${(t.created_at || '').replace('T', ' ').slice(0, 19)}</div>
+                    </div>
+                    <span style="font-size:11px; font-weight:700; color:${stColor}; background:rgba(255,255,255,0.05); padding:4px 9px; border-radius:6px;">${stText}</span>
+                </div>
+            `;
+        }).join('');
+    } catch (e) {}
+}
+
+// ========================================================
+// FULL-SCREEN BDG WITHDRAW PAGE LOGIC (#/wallet/Withdraw)
+// ========================================================
+window._selectedWithdrawMethod = 'BANK';
+
+function _getSavedBeneficiaries() {
+    try {
+        return JSON.parse(localStorage.getItem('asg_wd_beneficiaries') || '{}');
+    } catch (e) {
+        return {};
+    }
+}
+
+function selectWithdrawMethod(method) {
+    window._selectedWithdrawMethod = method;
+
+    const tiles = {
+        ARPay: document.getElementById('wd-tile-arpay'),
+        BANK: document.getElementById('wd-tile-bank'),
+        USDT: document.getElementById('wd-tile-usdt'),
+        UPI: document.getElementById('wd-tile-upi')
+    };
+    Object.values(tiles).forEach(t => t && t.classList.remove('active'));
+    if (tiles[method]) tiles[method].classList.add('active');
+
+    const arPanel = document.getElementById('wd-arpay-panel');
+    const stdPanel = document.getElementById('wd-standard-panel');
+    const arActivated = localStorage.getItem('asg_arwallet_active') === '1';
+
+    if (method === 'ARPay' && !arActivated) {
+        if (arPanel) { arPanel.classList.remove('hidden'); arPanel.style.display = 'flex'; }
+        if (stdPanel) { stdPanel.classList.add('hidden'); stdPanel.style.display = 'none'; }
+    } else {
+        if (arPanel) { arPanel.classList.add('hidden'); arPanel.style.display = 'none'; }
+        if (stdPanel) { stdPanel.classList.remove('hidden'); stdPanel.style.display = 'flex'; }
+        renderSavedBeneficiaryUI();
+    }
+    updateWithdrawSummary();
+    if (window.sound) window.sound.click();
+}
+
+function activateArWallet() {
+    localStorage.setItem('asg_arwallet_active', '1');
+    if (window.stateManager) {
+        window.stateManager.showToast('🎉 AR Wallet Activated! Add your UPI/ARPay ID below to withdraw.', 'success');
+    }
+    selectWithdrawMethod('ARPay');
+}
+
+function renderSavedBeneficiaryUI() {
+    const m = window._selectedWithdrawMethod || 'BANK';
+    const saved = _getSavedBeneficiaries()[m];
+    const emptyEl = document.getElementById('wd-beneficiary-empty');
+    const savedEl = document.getElementById('wd-beneficiary-saved');
+    const phEl = document.getElementById('wd-beneficiary-placeholder');
+    const warnEl = document.getElementById('wd-beneficiary-warn');
+    const hiddenAcc = document.getElementById('withdraw-account-input');
+
+    const placeholders = {
+        BANK: 'Add a bank account number',
+        USDT: 'Add USDT (TRC20) wallet address',
+        UPI: 'Add UPI ID (e.g. name@upi)',
+        ARPay: 'Add ARPay / UPI ID for instant payout'
+    };
+    if (phEl) phEl.textContent = placeholders[m] || 'Add beneficiary details';
+
+    if (saved && saved.value) {
+        if (emptyEl) emptyEl.classList.add('hidden');
+        if (savedEl) { savedEl.classList.remove('hidden'); savedEl.style.display = 'flex'; }
+        if (warnEl) warnEl.classList.add('hidden');
+        const tEl = document.getElementById('wd-saved-title');
+        const sEl = document.getElementById('wd-saved-sub');
+        if (tEl) tEl.textContent = saved.title || m;
+        if (sEl) sEl.textContent = saved.display || saved.value;
+        if (hiddenAcc) hiddenAcc.value = saved.value;
+    } else {
+        if (emptyEl) emptyEl.classList.remove('hidden');
+        if (savedEl) { savedEl.classList.add('hidden'); savedEl.style.display = 'none'; }
+        if (warnEl) warnEl.classList.remove('hidden');
+        if (hiddenAcc) hiddenAcc.value = '';
+    }
+    updateWithdrawSummary();
+}
+
+function openAddBeneficiarySheet() {
+    const m = window._selectedWithdrawMethod || 'BANK';
+    const sheet = document.getElementById('wd-add-beneficiary-sheet');
+    const titleEl = document.getElementById('wd-ben-modal-title');
+    const bankFields = document.getElementById('wd-ben-bank-fields');
+    const singleField = document.getElementById('wd-ben-single-field');
+    const singleLbl = document.getElementById('wd-single-label');
+    const singleInp = document.getElementById('wd-single-input');
+
+    if (m === 'BANK') {
+        if (titleEl) titleEl.textContent = 'Add Bank Account';
+        if (bankFields) bankFields.classList.remove('hidden');
+        if (singleField) singleField.classList.add('hidden');
+    } else {
+        if (bankFields) bankFields.classList.add('hidden');
+        if (singleField) singleField.classList.remove('hidden');
+        if (m === 'USDT') {
+            if (titleEl) titleEl.textContent = 'Add USDT (TRC20) Address';
+            if (singleLbl) singleLbl.textContent = 'USDT TRC20 Wallet Address';
+            if (singleInp) singleInp.placeholder = 'Paste your T... TRC20 wallet address';
+        } else {
+            if (titleEl) titleEl.textContent = m === 'ARPay' ? 'Link ARPay / UPI ID' : 'Add UPI ID';
+            if (singleLbl) singleLbl.textContent = 'UPI ID';
+            if (singleInp) singleInp.placeholder = 'e.g. 9876543210@paytm or name@ybl';
+        }
+    }
+    if (sheet) sheet.classList.remove('hidden');
+}
+
+function closeAddBeneficiarySheet() {
+    const sheet = document.getElementById('wd-add-beneficiary-sheet');
+    if (sheet) sheet.classList.add('hidden');
+}
+
+function saveWithdrawBeneficiary() {
+    const m = window._selectedWithdrawMethod || 'BANK';
+    const sm = window.stateManager;
+    const all = _getSavedBeneficiaries();
+
+    if (m === 'BANK') {
+        const bank = (document.getElementById('wd-bank-name')?.value || '').trim();
+        const holder = (document.getElementById('wd-bank-holder')?.value || '').trim();
+        const num = (document.getElementById('wd-bank-number')?.value || '').trim();
+        const ifsc = (document.getElementById('wd-bank-ifsc')?.value || '').trim().toUpperCase();
+        if (!bank || !num || !ifsc) {
+            if (sm) sm.showToast('Please enter Bank Name, Account Number & IFSC!', 'warning');
+            return;
+        }
+        all.BANK = {
+            title: `${bank} (${holder || 'Account'})`,
+            display: `A/C: ${num} | IFSC: ${ifsc}`,
+            value: `BANK: ${bank} | ${holder} | A/C: ${num} | IFSC: ${ifsc}`
+        };
+    } else {
+        const val = (document.getElementById('wd-single-input')?.value || '').trim();
+        if (!val || val.length < 4) {
+            if (sm) sm.showToast('Please enter a valid address / UPI ID!', 'warning');
+            return;
+        }
+        all[m] = {
+            title: m === 'USDT' ? 'USDT (TRC20)' : `${m} Payout`,
+            display: val,
+            value: `${m}: ${val}`
+        };
+    }
+
+    localStorage.setItem('asg_wd_beneficiaries', JSON.stringify(all));
+    closeAddBeneficiarySheet();
+    renderSavedBeneficiaryUI();
+    if (sm) sm.showToast('Beneficiary saved successfully!', 'success');
+}
+
+function updateWithdrawSummary() {
+    const sm = window.stateManager;
+    const bal = sm ? Number(sm.balance || 0) : 0;
+    const amt = parseFloat(document.getElementById('withdraw-amount-input')?.value || '0') || 0;
+    const acc = (document.getElementById('withdraw-account-input')?.value || '').trim();
+
+    const wBalEl = document.getElementById('wd-withdrawable-val');
+    const recvEl = document.getElementById('wd-received-val');
+    const btn = document.getElementById('btn-submit-withdraw');
+
+    if (wBalEl) wBalEl.textContent = `₹${bal.toFixed(2)}`;
+    if (recvEl) recvEl.textContent = `₹${amt.toFixed(2)}`;
+    if (btn) {
+        if (amt >= 110 && acc) btn.classList.add('ready');
+        else btn.classList.remove('ready');
+    }
+}
+
+function fillAllWithdrawBalance() {
+    const sm = window.stateManager;
+    const bal = sm ? Math.floor(Number(sm.balance || 0)) : 0;
+    const inp = document.getElementById('withdraw-amount-input');
+    if (inp) inp.value = bal > 0 ? String(bal) : '';
+    updateWithdrawSummary();
+}
+
+async function loadWithdrawPageHistory(showAll = false) {
+    const listEl = document.getElementById('wd-history-list');
+    const sm = window.stateManager;
+    if (!listEl || !sm || !sm.token) return;
+    try {
+        const res = await fetch('/api/wallet/transactions', { headers: { 'Authorization': `Bearer ${sm.token}` } });
+        const d = await res.json();
+        const wds = (d.transactions || []).filter(t => t.type === 'withdraw');
+        const shown = showAll ? wds : wds.slice(0, 10);
+        if (shown.length === 0) {
+            listEl.innerHTML = `<div class="bdg-no-data" style="padding:28px 10px;"><div style="font-size:46px; opacity:0.35; margin-bottom:6px;">📜</div><div>No data</div></div>`;
+            if (showAll) sm.showToast('No withdrawal records yet.', 'info');
+            return;
+        }
+        listEl.innerHTML = shown.map(t => {
+            const st = String(t.status || 'pending').toLowerCase();
+            const stColor = (st === 'approved' || st === 'completed') ? '#10b981' : (st === 'rejected' ? '#ef4444' : '#f59e0b');
+            const stText = (st === 'approved' || st === 'completed') ? 'Completed' : (st === 'rejected' ? 'Rejected' : 'Pending');
+            return `
+                <div style="display:flex; justify-content:space-between; align-items:center; padding:10px 6px; border-bottom:1px solid rgba(255,255,255,0.06);">
+                    <div>
+                        <div style="color:#fff; font-weight:700; font-size:13px;">₹${parseFloat(t.amount || 0).toFixed(2)}</div>
+                        <div style="color:#94a3b8; font-size:11px;">${t.details || 'Withdrawal'}</div>
                         <div style="color:#71717a; font-size:10px;">${(t.created_at || '').replace('T', ' ').slice(0, 19)}</div>
                     </div>
                     <span style="font-size:11px; font-weight:700; color:${stColor}; background:rgba(255,255,255,0.05); padding:4px 9px; border-radius:6px;">${stText}</span>
