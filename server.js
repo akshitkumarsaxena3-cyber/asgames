@@ -476,8 +476,8 @@ app.post('/api/referral/claim', requireAuth, async (req, res) => {
         const cleanTotal = Math.floor(total * 100) / 100;
         await DB.run('UPDATE commissions SET claimed = 1 WHERE user_id = ? AND claimed = 0', [req.user.id]);
         await DB.run('UPDATE users SET balance = balance + ? WHERE id = ?', [cleanTotal, req.user.id]);
-        await DB.run(`INSERT INTO transactions (id, user_id, type, amount, status, details) VALUES (?, ?, 'commission', ?, 'approved', 'Referral Commission Claim')`,
-            ['TX' + Date.now(), req.user.id, cleanTotal]);
+        await DB.run(`INSERT INTO transactions (id, user_id, type, amount, status, details) VALUES (?, ?, ?, ?, ?, ?)`,
+            ['TX' + Date.now(), req.user.id, 'commission', cleanTotal, 'approved', 'Referral Commission Claim']);
 
         res.json({ success: true, message: `Successfully claimed ₹${cleanTotal} referral commission!`, claimed: cleanTotal });
     } catch (e) {
@@ -500,8 +500,8 @@ app.post('/api/wallet/deposit', requireAuth, async (req, res) => {
         }
 
         const txId = 'DEP' + Date.now();
-        await DB.run(`INSERT INTO transactions (id, user_id, type, amount, status, details) VALUES (?, ?, 'deposit', ?, 'pending', ?)`,
-            [txId, req.user.id, depositAmt, `Channel: ${channel || 'UPI'} | UTR: ${utr}`]);
+        await DB.run(`INSERT INTO transactions (id, user_id, type, amount, status, details) VALUES (?, ?, ?, ?, ?, ?)`,
+            [txId, req.user.id, 'deposit', depositAmt, 'pending', `Channel: ${channel || 'UPI'} | UTR: ${utr}`]);
 
         res.json({ success: true, message: 'Deposit submitted! Balance will update after admin approval.' });
     } catch (e) {
@@ -524,8 +524,8 @@ app.post('/api/wallet/withdraw', requireAuth, async (req, res) => {
         await DB.run('UPDATE users SET balance = balance - ? WHERE id = ?', [withdrawAmt, req.user.id]);
 
         const txId = 'WTH' + Date.now();
-        await DB.run(`INSERT INTO transactions (id, user_id, type, amount, status, details) VALUES (?, ?, 'withdraw', ?, 'pending', ?)`,
-            [txId, req.user.id, withdrawAmt, bank_info || 'UPI / Bank Transfer']);
+        await DB.run(`INSERT INTO transactions (id, user_id, type, amount, status, details) VALUES (?, ?, ?, ?, ?, ?)`,
+            [txId, req.user.id, 'withdraw', withdrawAmt, 'pending', bank_info || 'UPI / Bank Transfer']);
 
         res.json({ success: true, message: 'Withdrawal requested! Processing within 1-24 hours.' });
     } catch (e) {

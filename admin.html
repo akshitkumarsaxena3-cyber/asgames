@@ -125,8 +125,8 @@
             <div class="admin-nav">
                 <button class="nav-btn active" onclick="switchTab('control')">🎮 Game Rigging & Control</button>
                 <button class="nav-btn" onclick="switchTab('users')">👥 User Management</button>
-                <button class="nav-btn" onclick="switchTab('deposits')">💰 Pending Deposits</button>
-                <button class="nav-btn" onclick="switchTab('withdrawals')">💳 Pending Withdrawals</button>
+                <button class="nav-btn" onclick="switchTab('deposits')">💰 Pending Deposits <span id="badge-dep" style="background:#ef4444; color:#fff; padding:1px 6px; border-radius:10px; font-size:11px; margin-left:4px; display:none;">0</span></button>
+                <button class="nav-btn" onclick="switchTab('withdrawals')">💳 Pending Withdrawals <span id="badge-wth" style="background:#ef4444; color:#fff; padding:1px 6px; border-radius:10px; font-size:11px; margin-left:4px; display:none;">0</span></button>
                 <button class="nav-btn" onclick="switchTab('history')">📑 Financial History</button>
                 <button class="nav-btn" onclick="switchTab('sync')">☁️ Cloud Database Sync</button>
             </div>
@@ -337,14 +337,23 @@
             location.reload();
         }
 
+        let currentAdminTab = 'control';
+
         function showDashboard() {
             document.getElementById('login-view').classList.add('hidden');
             document.getElementById('dashboard-view').classList.remove('hidden');
             refreshOverview();
             setInterval(refreshOverview, 2000);
+            setInterval(() => {
+                if (currentAdminTab === 'deposits') loadDeposits();
+                if (currentAdminTab === 'withdrawals') loadWithdrawals();
+                if (currentAdminTab === 'users') loadUsers();
+                if (currentAdminTab === 'history') loadAllHistory();
+            }, 4000);
         }
 
         function switchTab(tab) {
+            currentAdminTab = tab;
             document.querySelectorAll('.admin-nav .nav-btn').forEach(b => b.classList.remove('active'));
             if (event && event.target) event.target.classList.add('active');
 
@@ -375,6 +384,17 @@
                 document.getElementById('stat-balance').textContent = `₹${d.stats.totalBalance.toFixed(2)}`;
                 document.getElementById('stat-deposits').textContent = d.stats.pendingDeposits;
                 document.getElementById('stat-withdrawals').textContent = d.stats.pendingWithdrawals;
+
+                const bDep = document.getElementById('badge-dep');
+                if (bDep) {
+                    bDep.textContent = d.stats.pendingDeposits;
+                    bDep.style.display = d.stats.pendingDeposits > 0 ? 'inline-block' : 'none';
+                }
+                const bWth = document.getElementById('badge-wth');
+                if (bWth) {
+                    bWth.textContent = d.stats.pendingWithdrawals;
+                    bWth.style.display = d.stats.pendingWithdrawals > 0 ? 'inline-block' : 'none';
+                }
 
                 document.getElementById('current-mode-badge').textContent = `Active Mode: ${d.gameMode.toUpperCase()}` + (d.manualNumber !== '' ? ` (Forced #${d.manualNumber})` : '');
                 
@@ -548,7 +568,8 @@
             }
             tbody.innerHTML = d.transactions.map(t => {
                 const color = t.type === 'deposit' ? '#10b981' : (t.type === 'withdraw' ? '#ef4444' : '#38bdf8');
-                const badge = t.status === 'completed' ? 'lightgreen' : (t.status === 'pending' ? '#ffd875' : '#ef4444');
+                const isApproved = ['approved', 'completed'].includes(t.status);
+                const badge = isApproved ? 'lightgreen' : (t.status === 'pending' ? '#ffd875' : '#ef4444');
                 return `
                 <tr>
                     <td>${t.id}</td>

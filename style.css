@@ -284,56 +284,116 @@ body {
 }
 
 .promo-banner-card {
-    background: linear-gradient(135deg, #372a72 0%, #1e1b4b 50%, #4c1d95 100%);
-    border-radius: 14px;
+    background: linear-gradient(135deg, #2e1065 0%, #171138 50%, #431407 100%);
+    border-radius: 16px;
     padding: 18px 16px;
     display: flex;
     justify-content: space-between;
     align-items: center;
-    border: 1px solid rgba(167, 139, 250, 0.3);
-    box-shadow: 0 4px 18px rgba(76, 29, 149, 0.3);
+    border: 1px solid rgba(245, 196, 67, 0.4);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5), inset 0 1px 1px rgba(255, 255, 255, 0.15);
     position: relative;
     overflow: hidden;
 }
 
-.promo-banner-card::after {
+.promo-banner-card::before {
     content: '';
     position: absolute;
     top: -50%;
-    right: -20%;
-    width: 150px;
-    height: 150px;
-    background: radial-gradient(circle, rgba(250, 229, 159, 0.25) 0%, transparent 70%);
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: radial-gradient(circle, rgba(245, 196, 67, 0.12) 0%, transparent 60%);
     pointer-events: none;
 }
 
+.promo-vip-tag {
+    display: inline-block;
+    background: linear-gradient(90deg, #f5c443 0%, #b47612 100%);
+    color: #1a0f02;
+    font-size: 9px;
+    font-weight: 800;
+    padding: 2px 8px;
+    border-radius: 20px;
+    letter-spacing: 0.8px;
+    margin-bottom: 6px;
+    box-shadow: 0 2px 6px rgba(245, 196, 67, 0.4);
+}
+
 .promo-text h3 {
-    font-size: 16px;
-    font-weight: 700;
+    font-size: 17px;
+    font-weight: 800;
     color: #fae59f;
     margin-bottom: 4px;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.6);
 }
 
 .promo-text p {
-    font-size: 12px;
-    color: #e2e8f0;
+    font-size: 11px;
+    color: #cbd5e1;
+    line-height: 1.3;
 }
 
 .promo-btn-mini {
-    background: var(--gold-gradient-btn);
-    color: #2b1704;
+    background: linear-gradient(180deg, #ffd875 0%, #d97706 100%);
+    color: #1e1302;
     border: none;
-    padding: 6px 12px;
-    border-radius: 14px;
+    padding: 7px 14px;
+    border-radius: 20px;
     font-size: 11px;
-    font-weight: 700;
-    margin-top: 8px;
+    font-weight: 800;
+    margin-top: 10px;
     cursor: pointer;
+    box-shadow: 0 4px 12px rgba(217, 119, 6, 0.4);
+    letter-spacing: 0.5px;
+    transition: transform 0.15s;
+}
+
+.promo-btn-mini:active {
+    transform: scale(0.95);
 }
 
 .promo-graphic {
-    font-size: 42px;
-    filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.4));
+    filter: drop-shadow(0 6px 12px rgba(245, 196, 67, 0.3));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Live Stats Strip */
+.live-stats-strip {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0 16px 10px;
+    gap: 8px;
+}
+
+.stat-pill-mini {
+    background: rgba(30, 41, 59, 0.7);
+    border: 1px solid rgba(148, 163, 184, 0.18);
+    border-radius: 12px;
+    padding: 5px 10px;
+    font-size: 11px;
+    color: #94a3b8;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    backdrop-filter: blur(8px);
+}
+
+.live-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #10b981;
+    box-shadow: 0 0 8px #10b981;
+    animation: pulseDot 1.5s infinite;
+}
+
+@keyframes pulseDot {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.4; transform: scale(1.3); }
 }
 
 /* Category Filter Pills */
@@ -350,7 +410,7 @@ body {
 }
 
 .cat-pill {
-    background: var(--bg-card);
+    background: rgba(28, 34, 60, 0.85);
     border: 1px solid var(--border-color);
     color: var(--text-secondary);
     padding: 8px 14px;
@@ -382,27 +442,53 @@ body {
 }
 
 .game-card {
-    background: var(--bg-card);
-    border: 1px solid var(--border-color);
-    border-radius: 14px;
+    background: linear-gradient(145deg, #1e2648 0%, #151a33 100%);
+    border: 1px solid rgba(148, 163, 184, 0.15);
+    border-radius: 16px;
     padding: 14px;
     display: flex;
     flex-direction: column;
     justify-content: space-between;
-    min-height: 145px;
+    min-height: 155px;
     cursor: pointer;
     position: relative;
     overflow: hidden;
-    transition: transform 0.15s, border-color 0.2s, box-shadow 0.2s;
+    transition: transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1), border-color 0.2s, box-shadow 0.2s;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
 }
 
 .game-card:active {
-    transform: scale(0.97);
+    transform: scale(0.96);
 }
 
-.game-card:hover {
-    border-color: rgba(245, 196, 67, 0.5);
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+.card-wingo:hover {
+    border-color: #10b981;
+    box-shadow: 0 8px 24px rgba(16, 185, 129, 0.3);
+    transform: translateY(-2px);
+}
+
+.card-aviator:hover {
+    border-color: #ef4444;
+    box-shadow: 0 8px 24px rgba(239, 68, 68, 0.3);
+    transform: translateY(-2px);
+}
+
+.card-mines:hover {
+    border-color: #06b6d4;
+    box-shadow: 0 8px 24px rgba(6, 182, 212, 0.3);
+    transform: translateY(-2px);
+}
+
+.card-k3:hover {
+    border-color: #8b5cf6;
+    box-shadow: 0 8px 24px rgba(139, 92, 246, 0.3);
+    transform: translateY(-2px);
+}
+
+.card-5d:hover, .card-slots:hover {
+    border-color: #f5c443;
+    box-shadow: 0 8px 24px rgba(245, 196, 67, 0.3);
+    transform: translateY(-2px);
 }
 
 .card-top {
@@ -415,20 +501,22 @@ body {
     background: linear-gradient(135deg, #ef4444 0%, #b91c1c 100%);
     color: #fff;
     font-size: 9px;
-    font-weight: 700;
-    padding: 2px 6px;
-    border-radius: 6px;
+    font-weight: 800;
+    padding: 3px 7px;
+    border-radius: 8px;
     text-transform: uppercase;
     letter-spacing: 0.5px;
+    box-shadow: 0 2px 6px rgba(239, 68, 68, 0.35);
 }
 
 .game-badge-new {
     background: linear-gradient(135deg, #10b981 0%, #047857 100%);
     color: #fff;
     font-size: 9px;
-    font-weight: 700;
-    padding: 2px 6px;
-    border-radius: 6px;
+    font-weight: 800;
+    padding: 3px 7px;
+    border-radius: 8px;
+    box-shadow: 0 2px 6px rgba(16, 185, 129, 0.35);
 }
 
 .game-icon-large {
@@ -2117,4 +2205,182 @@ body {
 
 .menu-item-row:last-child {
     border-bottom: none;
+}
+
+
+/* ========================================================
+   ULTRA-LUXURY CASINO UI/UX & GRAPHICS OVERHAUL
+======================================================== */
+
+body {
+    background: radial-gradient(circle at top, #171e3c 0%, #070a15 100%) !important;
+}
+
+#app {
+    background: linear-gradient(180deg, #10152b 0%, #0b0e1e 100%) !important;
+    border-left: 1px solid rgba(245, 196, 67, 0.12);
+    border-right: 1px solid rgba(245, 196, 67, 0.12);
+}
+
+.app-header {
+    background: rgba(18, 24, 48, 0.85) !important;
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border-bottom: 1px solid rgba(245, 196, 67, 0.22) !important;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.45);
+}
+
+.brand-title {
+    background: linear-gradient(135deg, #fff5c2 0%, #f5c443 50%, #d97706 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    font-weight: 900 !important;
+    letter-spacing: 0.5px;
+    filter: drop-shadow(0 2px 6px rgba(245, 196, 67, 0.3));
+}
+
+/* Metallic VIP Wallet Balance Card */
+.header-balance-card {
+    background: linear-gradient(135deg, #212c56 0%, #151b38 60%, #261e45 100%) !important;
+    border: 1px solid rgba(250, 229, 159, 0.35) !important;
+    border-radius: 14px !important;
+    box-shadow: 0 8px 22px rgba(0, 0, 0, 0.45), inset 0 1px 1px rgba(255, 255, 255, 0.15) !important;
+    position: relative;
+    overflow: hidden;
+}
+
+.header-balance-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 60%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(250, 229, 159, 0.08), transparent);
+    animation: walletShimmer 4.5s infinite;
+    pointer-events: none;
+}
+
+@keyframes walletShimmer {
+    0% { left: -100%; }
+    50% { left: 150%; }
+    100% { left: 150%; }
+}
+
+.balance-value {
+    font-size: 21px !important;
+    font-weight: 800 !important;
+    color: #fffbeb !important;
+    text-shadow: 0 2px 8px rgba(245, 196, 67, 0.35);
+}
+
+.btn-deposit {
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%) !important;
+    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.3) !important;
+    font-weight: 800 !important;
+    border-radius: 10px !important;
+    transition: transform 0.15s, box-shadow 0.2s !important;
+}
+
+.btn-deposit:active {
+    transform: scale(0.95);
+}
+
+.btn-withdraw {
+    background: linear-gradient(135deg, #f5c443 0%, #d97706 100%) !important;
+    color: #1c1002 !important;
+    box-shadow: 0 4px 12px rgba(245, 196, 67, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.4) !important;
+    font-weight: 800 !important;
+    border-radius: 10px !important;
+    transition: transform 0.15s, box-shadow 0.2s !important;
+}
+
+.btn-withdraw:active {
+    transform: scale(0.95);
+}
+
+/* 3D Glossy Win Go Betting Buttons */
+.btn-bet-green {
+    background: linear-gradient(180deg, #34d399 0%, #059669 100%) !important;
+    box-shadow: 0 5px 14px rgba(16, 185, 129, 0.45), inset 0 2px 2px rgba(255, 255, 255, 0.35) !important;
+    border: 1px solid rgba(110, 231, 183, 0.5) !important;
+    font-weight: 800 !important;
+    letter-spacing: 0.5px;
+    transition: transform 0.12s !important;
+}
+
+.btn-bet-violet {
+    background: linear-gradient(180deg, #a78bfa 0%, #6d28d9 100%) !important;
+    box-shadow: 0 5px 14px rgba(139, 92, 246, 0.45), inset 0 2px 2px rgba(255, 255, 255, 0.35) !important;
+    border: 1px solid rgba(196, 181, 253, 0.5) !important;
+    font-weight: 800 !important;
+    letter-spacing: 0.5px;
+    transition: transform 0.12s !important;
+}
+
+.btn-bet-red {
+    background: linear-gradient(180deg, #f87171 0%, #dc2626 100%) !important;
+    box-shadow: 0 5px 14px rgba(239, 68, 68, 0.45), inset 0 2px 2px rgba(255, 255, 255, 0.35) !important;
+    border: 1px solid rgba(252, 165, 165, 0.5) !important;
+    font-weight: 800 !important;
+    letter-spacing: 0.5px;
+    transition: transform 0.12s !important;
+}
+
+.btn-bet-green:active, .btn-bet-violet:active, .btn-bet-red:active {
+    transform: scale(0.94);
+}
+
+/* 3D Specular Lottery Number Balls */
+.num-ball-btn {
+    box-shadow: 0 6px 14px rgba(0, 0, 0, 0.45), inset 0 3px 6px rgba(255, 255, 255, 0.45) !important;
+    transition: transform 0.15s, box-shadow 0.15s !important;
+}
+
+.num-ball-btn:hover {
+    transform: translateY(-2px) scale(1.06);
+}
+
+.num-ball-btn:active {
+    transform: scale(0.92);
+}
+
+/* Sleek Glass Bottom Navigation */
+.bottom-nav {
+    background: rgba(15, 20, 42, 0.92) !important;
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border-top: 1px solid rgba(245, 196, 67, 0.25) !important;
+    box-shadow: 0 -6px 24px rgba(0, 0, 0, 0.55);
+}
+
+.nav-item.active {
+    color: #fae59f !important;
+    text-shadow: 0 0 10px rgba(245, 196, 67, 0.6);
+}
+
+/* Modals Glassmorphism & Pop Animation */
+.center-modal {
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    background: rgba(5, 8, 18, 0.78) !important;
+}
+
+.modal-dialog {
+    background: linear-gradient(145deg, #1b2344 0%, #10152b 100%) !important;
+    border: 1px solid rgba(245, 196, 67, 0.35) !important;
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.7), 0 0 20px rgba(245, 196, 67, 0.12) !important;
+    animation: modalPopIn 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes modalPopIn {
+    0% { opacity: 0; transform: scale(0.92) translateY(10px); }
+    100% { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.btn-play-mini {
+    background: linear-gradient(135deg, #fde047 0%, #d97706 100%) !important;
+    color: #1c1002 !important;
+    font-weight: 800 !important;
+    box-shadow: 0 3px 8px rgba(245, 196, 67, 0.35);
 }

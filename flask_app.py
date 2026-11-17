@@ -363,31 +363,41 @@ def api_forgot_password():
 # WALLET & TRANSACTIONS APIS
 # ========================================================
 
+@app.route('/api/wallet/deposit', methods=['POST'])
 @app.route('/api/wallet/recharge', methods=['POST'])
 def api_recharge():
     user = get_current_user(request)
     if not user:
-        return jsonify({'success': False, 'message': 'Unauthorized'}), 401
+        return jsonify({'success': False, 'message': 'Unauthorized. Please login first.'}), 401
 
     data = request.get_json(silent=True) or {}
     amount = float(data.get('amount', 0))
+    utr = str(data.get('utr', '')).strip()
+    channel = str(data.get('channel', 'UPI')).strip()
     details = str(data.get('details', '')).strip()
 
-    if amount < 100:
-        return jsonify({'success': False, 'message': 'Minimum recharge is ₹100'}), 400
+    if not details and utr:
+        details = f"Channel: {channel} | UTR: {utr}"
+    elif not details:
+        details = f"Channel: {channel} | UPI Deposit Request"
 
-    tx_id = f"DEP_{int(time.time()*1000)}_{random.randint(100, 999)}"
+    if amount < 100:
+        return jsonify({'success': False, 'message': 'Minimum deposit is ₹100'}), 400
+    if utr and len(utr) < 6:
+        return jsonify({'success': False, 'message': 'Please enter a valid 12-digit UTR / Transaction ID'}), 400
+
+    tx_id = f"DEP{int(time.time()*1000)}"
     now_iso = datetime.now().isoformat()
 
     with get_db() as conn:
         cursor = conn.cursor()
         cursor.execute(
             'INSERT INTO transactions (id, user_id, type, amount, status, details, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
-            (tx_id, user['id'], 'deposit', amount, 'pending', details or 'UPI Deposit Request', now_iso)
+            (tx_id, user['id'], 'deposit', amount, 'pending', details, now_iso)
         )
         conn.commit()
 
-    return jsonify({'success': True, 'message': 'Recharge request submitted! Waiting for Admin approval.', 'tx_id': tx_id})
+    return jsonify({'success': True, 'message': 'Deposit submitted! Balance will update after admin approval.', 'tx_id': tx_id})
 
 @app.route('/api/wallet/withdraw', methods=['POST'])
 def api_withdraw():
@@ -397,7 +407,7 @@ def api_withdraw():
 
     data = request.get_json(silent=True) or {}
     amount = float(data.get('amount', 0))
-    details = str(data.get('details', '')).strip()
+    details = str(data.get('bank_info') or data.get('details') or 'Bank / UPI Withdrawal').strip()
 
     if amount < 110:
         return jsonify({'success': False, 'message': 'Minimum withdrawal is ₹110'}), 400
@@ -413,11 +423,11 @@ def api_withdraw():
 
         # Deduct balance immediately upon request
         cursor.execute('UPDATE users SET balance = balance - ? WHERE id = ?', (amount, user['id']))
-        tx_id = f"WTH_{int(time.time()*1000)}_{random.randint(100, 999)}"
+        tx_id = f"WTH{int(time.time()*1000)}"
         now_iso = datetime.now().isoformat()
         cursor.execute(
             'INSERT INTO transactions (id, user_id, type, amount, status, details, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
-            (tx_id, user['id'], 'withdraw', amount, 'pending', details or 'Bank/UPI Withdrawal', now_iso)
+            (tx_id, user['id'], 'withdraw', amount, 'pending', details, now_iso)
         )
         conn.commit()
 
@@ -435,6 +445,31 @@ def api_my_transactions():
         rows = [dict(r) for r in cursor.fetchall()]
 
     return jsonify({'success': True, 'transactions': rows})
+
+@app.route('/api/referral/stats', methods=['GET'])
+def api_referral_stats():
+    user = get_current_user(request)
+    if not user:
+        return jsonify({'success': False, 'message': 'Unauthorized'}), 401
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute('SELECT id, phone, created_at FROM users WHERE referred_by = ?', (user['invite_code'],))
+        subordinates = [dict(r) for r in cursor.fetchall()]
+    return jsonify({
+        'success': True,
+        'invite_code': user['invite_code'],
+        'total_subordinates': len(subordinates),
+        'unclaimed_commission': 0.0,
+        'total_commission': 0.0,
+        'subordinates': subordinates
+    })
+
+@app.route('/api/referral/claim', methods=['POST'])
+def api_referral_claim():
+    user = get_current_user(request)
+    if not user:
+        return jsonify({'success': False, 'message': 'Unauthorized'}), 401
+    return jsonify({'success': False, 'message': 'No commission available to claim yet.'})
 
 
 # ========================================================

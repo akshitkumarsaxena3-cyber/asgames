@@ -458,12 +458,21 @@ class DataStore {
 
         // 8. Insert Transaction
         if (sql.includes('INSERT INTO transactions')) {
-            const [id, user_id, type, amount, status, details] = params;
+            let id, user_id, type, amount, status, details;
+            if (params.length === 6) {
+                [id, user_id, type, amount, status, details] = params;
+            } else if (params.length === 4) {
+                [id, user_id, amount, details] = params;
+                type = sql.includes("'deposit'") ? 'deposit' : (sql.includes("'withdraw'") ? 'withdraw' : (sql.includes("'commission'") ? 'commission' : 'deposit'));
+                status = sql.includes("'approved'") ? 'approved' : 'pending';
+            } else {
+                [id, user_id, type, amount, status, details] = params;
+            }
             const tx = {
                 id: String(id),
                 user_id: parseInt(user_id),
-                type,
-                amount: parseFloat(amount),
+                type: type || 'deposit',
+                amount: parseFloat(amount) || 0,
                 status: status || 'pending',
                 details: details || '',
                 created_at: new Date().toISOString()
