@@ -41,74 +41,154 @@
             </div>
         </div>
 
-        <!-- User Authentication Modal (Login / Register) -->
-        <div id="auth-modal" class="center-modal hidden">
-            <div class="modal-dialog">
-                <div class="modal-header">
-                    <h3 id="auth-modal-title" style="color:#fae59f; font-size:16px; font-weight:700;">Account Login</h3>
-                    <button id="auth-modal-close" class="btn-drawer-close">&times;</button>
-                </div>
-                <!-- Auth Tabs -->
-                <div style="display:flex; gap:10px; margin-bottom:16px; border-bottom:1px solid #29345e; padding-bottom:8px;">
-                    <button id="tab-btn-login" class="nav-btn active" style="flex:1; padding:8px; font-size:13px; font-weight:700; background:var(--gold-gradient); color:#1a1505; border:none; border-radius:6px; cursor:pointer;" onclick="switchAuthTab('login')">LOGIN</button>
-                    <button id="tab-btn-register" class="nav-btn" style="flex:1; padding:8px; font-size:13px; font-weight:700; background:#1c223c; color:#94a3b8; border:1px solid #29345e; border-radius:6px; cursor:pointer;" onclick="switchAuthTab('register')">REGISTER</button>
+        <!-- User Authentication Modal (BDG-Style Luxury Login / Register / Forgot) -->
+        <div id="auth-modal" class="bdg-auth-overlay hidden">
+            <div class="bdg-auth-shell">
+                <!-- Top Bar -->
+                <div class="bdg-auth-topbar">
+                    <button id="auth-modal-close" class="bdg-back-btn" title="Back">&#8249;</button>
+                    <div class="bdg-auth-logo">
+                        <span class="bdg-logo-crown">👑</span>
+                        <span>ASGames</span>
+                    </div>
+                    <button class="lang-switch-pill" onclick="toggleLanguage()" title="Switch Hindi / English">
+                        <span class="lang-flag">🇺🇸</span>
+                        <span class="lang-code">EN</span>
+                    </button>
                 </div>
 
-                <!-- Login Form -->
-                <div id="form-login">
-                    <div class="input-group">
-                        <label class="input-label">Mobile Number</label>
-                        <input type="text" id="login-phone" class="form-input" placeholder="Enter 10-digit mobile number">
-                    </div>
-                    <div class="input-group">
-                        <label class="input-label">Password</label>
-                        <input type="password" id="login-password" class="form-input" placeholder="Enter password">
-                    </div>
-                    <div style="display:flex; justify-content:space-between; align-items:center; margin: 4px 0 14px;">
-                        <span style="font-size:11px; color:#94a3b8;">Safe & Secure Login</span>
-                        <a href="javascript:void(0)" onclick="switchAuthTab('forgot')" style="color:#fae59f; font-size:12px; font-weight:600; text-decoration:none;">Forgot Password?</a>
-                    </div>
-                    <button id="btn-submit-login" class="btn-full btn-gold" onclick="submitLogin()">LOGIN</button>
+                <!-- Header Icon & Gold Underline Title -->
+                <div class="bdg-auth-subheader">
+                    <div class="bdg-phone-badge">📱</div>
+                    <div id="auth-modal-title" class="bdg-subheader-title" data-i18n="reg_title">Register your phone</div>
+                    <div class="bdg-gold-divider"></div>
                 </div>
 
                 <!-- Register Form -->
-                <div id="form-register" class="hidden">
-                    <div class="input-group">
-                        <label class="input-label">Mobile Number</label>
-                        <input type="text" id="reg-phone" class="form-input" placeholder="Enter 10-digit mobile number">
+                <div id="form-register" class="bdg-auth-body">
+                    <div class="bdg-field-group">
+                        <label class="bdg-label"><span class="bdg-icon">📱</span> <span data-i18n="phone_number">Phone number</span></label>
+                        <div class="bdg-phone-row">
+                            <select id="reg-country-code" class="bdg-cc-select">
+                                <option value="+91">+91</option>
+                                <option value="+1">+1</option>
+                                <option value="+971">+971</option>
+                                <option value="+880">+880</option>
+                                <option value="+977">+977</option>
+                            </select>
+                            <input type="tel" id="reg-phone" class="bdg-input" placeholder="Please enter the phone number" data-i18n-ph="ph_phone">
+                        </div>
                     </div>
-                    <div class="input-group">
-                        <label class="input-label">Set Password</label>
-                        <input type="password" id="reg-password" class="form-input" placeholder="Set your password">
+
+                    <div class="bdg-field-group">
+                        <label class="bdg-label"><span class="bdg-icon">🔒</span> <span data-i18n="set_password">Set password</span></label>
+                        <div class="bdg-pass-wrap">
+                            <input type="password" id="reg-password" class="bdg-input" placeholder="Set password" data-i18n-ph="ph_set_pass">
+                            <button type="button" class="bdg-eye-btn" onclick="togglePassEye('reg-password', this)">👁️</button>
+                        </div>
                     </div>
-                    <div class="input-group">
-                        <label class="input-label">Invitation / Referral Code (Required or Optional)</label>
-                        <input type="text" id="reg-invite" class="form-input" placeholder="e.g. ASG84920">
+
+                    <div class="bdg-field-group">
+                        <label class="bdg-label"><span class="bdg-icon">🔒</span> <span data-i18n="confirm_password">Confirm password</span></label>
+                        <div class="bdg-pass-wrap">
+                            <input type="password" id="reg-password-confirm" class="bdg-input" placeholder="Confirm password" data-i18n-ph="ph_confirm_pass">
+                            <button type="button" class="bdg-eye-btn" onclick="togglePassEye('reg-password-confirm', this)">👁️</button>
+                        </div>
                     </div>
-                    <p style="font-size:11px; color:#10b981; margin-bottom:12px;">🎁 Get ₹100 Welcome Bonus instantly on registration!</p>
-                    <button id="btn-submit-register" class="btn-full btn-gold" onclick="submitRegister()">REGISTER & CLAIM ₹100</button>
+
+                    <div class="bdg-field-group">
+                        <label class="bdg-label"><span class="bdg-icon">👤</span> <span data-i18n="invite_code">Invite code</span></label>
+                        <input type="text" id="reg-invite" class="bdg-input" placeholder="Please enter the invitation code" data-i18n-ph="ph_invite">
+                    </div>
+
+                    <label class="bdg-agree-row">
+                        <input type="checkbox" id="reg-agree" checked>
+                        <span class="bdg-agree-text">
+                            <span data-i18n="agree_prefix">I have read and agree</span>
+                            <span class="bdg-privacy-link" data-i18n="privacy_agreement">【Privacy Agreement】</span>
+                        </span>
+                    </label>
+
+                    <button id="btn-submit-register" class="bdg-btn-gold" onclick="submitRegister()" data-i18n="btn_register">Register</button>
+
+                    <button type="button" class="bdg-btn-outline" onclick="switchAuthTab('login')">
+                        <span style="color:#94a3b8; font-weight:500;" data-i18n="have_account">I have an account</span>&nbsp;
+                        <span style="color:#f5c443; font-weight:700;" data-i18n="btn_login">Login</span>
+                    </button>
+                </div>
+
+                <!-- Login Form -->
+                <div id="form-login" class="bdg-auth-body hidden">
+                    <div class="bdg-field-group">
+                        <label class="bdg-label"><span class="bdg-icon">📱</span> <span data-i18n="phone_number">Phone number</span></label>
+                        <div class="bdg-phone-row">
+                            <select id="login-country-code" class="bdg-cc-select">
+                                <option value="+91">+91</option>
+                                <option value="+1">+1</option>
+                                <option value="+971">+971</option>
+                            </select>
+                            <input type="tel" id="login-phone" class="bdg-input" placeholder="Please enter the phone number" data-i18n-ph="ph_phone">
+                        </div>
+                    </div>
+
+                    <div class="bdg-field-group">
+                        <label class="bdg-label"><span class="bdg-icon">🔒</span> <span data-i18n="password">Password</span></label>
+                        <div class="bdg-pass-wrap">
+                            <input type="password" id="login-password" class="bdg-input" placeholder="Please enter password" data-i18n-ph="ph_enter_pass">
+                            <button type="button" class="bdg-eye-btn" onclick="togglePassEye('login-password', this)">👁️</button>
+                        </div>
+                    </div>
+
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin: 10px 0 22px;">
+                        <label class="bdg-agree-row" style="margin:0;">
+                            <input type="checkbox" checked>
+                            <span class="bdg-agree-text" data-i18n="remember_pass">Remember password</span>
+                        </label>
+                        <a href="javascript:void(0)" onclick="switchAuthTab('forgot')" style="color:#f5c443; font-size:12px; font-weight:600; text-decoration:none;" data-i18n="forgot_password">Forgot password?</a>
+                    </div>
+
+                    <button id="btn-submit-login" class="bdg-btn-gold" onclick="submitLogin()" data-i18n="btn_login">Log in</button>
+
+                    <button type="button" class="bdg-btn-outline" onclick="switchAuthTab('register')">
+                        <span style="color:#f5c443; font-weight:700;" data-i18n="btn_register">Register</span>
+                    </button>
                 </div>
 
                 <!-- Forgot Password Form -->
-                <div id="form-forgot" class="hidden">
-                    <p style="font-size:12px; color:#94a3b8; margin-bottom:14px; line-height:1.4;">Apna registered mobile number daalein aur naya password set karein:</p>
-                    <div class="input-group">
-                        <label class="input-label">Registered Mobile Number</label>
-                        <input type="text" id="forgot-phone" class="form-input" placeholder="Enter 10-digit mobile number">
+                <div id="form-forgot" class="bdg-auth-body hidden">
+                    <div class="bdg-field-group">
+                        <label class="bdg-label"><span class="bdg-icon">📱</span> <span data-i18n="phone_number">Phone number</span></label>
+                        <div class="bdg-phone-row">
+                            <select class="bdg-cc-select"><option value="+91">+91</option></select>
+                            <input type="tel" id="forgot-phone" class="bdg-input" placeholder="Please enter the phone number" data-i18n-ph="ph_phone">
+                        </div>
                     </div>
-                    <div class="input-group">
-                        <label class="input-label">New Password</label>
-                        <input type="password" id="forgot-password" class="form-input" placeholder="Enter new password">
+
+                    <div class="bdg-field-group">
+                        <label class="bdg-label"><span class="bdg-icon">🔒</span> <span data-i18n="new_password">New password</span></label>
+                        <div class="bdg-pass-wrap">
+                            <input type="password" id="forgot-password" class="bdg-input" placeholder="Enter new password" data-i18n-ph="ph_new_pass">
+                            <button type="button" class="bdg-eye-btn" onclick="togglePassEye('forgot-password', this)">👁️</button>
+                        </div>
                     </div>
-                    <div class="input-group">
-                        <label class="input-label">Confirm New Password</label>
-                        <input type="password" id="forgot-password-confirm" class="form-input" placeholder="Confirm new password">
+
+                    <div class="bdg-field-group">
+                        <label class="bdg-label"><span class="bdg-icon">🔒</span> <span data-i18n="confirm_password">Confirm password</span></label>
+                        <div class="bdg-pass-wrap">
+                            <input type="password" id="forgot-password-confirm" class="bdg-input" placeholder="Confirm new password" data-i18n-ph="ph_confirm_pass">
+                            <button type="button" class="bdg-eye-btn" onclick="togglePassEye('forgot-password-confirm', this)">👁️</button>
+                        </div>
                     </div>
-                    <button id="btn-submit-forgot" class="btn-full btn-gold" onclick="submitForgotPassword()">RESET PASSWORD</button>
-                    <div style="text-align:center; margin-top:14px;">
-                        <a href="javascript:void(0)" onclick="switchAuthTab('login')" style="color:#fae59f; font-size:12px; font-weight:600; text-decoration:none;">← Back to Login</a>
-                    </div>
+
+                    <button id="btn-submit-forgot" class="bdg-btn-gold" style="margin-top:10px;" onclick="submitForgotPassword()" data-i18n="btn_reset">Reset Password</button>
+
+                    <button type="button" class="bdg-btn-outline" onclick="switchAuthTab('login')">
+                        <span style="color:#f5c443; font-weight:700;" data-i18n="back_login">← Back to Login</span>
+                    </button>
                 </div>
+
+                <!-- Floating Gold Support Mascot -->
+                <div class="bdg-support-fab" title="24/7 Customer Support" onclick="alert('ASGames 24/7 Support Active! Contact admin for deposit/withdrawal help.')">💬</div>
             </div>
         </div>
 
@@ -179,8 +259,11 @@
                     <span class="brand-badge">PRO</span>
                 </div>
                 <div class="header-actions">
-                    <button id="btn-auth-trigger" class="btn-deposit" style="padding:4px 10px; font-size:11px;" onclick="openAuthModal()">Login / Register</button>
-                    <div class="ping-tag"><span>●</span> 19ms</div>
+                    <button class="lang-switch-pill" onclick="toggleLanguage()" title="Switch Hindi / English">
+                        <span class="lang-flag">🇺🇸</span>
+                        <span class="lang-code">EN</span>
+                    </button>
+                    <button id="btn-auth-trigger" class="btn-deposit" style="padding:4px 10px; font-size:11px;" onclick="openAuthModal('register')" data-i18n="login_register">Login / Register</button>
                     <button id="sound-toggle-btn" class="icon-btn" title="Toggle Sound">🔊</button>
                 </div>
             </div>
@@ -189,14 +272,14 @@
             <div class="header-balance-card">
                 <div class="balance-info">
                     <div class="balance-label-row">
-                        <span class="balance-label">Total Balance</span>
+                        <span class="balance-label" data-i18n="total_balance">Total Balance</span>
                         <button id="btn-refresh-balance" class="btn-refresh" title="Refresh">🔄</button>
                     </div>
                     <span class="balance-value user-balance-val">₹1,000.00</span>
                 </div>
                 <div class="balance-btns">
-                    <button class="btn-deposit trigger-recharge">+ Deposit</button>
-                    <button class="btn-withdraw trigger-withdraw">Withdraw</button>
+                    <button class="btn-deposit trigger-recharge" data-i18n="btn_deposit">+ Deposit</button>
+                    <button class="btn-withdraw trigger-withdraw" data-i18n="btn_withdraw">Withdraw</button>
                 </div>
             </div>
         </header>
@@ -1111,24 +1194,24 @@
         <nav class="tabbar-container">
             <div class="tabbar-item active" data-tab="home">
                 <span class="tabbar-icon">🏠</span>
-                <span>Home</span>
+                <span data-i18n="nav_home">Home</span>
             </div>
             <div class="tabbar-item" data-tab="activity">
                 <span class="tabbar-icon">🎁</span>
-                <span>Activity</span>
+                <span data-i18n="nav_activity">Activity</span>
             </div>
             <div class="tabbar-item" data-tab="promotion">
                 <span class="badge-dot">HOT</span>
                 <span class="tabbar-icon">💰</span>
-                <span>Get ₹500</span>
+                <span data-i18n="nav_promo">Get ₹500</span>
             </div>
             <div class="tabbar-item" data-tab="wallet">
                 <span class="tabbar-icon">💳</span>
-                <span>Wallet</span>
+                <span data-i18n="nav_wallet">Wallet</span>
             </div>
             <div class="tabbar-item" data-tab="account">
                 <span class="tabbar-icon">👤</span>
-                <span>Account</span>
+                <span data-i18n="nav_account">Account</span>
             </div>
         </nav>
 

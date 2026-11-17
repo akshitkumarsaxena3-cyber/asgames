@@ -42,15 +42,16 @@ class StateManager {
     }
 
     checkUrlReferral() {
-        const urlParams = new URLSearchParams(window.location.search);
-        const ref = urlParams.get('r');
+        const searchParams = new URLSearchParams(window.location.search);
+        const hashQuery = window.location.hash.includes('?') ? window.location.hash.split('?')[1] : '';
+        const hashParams = new URLSearchParams(hashQuery);
+        const ref = searchParams.get('r') || searchParams.get('invitationCode') || hashParams.get('invitationCode') || hashParams.get('r');
+
         if (ref) {
             const regInviteInput = document.getElementById('reg-invite');
-            if (regInviteInput) regInviteInput.value = ref.trim().toUpperCase();
-            // Automatically open register modal if referred
+            if (regInviteInput) regInviteInput.value = ref.trim();
             if (!this.token) {
-                openAuthModal();
-                switchAuthTab('register');
+                openAuthModal('register');
             }
         }
     }
@@ -789,10 +790,141 @@ class StateManager {
     }
 }
 
+// ========================================================
+// HINDI / ENGLISH LANGUAGE SYSTEM (i18n)
+// ========================================================
+const I18N_DICT = {
+    en: {
+        reg_title: 'Register your phone',
+        login_title: 'Log in with phone',
+        forgot_title: 'Reset your password',
+        phone_number: 'Phone number',
+        set_password: 'Set password',
+        confirm_password: 'Confirm password',
+        new_password: 'New password',
+        password: 'Password',
+        invite_code: 'Invite code',
+        agree_prefix: 'I have read and agree',
+        privacy_agreement: '【Privacy Agreement】',
+        btn_register: 'Register',
+        btn_login: 'Log in',
+        btn_reset: 'Reset Password',
+        have_account: 'I have an account',
+        remember_pass: 'Remember password',
+        forgot_password: 'Forgot password?',
+        back_login: '← Back to Login',
+        ph_phone: 'Please enter the phone number',
+        ph_set_pass: 'Set password',
+        ph_confirm_pass: 'Confirm password',
+        ph_enter_pass: 'Please enter password',
+        ph_new_pass: 'Enter new password',
+        ph_invite: 'Please enter the invitation code',
+        login_register: 'Login / Register',
+        total_balance: 'Total Balance',
+        btn_deposit: '+ Deposit',
+        btn_withdraw: 'Withdraw',
+        nav_home: 'Home',
+        nav_activity: 'Activity',
+        nav_promo: 'Get ₹500',
+        nav_wallet: 'Wallet',
+        nav_account: 'Account'
+    },
+    hi: {
+        reg_title: 'अपना फ़ोन रजिस्टर करें',
+        login_title: 'फ़ोन नंबर से लॉगिन करें',
+        forgot_title: 'पासवर्ड रीसेट करें',
+        phone_number: 'फ़ोन नंबर',
+        set_password: 'पासवर्ड सेट करें',
+        confirm_password: 'पासवर्ड की पुष्टि करें',
+        new_password: 'नया पासवर्ड',
+        password: 'पासवर्ड',
+        invite_code: 'इनवाइट कोड',
+        agree_prefix: 'मैंने पढ़ा है और सहमत हूँ',
+        privacy_agreement: '【गोपनीयता नीति】',
+        btn_register: 'रजिस्टर करें',
+        btn_login: 'लॉगिन करें',
+        btn_reset: 'पासवर्ड बदलें',
+        have_account: 'मेरा अकाउंट पहले से है',
+        remember_pass: 'पासवर्ड याद रखें',
+        forgot_password: 'पासवर्ड भूल गए?',
+        back_login: '← लॉगिन पर वापस जाएं',
+        ph_phone: 'कृपया 10 अंकों का फ़ोन नंबर डालें',
+        ph_set_pass: 'पासवर्ड सेट करें',
+        ph_confirm_pass: 'पासवर्ड दोबारा डालें',
+        ph_enter_pass: 'कृपया पासवर्ड डालें',
+        ph_new_pass: 'नया पासवर्ड डालें',
+        ph_invite: 'कृपया इनवाइट कोड डालें (वैकल्पिक)',
+        login_register: 'लॉगिन / रजिस्टर',
+        total_balance: 'कुल बैलेंस',
+        btn_deposit: '+ जमा करें',
+        btn_withdraw: 'निकासी',
+        nav_home: 'होम',
+        nav_activity: 'गतिविधि',
+        nav_promo: '₹500 कमाएं',
+        nav_wallet: 'वॉलेट',
+        nav_account: 'अकाउंट'
+    }
+};
+
+let currentLang = localStorage.getItem('asg_lang') || 'en';
+let currentAuthView = 'register';
+
+function applyLanguage(lang) {
+    currentLang = (lang === 'hi') ? 'hi' : 'en';
+    localStorage.setItem('asg_lang', currentLang);
+    const dict = I18N_DICT[currentLang];
+
+    document.querySelectorAll('[data-i18n]').forEach(el => {
+        const key = el.getAttribute('data-i18n');
+        if (dict[key]) el.textContent = dict[key];
+    });
+    document.querySelectorAll('[data-i18n-ph]').forEach(el => {
+        const key = el.getAttribute('data-i18n-ph');
+        if (dict[key]) el.setAttribute('placeholder', dict[key]);
+    });
+
+    // Update all language pills across header & auth screen
+    document.querySelectorAll('.lang-flag').forEach(el => {
+        el.textContent = currentLang === 'hi' ? '🇮🇳' : '🇺🇸';
+    });
+    document.querySelectorAll('.lang-code').forEach(el => {
+        el.textContent = currentLang === 'hi' ? 'हिंदी' : 'EN';
+    });
+
+    // Update Auth Subheader title according to active tab
+    const title = document.getElementById('auth-modal-title');
+    if (title) {
+        if (currentAuthView === 'login') title.textContent = dict.login_title;
+        else if (currentAuthView === 'forgot') title.textContent = dict.forgot_title;
+        else title.textContent = dict.reg_title;
+    }
+}
+
+function toggleLanguage() {
+    const next = currentLang === 'en' ? 'hi' : 'en';
+    applyLanguage(next);
+    if (window.stateManager) {
+        window.stateManager.showToast(next === 'hi' ? '🇮🇳 भाषा हिंदी में बदल दी गई है!' : '🇺🇸 Language switched to English!', 'info');
+    }
+}
+
+function togglePassEye(inputId, btn) {
+    const inp = document.getElementById(inputId);
+    if (!inp) return;
+    if (inp.type === 'password') {
+        inp.type = 'text';
+        btn.textContent = '🙈';
+    } else {
+        inp.type = 'password';
+        btn.textContent = '👁️';
+    }
+}
+
 // Global Auth Modal Functions
-function openAuthModal() {
+function openAuthModal(defaultTab = 'register') {
     const modal = document.getElementById('auth-modal');
     if (modal) modal.classList.remove('hidden');
+    switchAuthTab(defaultTab);
 }
 
 function closeAuthModal() {
@@ -801,34 +933,26 @@ function closeAuthModal() {
 }
 
 function switchAuthTab(tab) {
-    const btnLogin = document.getElementById('tab-btn-login');
-    const btnReg = document.getElementById('tab-btn-register');
+    currentAuthView = tab;
     const formLogin = document.getElementById('form-login');
     const formReg = document.getElementById('form-register');
     const formForgot = document.getElementById('form-forgot');
     const title = document.getElementById('auth-modal-title');
+    const dict = I18N_DICT[currentLang] || I18N_DICT.en;
+
+    if (formLogin) formLogin.classList.add('hidden');
+    if (formReg) formReg.classList.add('hidden');
+    if (formForgot) formForgot.classList.add('hidden');
 
     if (tab === 'login') {
-        if (btnLogin) { btnLogin.style.background = 'var(--gold-gradient)'; btnLogin.style.color = '#1a1505'; }
-        if (btnReg) { btnReg.style.background = '#1c223c'; btnReg.style.color = '#94a3b8'; }
         if (formLogin) formLogin.classList.remove('hidden');
-        if (formReg) formReg.classList.add('hidden');
-        if (formForgot) formForgot.classList.add('hidden');
-        if (title) title.textContent = 'Account Login';
-    } else if (tab === 'register') {
-        if (btnReg) { btnReg.style.background = 'var(--gold-gradient)'; btnReg.style.color = '#1a1505'; }
-        if (btnLogin) { btnLogin.style.background = '#1c223c'; btnLogin.style.color = '#94a3b8'; }
-        if (formReg) formReg.classList.remove('hidden');
-        if (formLogin) formLogin.classList.add('hidden');
-        if (formForgot) formForgot.classList.add('hidden');
-        if (title) title.textContent = 'New Account Registration';
+        if (title) title.textContent = dict.login_title;
     } else if (tab === 'forgot') {
-        if (btnLogin) { btnLogin.style.background = '#1c223c'; btnLogin.style.color = '#94a3b8'; }
-        if (btnReg) { btnReg.style.background = '#1c223c'; btnReg.style.color = '#94a3b8'; }
         if (formForgot) formForgot.classList.remove('hidden');
-        if (formLogin) formLogin.classList.add('hidden');
-        if (formReg) formReg.classList.add('hidden');
-        if (title) title.textContent = 'Forgot Password';
+        if (title) title.textContent = dict.forgot_title;
+    } else {
+        if (formReg) formReg.classList.remove('hidden');
+        if (title) title.textContent = dict.reg_title;
     }
 }
 
@@ -900,12 +1024,26 @@ async function submitLogin() {
 }
 
 async function submitRegister() {
-    const phone = document.getElementById('reg-phone').value.trim();
-    const password = document.getElementById('reg-password').value.trim();
-    const invite = document.getElementById('reg-invite').value.trim();
+    const phone = (document.getElementById('reg-phone')?.value || '').trim();
+    const password = (document.getElementById('reg-password')?.value || '').trim();
+    const confirmPassword = (document.getElementById('reg-password-confirm')?.value || '').trim();
+    const invite = (document.getElementById('reg-invite')?.value || '').trim();
+    const agree = document.getElementById('reg-agree');
 
-    if (!phone || !password) {
-        alert('Please enter mobile number and set a password');
+    if (!phone || phone.length < 10) {
+        alert(currentLang === 'hi' ? 'कृपया 10 अंकों का सही मोबाइल नंबर डालें' : 'Please enter a valid 10-digit mobile number');
+        return;
+    }
+    if (!password || password.length < 4) {
+        alert(currentLang === 'hi' ? 'पासवर्ड कम से कम 4 अक्षरों का होना चाहिए' : 'Password must be at least 4 characters');
+        return;
+    }
+    if (confirmPassword && password !== confirmPassword) {
+        alert(currentLang === 'hi' ? 'दोनों पासवर्ड मेल नहीं खा रहे हैं!' : 'Set password and Confirm password do not match!');
+        return;
+    }
+    if (agree && !agree.checked) {
+        alert(currentLang === 'hi' ? 'कृपया गोपनीयता नीति (Privacy Agreement) को स्वीकार करें' : 'Please agree to the Privacy Agreement first');
         return;
     }
 
@@ -918,7 +1056,7 @@ async function submitRegister() {
         const d = await res.json();
         if (d.success) {
             localStorage.setItem('asg_token', d.token);
-            alert('Registration successful! ₹100 Welcome Bonus credited.');
+            alert(currentLang === 'hi' ? 'रजिस्ट्रेशन सफल! ₹100 वेलकम बोनस मिल गया।' : 'Registration successful! ₹100 Welcome Bonus credited.');
             closeAuthModal();
             location.reload();
         } else {
@@ -932,5 +1070,6 @@ async function submitRegister() {
 // Global initialization
 window.addEventListener('DOMContentLoaded', () => {
     window.stateManager = new StateManager();
+    applyLanguage(currentLang);
     window.stateManager.showSplashLoader('Loading ASGames VIP...', 850);
 });
