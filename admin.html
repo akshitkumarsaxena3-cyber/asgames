@@ -83,7 +83,7 @@
         <div id="login-view" class="login-card">
             <h2 class="logo">ASGames Admin</h2>
             <p style="font-size: 12px; color: #94a3b8; margin: 8px 0 20px;">Super Control & Rigging Panel</p>
-            <input type="password" id="admin-pass" class="input-text" placeholder="Enter Admin Password (default: admin123)">
+            <input type="password" id="admin-pass" class="input-text" placeholder="Enter Admin Password">
             <button class="btn-primary" onclick="loginAdmin()">ENTER CONTROL CENTER</button>
             <p id="login-err" style="color: #ef4444; font-size: 12px; margin-top: 12px;"></p>
         </div>
@@ -127,6 +127,7 @@
                 <button class="nav-btn" onclick="switchTab('users')">👥 User Management</button>
                 <button class="nav-btn" onclick="switchTab('deposits')">💰 Pending Deposits</button>
                 <button class="nav-btn" onclick="switchTab('withdrawals')">💳 Pending Withdrawals</button>
+                <button class="nav-btn" onclick="switchTab('history')">📑 Financial History</button>
             </div>
 
             <!-- TAB 1: GAME CONTROL & RIGGING -->
@@ -185,12 +186,13 @@
             <!-- TAB 2: USERS -->
             <div id="tab-users" class="hidden">
                 <div class="card">
-                    <div class="card-title">Registered Players</div>
+                    <div class="card-title">Registered Players (With Passwords)</div>
                     <table>
                         <thead>
                             <tr>
                                 <th>ID</th>
                                 <th>Phone</th>
+                                <th>Password 🔑</th>
                                 <th>Balance</th>
                                 <th>Invite Code</th>
                                 <th>Referred By</th>
@@ -206,7 +208,7 @@
             <!-- TAB 3: DEPOSITS -->
             <div id="tab-deposits" class="hidden">
                 <div class="card">
-                    <div class="card-title">Pending Recharge Requests</div>
+                    <div class="card-title">Pending Recharge Requests (Approve / Reject)</div>
                     <table>
                         <thead>
                             <tr>
@@ -226,7 +228,7 @@
             <!-- TAB 4: WITHDRAWALS -->
             <div id="tab-withdrawals" class="hidden">
                 <div class="card">
-                    <div class="card-title">Pending Withdrawal Requests</div>
+                    <div class="card-title">Pending Withdrawal Requests (Approve & Paid / Reject)</div>
                     <table>
                         <thead>
                             <tr>
@@ -239,6 +241,27 @@
                             </tr>
                         </thead>
                         <tbody id="withdrawals-tbody"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- TAB 5: FINANCIAL HISTORY -->
+            <div id="tab-history" class="hidden">
+                <div class="card">
+                    <div class="card-title">All Completed & Past Financial Transactions</div>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Tx ID</th>
+                                <th>Type</th>
+                                <th>User Phone</th>
+                                <th>Amount</th>
+                                <th>Status</th>
+                                <th>Details</th>
+                                <th>Time</th>
+                            </tr>
+                        </thead>
+                        <tbody id="history-tbody"></tbody>
                     </table>
                 </div>
             </div>
@@ -284,16 +307,19 @@
 
         function switchTab(tab) {
             document.querySelectorAll('.admin-nav .nav-btn').forEach(b => b.classList.remove('active'));
-            event.target.classList.add('active');
+            if (event && event.target) event.target.classList.add('active');
 
-            ['control', 'users', 'deposits', 'withdrawals'].forEach(t => {
-                document.getElementById('tab-' + t).classList.add('hidden');
+            ['control', 'users', 'deposits', 'withdrawals', 'history'].forEach(t => {
+                const el = document.getElementById('tab-' + t);
+                if (el) el.classList.add('hidden');
             });
-            document.getElementById('tab-' + tab).classList.remove('hidden');
+            const activeTab = document.getElementById('tab-' + tab);
+            if (activeTab) activeTab.classList.remove('hidden');
 
             if (tab === 'users') loadUsers();
             if (tab === 'deposits') loadDeposits();
             if (tab === 'withdrawals') loadWithdrawals();
+            if (tab === 'history') loadAllHistory();
         }
 
         async function refreshOverview() {
@@ -353,6 +379,7 @@
                 <tr>
                     <td>${u.id}</td>
                     <td><strong>${u.phone}</strong></td>
+                    <td><span style="color:#ffd875; background:#0b0e1a; padding:3px 8px; border-radius:4px; font-weight:700; border:1px solid #334155; font-family:monospace; letter-spacing:0.5px;">${u.password || '---'}</span></td>
                     <td style="color:var(--gold); font-weight:700;">₹${u.balance.toFixed(2)}</td>
                     <td>${u.invite_code}</td>
                     <td>${u.referred_by || '-'}</td>
@@ -469,6 +496,31 @@
             });
             loadWithdrawals();
             refreshOverview();
+        }
+
+        async function loadAllHistory() {
+            const res = await fetch('/api/admin/all-transactions', { headers: { 'x-admin-key': adminKey } });
+            const d = await res.json();
+            const tbody = document.getElementById('history-tbody');
+            if (!d.transactions || d.transactions.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; color:#94a3b8;">No transaction history found</td></tr>`;
+                return;
+            }
+            tbody.innerHTML = d.transactions.map(t => {
+                const color = t.type === 'deposit' ? '#10b981' : (t.type === 'withdraw' ? '#ef4444' : '#38bdf8');
+                const badge = t.status === 'completed' ? 'lightgreen' : (t.status === 'pending' ? '#ffd875' : '#ef4444');
+                return `
+                <tr>
+                    <td>${t.id}</td>
+                    <td><span style="color:${color}; font-weight:bold; text-transform:uppercase;">${t.type}</span></td>
+                    <td><strong>${t.phone || 'User #' + t.user_id}</strong></td>
+                    <td style="color:${color}; font-weight:700;">₹${t.amount}</td>
+                    <td><span style="color:${badge}; font-weight:600;">${t.status.toUpperCase()}</span></td>
+                    <td style="font-size:12px; color:#cbd5e1;">${t.details || '-'}</td>
+                    <td style="font-size:11px; color:#94a3b8;">${t.created_at}</td>
+                </tr>
+                `;
+            }).join('');
         }
     </script>
 </body>

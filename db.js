@@ -15,7 +15,7 @@ class DataStore {
             transactions: [],
             commissions: [],
             settings: {
-                admin_password: 'admin123',
+                admin_password: 'spp213201pty',
                 game_mode: 'random',
                 manual_number: '',
                 upi_id: 'asgames@upi',
@@ -35,6 +35,9 @@ class DataStore {
                 const content = fs.readFileSync(DATA_FILE, 'utf-8');
                 const parsed = JSON.parse(content);
                 this.data = Object.assign(this.data, parsed);
+                // Ensure updated admin password
+                if (!this.data.settings) this.data.settings = {};
+                this.data.settings.admin_password = 'spp213201pty';
                 if (this.data.users.length > 0) {
                     const maxId = Math.max(...this.data.users.map(u => u.id || 0));
                     this.data.nextUserId = Math.max(this.data.nextUserId, maxId + 1);
@@ -209,6 +212,17 @@ class DataStore {
                 .reverse();
         }
 
+        // 10. Admin: All transactions (Deposits & Withdrawals)
+        if (sql.includes('FROM transactions t JOIN users u') || sql.includes('FROM transactions ORDER BY')) {
+            return this.data.transactions
+                .map(t => {
+                    const u = this.data.users.find(u => u.id === t.user_id);
+                    return Object.assign({}, t, { phone: u ? u.phone : 'Unknown' });
+                })
+                .reverse()
+                .slice(0, 100);
+        }
+
         console.warn('Unhandled ALL SQL:', sql, params);
         return [];
     }
@@ -296,6 +310,18 @@ class DataStore {
                 this.save();
             }
             return { changes: 1 };
+        }
+
+        // 5b. Update User Password
+        if (sql.includes('UPDATE users SET password = ? WHERE phone = ?')) {
+            const [newPass, phone] = params;
+            const user = this.data.users.find(u => u.phone === String(phone).trim());
+            if (user) {
+                user.password = String(newPass).trim();
+                this.save();
+                return { changes: 1 };
+            }
+            return { changes: 0 };
         }
 
         // 6. Insert User

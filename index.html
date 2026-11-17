@@ -50,6 +50,10 @@
                         <label class="input-label">Password</label>
                         <input type="password" id="login-password" class="form-input" placeholder="Enter password">
                     </div>
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin: 4px 0 14px;">
+                        <span style="font-size:11px; color:#94a3b8;">Safe & Secure Login</span>
+                        <a href="javascript:void(0)" onclick="switchAuthTab('forgot')" style="color:#fae59f; font-size:12px; font-weight:600; text-decoration:none;">Forgot Password?</a>
+                    </div>
                     <button id="btn-submit-login" class="btn-full btn-gold" onclick="submitLogin()">LOGIN</button>
                 </div>
 
@@ -69,6 +73,27 @@
                     </div>
                     <p style="font-size:11px; color:#10b981; margin-bottom:12px;">🎁 Get ₹100 Welcome Bonus instantly on registration!</p>
                     <button id="btn-submit-register" class="btn-full btn-gold" onclick="submitRegister()">REGISTER & CLAIM ₹100</button>
+                </div>
+
+                <!-- Forgot Password Form -->
+                <div id="form-forgot" class="hidden">
+                    <p style="font-size:12px; color:#94a3b8; margin-bottom:14px; line-height:1.4;">Apna registered mobile number daalein aur naya password set karein:</p>
+                    <div class="input-group">
+                        <label class="input-label">Registered Mobile Number</label>
+                        <input type="text" id="forgot-phone" class="form-input" placeholder="Enter 10-digit mobile number">
+                    </div>
+                    <div class="input-group">
+                        <label class="input-label">New Password</label>
+                        <input type="password" id="forgot-password" class="form-input" placeholder="Enter new password">
+                    </div>
+                    <div class="input-group">
+                        <label class="input-label">Confirm New Password</label>
+                        <input type="password" id="forgot-password-confirm" class="form-input" placeholder="Confirm new password">
+                    </div>
+                    <button id="btn-submit-forgot" class="btn-full btn-gold" onclick="submitForgotPassword()">RESET PASSWORD</button>
+                    <div style="text-align:center; margin-top:14px;">
+                        <a href="javascript:void(0)" onclick="switchAuthTab('login')" style="color:#fae59f; font-size:12px; font-weight:600; text-decoration:none;">← Back to Login</a>
+                    </div>
                 </div>
             </div>
         </div>

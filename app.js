@@ -702,24 +702,68 @@ function switchAuthTab(tab) {
     const btnReg = document.getElementById('tab-btn-register');
     const formLogin = document.getElementById('form-login');
     const formReg = document.getElementById('form-register');
+    const formForgot = document.getElementById('form-forgot');
     const title = document.getElementById('auth-modal-title');
 
     if (tab === 'login') {
-        btnLogin.style.background = 'var(--gold-gradient)';
-        btnLogin.style.color = '#1a1505';
-        btnReg.style.background = '#1c223c';
-        btnReg.style.color = '#94a3b8';
-        formLogin.classList.remove('hidden');
-        formReg.classList.add('hidden');
+        if (btnLogin) { btnLogin.style.background = 'var(--gold-gradient)'; btnLogin.style.color = '#1a1505'; }
+        if (btnReg) { btnReg.style.background = '#1c223c'; btnReg.style.color = '#94a3b8'; }
+        if (formLogin) formLogin.classList.remove('hidden');
+        if (formReg) formReg.classList.add('hidden');
+        if (formForgot) formForgot.classList.add('hidden');
         if (title) title.textContent = 'Account Login';
-    } else {
-        btnReg.style.background = 'var(--gold-gradient)';
-        btnReg.style.color = '#1a1505';
-        btnLogin.style.background = '#1c223c';
-        btnLogin.style.color = '#94a3b8';
-        formReg.classList.remove('hidden');
-        formLogin.classList.add('hidden');
+    } else if (tab === 'register') {
+        if (btnReg) { btnReg.style.background = 'var(--gold-gradient)'; btnReg.style.color = '#1a1505'; }
+        if (btnLogin) { btnLogin.style.background = '#1c223c'; btnLogin.style.color = '#94a3b8'; }
+        if (formReg) formReg.classList.remove('hidden');
+        if (formLogin) formLogin.classList.add('hidden');
+        if (formForgot) formForgot.classList.add('hidden');
         if (title) title.textContent = 'New Account Registration';
+    } else if (tab === 'forgot') {
+        if (btnLogin) { btnLogin.style.background = '#1c223c'; btnLogin.style.color = '#94a3b8'; }
+        if (btnReg) { btnReg.style.background = '#1c223c'; btnReg.style.color = '#94a3b8'; }
+        if (formForgot) formForgot.classList.remove('hidden');
+        if (formLogin) formLogin.classList.add('hidden');
+        if (formReg) formReg.classList.add('hidden');
+        if (title) title.textContent = 'Forgot Password';
+    }
+}
+
+async function submitForgotPassword() {
+    const phone = (document.getElementById('forgot-phone')?.value || '').trim();
+    const newPass = (document.getElementById('forgot-password')?.value || '').trim();
+    const confirmPass = (document.getElementById('forgot-password-confirm')?.value || '').trim();
+
+    if (!phone || phone.length < 10) {
+        alert('Please enter a valid 10-digit registered mobile number.');
+        return;
+    }
+    if (!newPass || newPass.length < 4) {
+        alert('Password must be at least 4 characters long.');
+        return;
+    }
+    if (newPass !== confirmPass) {
+        alert('New passwords do not match! Please check and re-enter.');
+        return;
+    }
+
+    try {
+        const res = await fetch('/api/auth/forgot-password', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ phone, new_password: newPass })
+        });
+        const d = await res.json();
+        if (d.success) {
+            alert('Password reset successfully! Please log in with your new password.');
+            switchAuthTab('login');
+            const loginPhone = document.getElementById('login-phone');
+            if (loginPhone) loginPhone.value = phone;
+        } else {
+            alert(d.message || 'Password reset failed.');
+        }
+    } catch (e) {
+        alert('Request failed. Please check your connection.');
     }
 }
 

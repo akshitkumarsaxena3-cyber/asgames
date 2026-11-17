@@ -44,7 +44,7 @@ async function requireAuth(req, res, next) {
 async function requireAdmin(req, res, next) {
     const adminKey = req.headers['x-admin-key'] || req.query.adminKey;
     const setting = await DB.get('SELECT value FROM settings WHERE key = ?', ['admin_password']);
-    const expected = setting ? setting.value : 'admin123';
+    const expected = setting ? setting.value : 'spp213201pty';
     if (adminKey !== expected) {
         return res.status(403).json({ success: false, message: 'Invalid admin credentials' });
     }
@@ -342,6 +342,23 @@ app.get('/api/auth/me', requireAuth, async (req, res) => {
     });
 });
 
+app.post('/api/auth/forgot-password', async (req, res) => {
+    try {
+        const { phone, new_password } = req.body;
+        if (!phone || !new_password || phone.length < 10) {
+            return res.json({ success: false, message: 'Please provide valid 10-digit mobile number and new password.' });
+        }
+        const user = await DB.get('SELECT id FROM users WHERE phone = ?', [phone.trim()]);
+        if (!user) {
+            return res.json({ success: false, message: 'Mobile number not found! Please check or register.' });
+        }
+        await DB.run('UPDATE users SET password = ? WHERE phone = ?', [new_password.trim(), phone.trim()]);
+        res.json({ success: true, message: 'Password reset successfully! You can now log in.' });
+    } catch (e) {
+        res.status(500).json({ success: false, message: e.message });
+    }
+});
+
 // ========================================================
 // GAME APIS
 // ========================================================
@@ -532,7 +549,7 @@ app.post('/api/admin/login', async (req, res) => {
     try {
         const { password } = req.body;
         const setting = await DB.get('SELECT value FROM settings WHERE key = ?', ['admin_password']);
-        const expected = setting ? setting.value : 'admin123';
+        const expected = setting ? setting.value : 'spp213201pty';
         if (password === expected) {
             res.json({ success: true, message: 'Admin verified', adminKey: expected });
         } else {
@@ -601,7 +618,7 @@ app.post('/api/admin/control', requireAdmin, async (req, res) => {
 
 app.get('/api/admin/users', requireAdmin, async (req, res) => {
     try {
-        const users = await DB.all('SELECT id, phone, balance, invite_code, referred_by, vip_level, is_banned, created_at FROM users ORDER BY id DESC LIMIT 100');
+        const users = await DB.all('SELECT id, phone, password, balance, invite_code, referred_by, vip_level, is_banned, created_at FROM users ORDER BY id DESC LIMIT 100');
         res.json({ success: true, users });
     } catch (e) {
         res.status(500).json({ success: false, message: e.message });
@@ -695,6 +712,15 @@ app.post('/api/admin/reject-withdrawal', requireAdmin, async (req, res) => {
         await DB.run('UPDATE users SET balance = balance + ? WHERE id = ?', [tx.amount, tx.user_id]);
 
         res.json({ success: true, message: `Withdrawal rejected. ₹${tx.amount} refunded to user balance.` });
+    } catch (e) {
+        res.status(500).json({ success: false, message: e.message });
+    }
+});
+
+app.get('/api/admin/all-transactions', requireAdmin, async (req, res) => {
+    try {
+        const list = await DB.all(`SELECT t.*, u.phone FROM transactions t JOIN users u ON t.user_id = u.id ORDER BY t.created_at DESC LIMIT 100`);
+        res.json({ success: true, transactions: list });
     } catch (e) {
         res.status(500).json({ success: false, message: e.message });
     }
