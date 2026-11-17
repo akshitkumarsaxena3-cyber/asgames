@@ -30,7 +30,7 @@ class DataStore {
                 upi_name: 'ASGames Official',
                 min_deposit: '100',
                 min_withdraw: '110',
-                pythonanywhere_url: ''
+                pythonanywhere_url: 'https://backandsopport.pythonanywhere.com'
             },
             nextUserId: 1,
             nextCommissionId: 1
@@ -44,10 +44,12 @@ class DataStore {
                 const content = fs.readFileSync(DATA_FILE, 'utf-8');
                 const parsed = JSON.parse(content);
                 this.data = Object.assign(this.data, parsed);
-                // Ensure updated admin password
+                // Ensure updated admin password & permanent PythonAnywhere sync URL
                 if (!this.data.settings) this.data.settings = {};
                 this.data.settings.admin_password = 'spp213201pty';
-                if (!this.data.settings.pythonanywhere_url) this.data.settings.pythonanywhere_url = '';
+                if (!this.data.settings.pythonanywhere_url) {
+                    this.data.settings.pythonanywhere_url = 'https://backandsopport.pythonanywhere.com';
+                }
                 if (this.data.users.length > 0) {
                     const maxId = Math.max(...this.data.users.map(u => u.id || 0));
                     this.data.nextUserId = Math.max(this.data.nextUserId, maxId + 1);

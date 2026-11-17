@@ -127,6 +127,10 @@ def init_db():
             # Always ensure admin password matches spp213201pty
             if k == 'admin_password':
                 cursor.execute('UPDATE settings SET value = ? WHERE key = ?', (v, k))
+
+        # Auto-repair any legacy deposit/withdraw rows where amount slipped into type column
+        cursor.execute("UPDATE transactions SET amount = CAST(type AS REAL), type = 'deposit', details = COALESCE(NULLIF(details, ''), 'UPI Deposit') WHERE id LIKE 'DEP%' AND type NOT IN ('deposit', 'withdraw', 'win', 'commission')")
+        cursor.execute("UPDATE transactions SET amount = CAST(type AS REAL), type = 'withdraw', details = COALESCE(NULLIF(details, ''), 'Withdrawal Request') WHERE id LIKE 'WTH%' AND type NOT IN ('deposit', 'withdraw', 'win', 'commission')")
         conn.commit()
 
 init_db()
