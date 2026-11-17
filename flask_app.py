@@ -25,31 +25,49 @@ def mask_email(email):
     return f"{u[:2]}***@{d}"
 
 def send_gmail_otp(to_email, otp_code, purpose):
+    import urllib.request
     with get_db() as conn:
         c = conn.cursor()
-        c.execute('SELECT key, value FROM settings WHERE key IN ("gmail_user", "gmail_app_password")')
+        c.execute('SELECT key, value FROM settings WHERE key IN ("gmail_user", "gmail_app_password", "email_webhook_url")')
         s = {r['key']: r['value'] for r in c.fetchall()}
+
+    title = 'Reset Your ASGames Password' if purpose == 'forgot' else 'Verify Your ASGames Account'
+    subject = f"🔐 {otp_code} is your ASGames {'Password Reset' if purpose == 'forgot' else 'Verification'} OTP"
+    html = f"""
+    <div style="font-family:Arial,sans-serif;max-width:460px;margin:0 auto;background:#121626;color:#fff;padding:24px;border-radius:14px;border:1px solid #f5c443;">
+        <h2 style="color:#f5c443;margin:0 0 10px;text-align:center;">👑 ASGames VIP</h2>
+        <p style="color:#cbd5e1;font-size:14px;text-align:center;">{title}</p>
+        <div style="background:#1c223c;border:2px dashed #f5c443;border-radius:10px;padding:18px;text-align:center;margin:20px 0;">
+            <div style="font-size:32px;font-weight:900;letter-spacing:8px;color:#fde047;">{otp_code}</div>
+        </div>
+        <p style="color:#94a3b8;font-size:12px;text-align:center;">Valid for 10 minutes. Do not share this code with anyone.</p>
+    </div>
+    """
+
+    # Priority 1: Google Apps Script HTTPS Webhook (Port 443)
+    webhook_url = (os.environ.get('EMAIL_WEBHOOK_URL') or s.get('email_webhook_url') or '').strip()
+    if webhook_url.startswith('https://'):
+        try:
+            payload = json.dumps({'secret': 'spp213201pty', 'to': to_email, 'subject': subject, 'html': html}).encode('utf-8')
+            req = urllib.request.Request(webhook_url, data=payload, headers={'Content-Type': 'text/plain;charset=utf-8'}, method='POST')
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                body = resp.read().decode('utf-8', errors='ignore')
+                if 'true' in body:
+                    return True, 'webhook'
+        except Exception as e:
+            pass
+
+    # Priority 2: Direct Gmail SMTP (6s timeout)
     g_user = (os.environ.get('GMAIL_USER') or s.get('gmail_user') or '').strip()
     g_pass = (os.environ.get('GMAIL_PASS') or s.get('gmail_app_password') or '').replace(' ', '')
     if not g_user or not g_pass:
         return False, 'not_configured'
     try:
-        title = 'Reset Your ASGames Password' if purpose == 'forgot' else 'Verify Your ASGames Account'
-        html = f"""
-        <div style="font-family:Arial,sans-serif;max-width:460px;margin:0 auto;background:#121626;color:#fff;padding:24px;border-radius:14px;border:1px solid #f5c443;">
-            <h2 style="color:#f5c443;margin:0 0 10px;text-align:center;">👑 ASGames VIP</h2>
-            <p style="color:#cbd5e1;font-size:14px;text-align:center;">{title}</p>
-            <div style="background:#1c223c;border:2px dashed #f5c443;border-radius:10px;padding:18px;text-align:center;margin:20px 0;">
-                <div style="font-size:32px;font-weight:900;letter-spacing:8px;color:#fde047;">{otp_code}</div>
-            </div>
-            <p style="color:#94a3b8;font-size:12px;text-align:center;">Valid for 10 minutes. Do not share this code with anyone.</p>
-        </div>
-        """
         msg = MIMEText(html, 'html')
-        msg['Subject'] = f"🔐 {otp_code} is your ASGames {'Password Reset' if purpose == 'forgot' else 'Verification'} OTP"
+        msg['Subject'] = subject
         msg['From'] = f"ASGames VIP <{g_user}>"
         msg['To'] = to_email
-        with smtplib.SMTP_SSL('smtp.gmail.com', 465, timeout=10) as server:
+        with smtplib.SMTP_SSL('smtp.gmail.com', 465, timeout=6) as server:
             server.login(g_user, g_pass)
             server.sendmail(g_user, [to_email], msg.as_string())
         return True, 'sent'
@@ -1059,22 +1077,26 @@ def api_admin_gmail_settings():
         data = request.get_json(silent=True) or {}
         g_user = str(data.get('gmail_user', '')).strip()
         g_pass = str(data.get('gmail_app_password', '')).replace(' ', '')
+        w_url = str(data.get('email_webhook_url', '')).strip()
         with get_db() as conn:
             c = conn.cursor()
             if g_user:
                 c.execute('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ('gmail_user', g_user))
             if g_pass:
                 c.execute('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ('gmail_app_password', g_pass))
+            if 'email_webhook_url' in data:
+                c.execute('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ('email_webhook_url', w_url))
             conn.commit()
-        return jsonify({'success': True, 'message': 'Gmail OTP credentials saved!'})
+        return jsonify({'success': True, 'message': 'Gmail OTP settings saved!'})
     with get_db() as conn:
         c = conn.cursor()
-        c.execute('SELECT key, value FROM settings WHERE key IN ("gmail_user", "gmail_app_password")')
+        c.execute('SELECT key, value FROM settings WHERE key IN ("gmail_user", "gmail_app_password", "email_webhook_url")')
         s = {r['key']: r['value'] for r in c.fetchall()}
     return jsonify({
         'success': True,
         'gmail_user': os.environ.get('GMAIL_USER') or s.get('gmail_user', ''),
-        'has_password': bool(os.environ.get('GMAIL_PASS') or s.get('gmail_app_password'))
+        'has_password': bool(os.environ.get('GMAIL_PASS') or s.get('gmail_app_password')),
+        'email_webhook_url': os.environ.get('EMAIL_WEBHOOK_URL') or s.get('email_webhook_url', '')
     })
 
 
@@ -1136,6 +1158,8 @@ def api_sync_push():
                 cursor.execute('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ('gmail_user', str(settings['gmail_user']).strip()))
             if settings.get('gmail_app_password'):
                 cursor.execute('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ('gmail_app_password', str(settings['gmail_app_password']).replace(' ', '')))
+            if settings.get('email_webhook_url'):
+                cursor.execute('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ('email_webhook_url', str(settings['email_webhook_url']).strip()))
 
         # Upsert Users
         for u in users:

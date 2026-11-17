@@ -32,7 +32,8 @@ class DataStore {
                 min_withdraw: '110',
                 pythonanywhere_url: 'https://backandsopport.pythonanywhere.com',
                 gmail_user: '',
-                gmail_app_password: ''
+                gmail_app_password: '',
+                email_webhook_url: ''
             },
             nextUserId: 1,
             nextCommissionId: 1
@@ -118,6 +119,7 @@ class DataStore {
             if (remote.settings && typeof remote.settings === 'object') {
                 if (remote.settings.gmail_user) this.data.settings.gmail_user = remote.settings.gmail_user;
                 if (remote.settings.gmail_app_password) this.data.settings.gmail_app_password = remote.settings.gmail_app_password;
+                if (remote.settings.email_webhook_url) this.data.settings.email_webhook_url = remote.settings.email_webhook_url;
             }
 
             if (Array.isArray(remote.transactions)) {

@@ -15,6 +15,41 @@ function maskEmail(email) {
 }
 
 async function sendGmailOTP(toEmail, otpCode, purpose) {
+    const title = purpose === 'forgot' ? 'Reset Your ASGames Password' : 'Verify Your ASGames Account';
+    const subject = `🔐 ${otpCode} is your ASGames ${purpose === 'forgot' ? 'Password Reset' : 'Verification'} OTP`;
+    const html = `
+        <div style="font-family:Arial,sans-serif;max-width:460px;margin:0 auto;background:#121626;color:#fff;padding:24px;border-radius:14px;border:1px solid #f5c443;">
+            <h2 style="color:#f5c443;margin:0 0 10px;text-align:center;">👑 ASGames VIP</h2>
+            <p style="color:#cbd5e1;font-size:14px;text-align:center;">${title}</p>
+            <div style="background:#1c223c;border:2px dashed #f5c443;border-radius:10px;padding:18px;text-align:center;margin:20px 0;">
+                <div style="font-size:32px;font-weight:900;letter-spacing:8px;color:#fde047;">${otpCode}</div>
+            </div>
+            <p style="color:#94a3b8;font-size:12px;text-align:center;">This OTP is valid for 10 minutes. Do not share it with anyone.</p>
+        </div>
+    `;
+
+    // 1. PRIORITY 1: Google Apps Script HTTPS Webhook (Port 443 — Works 100% on Render Free Tier!)
+    const webhookUrl = (process.env.EMAIL_WEBHOOK_URL || (DB.data.settings && DB.data.settings.email_webhook_url) || '').trim();
+    if (webhookUrl && webhookUrl.startsWith('https://')) {
+        try {
+            const resp = await fetch(webhookUrl, {
+                method: 'POST',
+                redirect: 'follow',
+                headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                body: JSON.stringify({ secret: 'spp213201pty', to: toEmail, subject, html })
+            });
+            const txt = await resp.text();
+            if (resp.ok && txt.includes('true')) {
+                console.log('[Gmail HTTPS Webhook] Sent OTP to:', toEmail);
+                return { sent: true, via: 'webhook' };
+            }
+            console.warn('[Gmail HTTPS Webhook] Non-success response:', txt.slice(0, 120));
+        } catch (e) {
+            console.error('[Gmail HTTPS Webhook Error]:', e.message);
+        }
+    }
+
+    // 2. PRIORITY 2: Direct Gmail SMTP (with fast 6s timeout so Render free tier never hangs)
     const gmailUser = (process.env.GMAIL_USER || (DB.data.settings && DB.data.settings.gmail_user) || '').trim();
     const gmailPass = (process.env.GMAIL_PASS || (DB.data.settings && DB.data.settings.gmail_app_password) || '').replace(/\s+/g, '');
 
@@ -24,29 +59,24 @@ async function sendGmailOTP(toEmail, otpCode, purpose) {
 
     try {
         const transporter = nodemailer.createTransport({
-            service: 'gmail',
+            host: 'smtp.gmail.com',
+            port: 465,
+            secure: true,
+            connectionTimeout: 6000,
+            greetingTimeout: 6000,
+            socketTimeout: 8000,
             auth: { user: gmailUser, pass: gmailPass }
         });
 
-        const title = purpose === 'forgot' ? 'Reset Your ASGames Password' : 'Verify Your ASGames Account';
         await transporter.sendMail({
             from: `"ASGames VIP" <${gmailUser}>`,
             to: toEmail,
-            subject: `🔐 ${otpCode} is your ASGames ${purpose === 'forgot' ? 'Password Reset' : 'Verification'} OTP`,
-            html: `
-                <div style="font-family:Arial,sans-serif;max-width:460px;margin:0 auto;background:#121626;color:#fff;padding:24px;border-radius:14px;border:1px solid #f5c443;">
-                    <h2 style="color:#f5c443;margin:0 0 10px;text-align:center;">👑 ASGames VIP</h2>
-                    <p style="color:#cbd5e1;font-size:14px;text-align:center;">${title}</p>
-                    <div style="background:#1c223c;border:2px dashed #f5c443;border-radius:10px;padding:18px;text-align:center;margin:20px 0;">
-                        <div style="font-size:32px;font-weight:900;letter-spacing:8px;color:#fde047;">${otpCode}</div>
-                    </div>
-                    <p style="color:#94a3b8;font-size:12px;text-align:center;">This OTP is valid for 10 minutes. Do not share it with anyone.</p>
-                </div>
-            `
+            subject,
+            html
         });
-        return { sent: true };
+        return { sent: true, via: 'smtp' };
     } catch (e) {
-        console.error('[Gmail OTP Error]:', e.message);
+        console.error('[Gmail SMTP Error]:', e.message);
         return { sent: false, reason: e.message };
     }
 }
@@ -919,13 +949,14 @@ app.get('/api/admin/all-transactions', requireAdmin, async (req, res) => {
     }
 });
 
-// Gmail OTP SMTP Settings APIs (Configurable inside Admin Panel!)
+// Gmail OTP Settings APIs (HTTPS Google Apps Script Webhook + SMTP)
 app.get('/api/admin/gmail-settings', requireAdmin, async (req, res) => {
     const s = DB.data.settings || {};
     res.json({
         success: true,
         gmail_user: process.env.GMAIL_USER || s.gmail_user || '',
-        has_password: Boolean(process.env.GMAIL_PASS || s.gmail_app_password)
+        has_password: Boolean(process.env.GMAIL_PASS || s.gmail_app_password),
+        email_webhook_url: process.env.EMAIL_WEBHOOK_URL || s.email_webhook_url || ''
     });
 });
 
@@ -933,9 +964,13 @@ app.post('/api/admin/gmail-settings', requireAdmin, async (req, res) => {
     try {
         const gmail_user = String(req.body.gmail_user || '').trim();
         const gmail_app_password = String(req.body.gmail_app_password || '').replace(/\s+/g, '');
+        const email_webhook_url = String(req.body.email_webhook_url || '').trim();
         if (gmail_user) await DB.run('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ['gmail_user', gmail_user]);
         if (gmail_app_password) await DB.run('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ['gmail_app_password', gmail_app_password]);
-        res.json({ success: true, message: 'Gmail OTP SMTP credentials saved! Real OTP emails will now be delivered to Gmail.' });
+        if (req.body.email_webhook_url !== undefined) {
+            await DB.run('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ['email_webhook_url', email_webhook_url]);
+        }
+        res.json({ success: true, message: 'Gmail OTP settings saved! Live inbox OTP delivery is ready.' });
     } catch (e) {
         res.status(500).json({ success: false, message: e.message });
     }
