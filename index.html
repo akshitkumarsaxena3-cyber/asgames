@@ -427,37 +427,151 @@
             <button class="float-rail-btn float-wheel" onclick="window.stateManager.openGameView('wheel')" title="Invite Wheel">🎡</button>
         </div>
 
-        <!-- Recharge / Deposit Modal -->
-        <div id="recharge-modal" class="center-modal hidden">
-            <div class="modal-dialog">
-                <div class="modal-header">
-                    <h3 style="color:#fae59f; font-size:16px; font-weight:700;">Deposit Funds (Instant UPI)</h3>
-                    <button id="recharge-modal-close" class="btn-drawer-close">&times;</button>
+        <!-- Full-Screen BDG-Style Deposit Page (#/wallet/Recharge) -->
+        <div id="recharge-modal" class="bdg-auth-overlay hidden">
+            <div class="bdg-auth-shell dep-page-shell">
+                <!-- Sticky Dark Header -->
+                <div class="dep-topbar">
+                    <button id="recharge-modal-close" class="bdg-back-btn" style="color:#fff;">&#8249;</button>
+                    <span class="dep-topbar-title">Deposit</span>
+                    <button type="button" class="dep-topbar-hist" onclick="document.getElementById('dep-history-card')?.scrollIntoView({behavior:'smooth'})">Deposit history</button>
                 </div>
-                <div class="input-group">
-                    <label class="input-label">Select Amount (₹)</label>
-                    <div class="quick-amounts-grid">
-                        <div class="recharge-pill" data-amount="100">₹100</div>
-                        <div class="recharge-pill active" data-amount="500">₹500</div>
-                        <div class="recharge-pill" data-amount="1000">₹1,000</div>
-                        <div class="recharge-pill" data-amount="2000">₹2,000</div>
-                        <div class="recharge-pill" data-amount="5000">₹5,000</div>
-                        <div class="recharge-pill" data-amount="10000">₹10,000</div>
+
+                <!-- Scrollable Deposit Body -->
+                <div class="dep-scroll-body">
+                    <!-- Metallic Gold Balance Card -->
+                    <div class="dep-gold-card">
+                        <div class="dep-gold-top">
+                            <span class="dep-gold-lbl">💳 Balance</span>
+                        </div>
+                        <div class="dep-gold-amt-row">
+                            <span class="dep-gold-amt user-balance-val">₹0.00</span>
+                            <button type="button" class="dep-gold-refresh" onclick="window.stateManager.fetchUserProfile(); window.stateManager.showToast('Balance refreshed','info');" title="Refresh Balance">↻</button>
+                        </div>
+                        <div class="dep-gold-bottom">
+                            <div class="dep-card-chip"></div>
+                            <div class="dep-card-dots">**** &nbsp;&nbsp; ****</div>
+                        </div>
                     </div>
-                    <input type="number" id="recharge-amount-input" class="form-input" value="500" placeholder="Enter amount">
-                </div>
-                <div class="input-group">
-                    <label class="input-label">Official Deposit UPI ID</label>
-                    <div style="background:#0f1322; border:1px solid #2e3860; padding:10px 14px; border-radius:8px; display:flex; justify-content:space-between; align-items:center;">
-                        <span style="font-weight:700; color:#fae59f;">asgames@upi</span>
-                        <button class="btn-action" style="background:#10b981; color:#fff;" onclick="navigator.clipboard.writeText('asgames@upi'); alert('UPI ID copied!');">Copy</button>
+
+                    <!-- 5 Payment Methods Grid -->
+                    <div class="dep-methods-grid">
+                        <div class="dep-method-tile active" data-method="UPI-QR" onclick="selectDepositMethod('UPI-QR', this)">
+                            <div class="dep-method-ico dep-ico-upi"><span>UPI</span><small>▦</small></div>
+                            <div class="dep-method-name">UPI-QR</div>
+                        </div>
+                        <div class="dep-method-tile" data-method="UPI-QRpay" onclick="selectDepositMethod('UPI-QRpay', this)">
+                            <div class="dep-method-ico dep-ico-upi2"><span>UPI▸</span><small>▦</small></div>
+                            <div class="dep-method-name">UPI-QRpay</div>
+                        </div>
+                        <div class="dep-method-tile" data-method="Wake UP-APP" onclick="selectDepositMethod('Wake UP-APP', this)">
+                            <div class="dep-method-ico">💰</div>
+                            <div class="dep-method-name">Wake UP-APP</div>
+                        </div>
+                        <div class="dep-method-tile" data-method="USDT" onclick="selectDepositMethod('USDT', this)">
+                            <div class="dep-method-ico dep-ico-usdt">₮</div>
+                            <div class="dep-method-name">USDT</div>
+                        </div>
+                        <div class="dep-method-tile" data-method="ARPay" onclick="selectDepositMethod('ARPay', this)">
+                            <span class="dep-bonus-ribbon">🎁<br>+1%</span>
+                            <div class="dep-method-ico dep-ico-ar">A</div>
+                            <div class="dep-method-name">ARPay</div>
+                        </div>
+                    </div>
+
+                    <!-- Select Channel Card -->
+                    <div class="dep-section-card">
+                        <div class="dep-sec-hdr"><span class="bdg-gold-ico">🏷️</span> <span>Select channel</span></div>
+                        <div id="dep-channel-grid" class="dep-channel-grid">
+                            <div class="dep-channel-tile active" data-channel="UPI-QR" onclick="selectDepositChannel('UPI-QR', this)">
+                                <div class="dep-ch-name">UPI-QR</div>
+                                <div class="dep-ch-range">Balance:100 - 50K</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Deposit Amount Card -->
+                    <div class="dep-section-card">
+                        <div class="dep-sec-hdr"><span class="bdg-gold-ico">💼</span> <span>Deposit amount</span></div>
+                        <div class="dep-amounts-grid">
+                            <button type="button" class="recharge-pill dep-amt-btn" data-amount="100"><span>₹</span><strong>100</strong></button>
+                            <button type="button" class="recharge-pill dep-amt-btn" data-amount="200"><span>₹</span><strong>200</strong></button>
+                            <button type="button" class="recharge-pill dep-amt-btn" data-amount="300"><span>₹</span><strong>300</strong></button>
+                            <button type="button" class="recharge-pill dep-amt-btn" data-amount="400"><span>₹</span><strong>400</strong></button>
+                            <button type="button" class="recharge-pill dep-amt-btn" data-amount="500"><span>₹</span><strong>500</strong></button>
+                            <button type="button" class="recharge-pill dep-amt-btn" data-amount="1000"><span>₹</span><strong>1K</strong></button>
+                            <button type="button" class="recharge-pill dep-amt-btn" data-amount="2000"><span>₹</span><strong>2K</strong></button>
+                            <button type="button" class="recharge-pill dep-amt-btn" data-amount="3000"><span>₹</span><strong>3K</strong></button>
+                            <button type="button" class="recharge-pill dep-amt-btn" data-amount="5000"><span>₹</span><strong>5K</strong></button>
+                        </div>
+                        <div class="dep-input-bar">
+                            <span class="dep-input-rs">₹</span>
+                            <span class="dep-input-sep">|</span>
+                            <input type="number" id="recharge-amount-input" class="dep-amount-input" placeholder="₹100.00 - ₹50,000.00" oninput="updateDepositButtonState()">
+                            <button type="button" class="dep-input-clear" onclick="clearDepositAmount()">⊗</button>
+                        </div>
+                    </div>
+
+                    <!-- Recharge Instructions Card -->
+                    <div class="dep-section-card">
+                        <div class="dep-sec-hdr"><span class="bdg-gold-ico">📒</span> <span>Recharge instructions</span></div>
+                        <div class="rg-notes-box">
+                            <div class="rg-note-row"><span class="rg-diamond">◆</span><span>If the transfer time is up, please fill out the deposit form again.</span></div>
+                            <div class="rg-note-row"><span class="rg-diamond">◆</span><span>The transfer amount must match the order you created, otherwise the money cannot be credited successfully.</span></div>
+                            <div class="rg-note-row"><span class="rg-diamond">◆</span><span>If you transfer the wrong amount, our company will not be responsible for the lost amount!</span></div>
+                            <div class="rg-note-row"><span class="rg-diamond">◆</span><span>Note: do not cancel the deposit order after the money has been transferred.</span></div>
+                        </div>
+                    </div>
+
+                    <!-- Deposit History Card -->
+                    <div id="dep-history-card" class="dep-section-card">
+                        <div class="dep-sec-hdr"><span class="bdg-gold-ico">📄</span> <span>Deposit history</span></div>
+                        <div id="dep-history-list">
+                            <div class="bdg-no-data" style="padding:30px 10px;">
+                                <div style="font-size:44px; opacity:0.35; margin-bottom:6px;">📜</div>
+                                <div>No data</div>
+                            </div>
+                        </div>
                     </div>
                 </div>
-                <div class="input-group">
-                    <label class="input-label">12-Digit UTR / Transaction ID (Required)</label>
-                    <input type="text" id="recharge-utr-input" class="form-input" placeholder="Paste UTR after UPI payment">
+
+                <!-- Sticky Bottom Footer Bar -->
+                <div class="dep-sticky-footer">
+                    <div>
+                        <div class="dep-footer-lbl">Recharge Method:</div>
+                        <div id="dep-footer-method" class="dep-footer-method">UPI-QR</div>
+                    </div>
+                    <button type="button" id="dep-open-pay-btn" class="dep-submit-btn" onclick="openDepositCheckoutSheet()">Deposit</button>
                 </div>
-                <button id="btn-submit-recharge" class="btn-full btn-gold">SUBMIT DEPOSIT FOR APPROVAL</button>
+
+                <!-- Step 2: UPI / USDT Payment & UTR Submission Overlay -->
+                <div id="dep-checkout-sheet" class="dep-checkout-overlay hidden">
+                    <div class="dep-checkout-card">
+                        <div class="dep-checkout-hdr">
+                            <span style="color:#fae59f; font-weight:800; font-size:15px;">Complete Payment (<span id="dep-pay-channel-lbl">UPI-QR</span>)</span>
+                            <button type="button" class="btn-drawer-close" onclick="closeDepositCheckoutSheet()">&times;</button>
+                        </div>
+                        <div class="dep-checkout-amt-box">
+                            <div style="font-size:11px; color:#a1a1aa;">Pay Exact Amount</div>
+                            <div id="dep-pay-amount-lbl" style="font-size:28px; font-weight:900; color:#fae59f;">₹500.00</div>
+                        </div>
+                        <div class="dep-checkout-qr-wrap">
+                            <img id="dep-pay-qr-img" src="" alt="Payment QR" style="width:154px; height:154px; border-radius:8px; background:#fff; padding:6px; display:block; margin:0 auto;">
+                        </div>
+                        <div class="dep-checkout-upi-row">
+                            <div>
+                                <div id="dep-pay-id-label" style="font-size:10px; color:#94a3b8;">Official Deposit UPI ID</div>
+                                <div id="dep-pay-id-val" style="font-size:13px; font-weight:700; color:#fae59f;">asgames@upi</div>
+                            </div>
+                            <button type="button" class="btn-action" style="background:#10b981; color:#fff; padding:6px 12px;" onclick="copyDepositPayAddress()">Copy</button>
+                        </div>
+                        <div class="input-group" style="margin-top:12px;">
+                            <label class="input-label" style="color:#e4e4e7;">12-Digit UTR / Transaction Ref No. (Required)</label>
+                            <input type="text" id="recharge-utr-input" class="rg-input" placeholder="Paste 12-digit UTR after payment">
+                        </div>
+                        <button type="button" id="btn-submit-recharge" class="bdg-btn-gold" style="margin:12px 0 0;">CONFIRM &amp; SUBMIT DEPOSIT</button>
+                    </div>
+                </div>
             </div>
         </div>
 

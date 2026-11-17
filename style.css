@@ -4744,3 +4744,475 @@ body {
     text-decoration: underline;
     text-underline-offset: 3px;
 }
+
+/* ======================================================== */
+/* FULL-SCREEN BDG DEPOSIT PAGE (#/wallet/Recharge)         */
+/* ======================================================== */
+.dep-page-shell {
+    background: #1b1b1e !important;
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    overflow: hidden;
+    position: relative;
+}
+
+.dep-topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 14px;
+    background: #252529;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    flex-shrink: 0;
+}
+
+.dep-topbar-title {
+    color: #ffffff;
+    font-size: 17px;
+    font-weight: 700;
+}
+
+.dep-topbar-hist {
+    background: none;
+    border: none;
+    color: #e4e4e7;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+}
+
+.dep-scroll-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 14px 14px 90px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+/* Gold Debit Card Balance Banner */
+.dep-gold-card {
+    background: linear-gradient(135deg, #d7ae5a 0%, #c8973f 48%, #f2d58b 78%, #d7ab54 100%);
+    border-radius: 12px;
+    padding: 16px 18px 14px;
+    color: #4a2f08;
+    position: relative;
+    overflow: hidden;
+    box-shadow: 0 8px 22px rgba(0, 0, 0, 0.4);
+}
+
+.dep-gold-card::after {
+    content: '';
+    position: absolute;
+    right: -30px;
+    top: -30px;
+    width: 190px;
+    height: 190px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.16);
+    pointer-events: none;
+}
+
+.dep-gold-lbl {
+    font-size: 12.5px;
+    font-weight: 600;
+    color: #5c3c0e;
+}
+
+.dep-gold-amt-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 6px 0 22px;
+}
+
+.dep-gold-amt {
+    font-size: 26px;
+    font-weight: 900;
+    color: #573607;
+    letter-spacing: 0.3px;
+}
+
+.dep-gold-refresh {
+    background: none;
+    border: none;
+    color: #ffffff;
+    font-size: 20px;
+    cursor: pointer;
+    line-height: 1;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+.dep-gold-bottom {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.dep-card-chip {
+    width: 30px;
+    height: 22px;
+    border-radius: 5px;
+    background: linear-gradient(135deg, #fff3c4, #e1b85c);
+    border: 1px solid rgba(92, 60, 14, 0.35);
+}
+
+.dep-card-dots {
+    font-size: 14px;
+    font-weight: 700;
+    color: #6b4612;
+    letter-spacing: 2px;
+}
+
+/* 5 Payment Methods Grid */
+.dep-methods-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+}
+
+.dep-method-tile {
+    background: #2b2b30;
+    border-radius: 10px;
+    padding: 14px 6px 12px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    cursor: pointer;
+    position: relative;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    transition: transform 0.14s, background 0.2s;
+}
+
+.dep-method-tile:active {
+    transform: scale(0.96);
+}
+
+.dep-method-tile.active {
+    background: linear-gradient(145deg, #f3d78a 0%, #c6913a 100%);
+    border-color: #fce7a8;
+    box-shadow: 0 6px 16px rgba(212, 161, 67, 0.35);
+}
+
+.dep-method-ico {
+    font-size: 24px;
+    height: 36px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+}
+
+.dep-ico-upi span,
+.dep-ico-upi2 span {
+    font-size: 10px;
+    font-weight: 900;
+    letter-spacing: 0.5px;
+    color: #5c3c0e;
+}
+
+.dep-ico-upi2 span {
+    color: #facc15;
+}
+
+.dep-method-tile.active .dep-ico-upi2 span {
+    color: #5c3c0e;
+}
+
+.dep-ico-upi small,
+.dep-ico-upi2 small {
+    font-size: 18px;
+    color: #18181b;
+}
+
+.dep-ico-usdt {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    background: #10b981;
+    color: #fff;
+    font-weight: 900;
+    font-size: 19px;
+}
+
+.dep-ico-ar {
+    width: 34px;
+    height: 34px;
+    border-radius: 8px;
+    background: linear-gradient(135deg, #fde047, #d97706);
+    color: #1e1b18;
+    font-weight: 900;
+    font-size: 20px;
+}
+
+.dep-method-name {
+    color: #a1a1aa;
+    font-size: 11px;
+    font-weight: 600;
+    text-align: center;
+    white-space: nowrap;
+}
+
+.dep-method-tile.active .dep-method-name {
+    color: #4a2f08;
+    font-weight: 800;
+}
+
+.dep-bonus-ribbon {
+    position: absolute;
+    top: -2px;
+    right: 4px;
+    background: linear-gradient(180deg, #ef4444, #dc2626);
+    color: #ffffff;
+    font-size: 9px;
+    font-weight: 800;
+    line-height: 1.1;
+    padding: 3px 5px 5px;
+    border-radius: 0 0 6px 6px;
+    text-align: center;
+    box-shadow: 0 3px 8px rgba(220, 38, 38, 0.45);
+}
+
+/* Section Cards */
+.dep-section-card {
+    background: #2b2b30;
+    border-radius: 12px;
+    padding: 15px 14px;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.dep-sec-hdr {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: #ffffff;
+    font-size: 14px;
+    font-weight: 700;
+    margin-bottom: 12px;
+}
+
+.dep-channel-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+}
+
+.dep-channel-tile {
+    background: #36363c;
+    border-radius: 10px;
+    padding: 12px 12px;
+    cursor: pointer;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.dep-channel-tile.active {
+    background: linear-gradient(135deg, #f3d78a 0%, #c6913a 100%);
+    border-color: #fce7a8;
+}
+
+.dep-ch-name {
+    color: #e4e4e7;
+    font-size: 13px;
+    font-weight: 700;
+    margin-bottom: 4px;
+}
+
+.dep-ch-range {
+    color: #a1a1aa;
+    font-size: 11px;
+    font-weight: 600;
+}
+
+.dep-channel-tile.active .dep-ch-name,
+.dep-channel-tile.active .dep-ch-range {
+    color: #5c3c0e;
+}
+
+/* 3x3 Deposit Amount Grid */
+.dep-amounts-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+    margin-bottom: 14px;
+}
+
+.dep-amt-btn {
+    height: 40px;
+    border-radius: 8px;
+    background: #232327;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    color: #d9ac4f;
+    font-size: 14px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    cursor: pointer;
+}
+
+.dep-amt-btn span {
+    color: #71717a;
+    font-weight: 500;
+}
+
+.dep-amt-btn.active {
+    background: linear-gradient(135deg, #f3d78a 0%, #c6913a 100%) !important;
+    border-color: #fce7a8 !important;
+    color: #4a2f08 !important;
+}
+
+.dep-amt-btn.active span {
+    color: #5c3c0e !important;
+}
+
+/* Dark Input Bar */
+.dep-input-bar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: #1f1f23;
+    border-radius: 24px;
+    padding: 0 14px;
+    height: 44px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.dep-input-rs {
+    color: #d9ac4f;
+    font-size: 18px;
+    font-weight: 800;
+}
+
+.dep-input-sep {
+    color: #52525b;
+    font-size: 14px;
+}
+
+.dep-amount-input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    color: #ffffff;
+    font-size: 14px;
+    font-weight: 700;
+    outline: none;
+}
+
+.dep-amount-input::placeholder {
+    color: #71717a;
+    font-weight: 500;
+    font-size: 12.5px;
+}
+
+.dep-input-clear {
+    background: none;
+    border: none;
+    color: #71717a;
+    font-size: 18px;
+    cursor: pointer;
+}
+
+/* Sticky Bottom Footer */
+.dep-sticky-footer {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: #232328;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    padding: 10px 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    z-index: 20;
+}
+
+.dep-footer-lbl {
+    color: #a1a1aa;
+    font-size: 11px;
+}
+
+.dep-footer-method {
+    color: #ffffff;
+    font-size: 13px;
+    font-weight: 800;
+}
+
+.dep-submit-btn {
+    min-width: 112px;
+    height: 40px;
+    border-radius: 8px;
+    border: none;
+    background: #5c5e69;
+    color: #a1a1aa;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.dep-submit-btn.ready {
+    background: linear-gradient(90deg, #fae59f 0%, #d4a143 100%);
+    color: #4a2f08;
+    box-shadow: 0 4px 14px rgba(212, 161, 67, 0.45);
+}
+
+/* Checkout UTR Sheet */
+.dep-checkout-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.78);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 40;
+    padding: 16px;
+}
+
+.dep-checkout-overlay.hidden {
+    display: none;
+}
+
+.dep-checkout-card {
+    width: 100%;
+    max-width: 380px;
+    background: #26262b;
+    border: 1px solid rgba(217, 172, 79, 0.35);
+    border-radius: 14px;
+    padding: 18px;
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.7);
+}
+
+.dep-checkout-hdr {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
+.dep-checkout-amt-box {
+    text-align: center;
+    background: #1c1c20;
+    border-radius: 10px;
+    padding: 10px;
+    margin-bottom: 12px;
+}
+
+.dep-checkout-qr-wrap {
+    margin-bottom: 12px;
+}
+
+.dep-checkout-upi-row {
+    background: #1c1c20;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
+    padding: 10px 12px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}

@@ -300,6 +300,7 @@ class StateManager {
                 if (input) input.value = amt;
                 document.querySelectorAll('.recharge-pill').forEach(p => p.classList.remove('active'));
                 pill.classList.add('active');
+                if (typeof updateDepositButtonState === 'function') updateDepositButtonState();
                 if (window.sound) window.sound.click();
             });
         });
@@ -334,12 +335,13 @@ class StateManager {
                             'Content-Type': 'application/json',
                             'Authorization': `Bearer ${this.token}`
                         },
-                        body: JSON.stringify({ amount: amt, utr, channel: 'UPI' })
+                        body: JSON.stringify({ amount: amt, utr, channel: window._selectedDepositChannel || 'UPI-QR' })
                     });
                     const d = await res.json();
                     if (d.success) {
                         this.showToast('Deposit submitted! Waiting for admin approval.', 'success');
-                        this.closeRechargeModal();
+                        if (typeof closeDepositCheckoutSheet === 'function') closeDepositCheckoutSheet();
+                        if (typeof loadDepositPageHistory === 'function') loadDepositPageHistory();
                         if (utrInput) utrInput.value = '';
                     } else {
                         this.showToast(d.message, 'error');
@@ -538,12 +540,15 @@ class StateManager {
     openRechargeModal() {
         const modal = document.getElementById('recharge-modal');
         if (modal) modal.classList.remove('hidden');
+        if (typeof updateDepositButtonState === 'function') updateDepositButtonState();
+        if (typeof loadDepositPageHistory === 'function') loadDepositPageHistory();
         if (window.sound) window.sound.click();
     }
 
     closeRechargeModal() {
         const modal = document.getElementById('recharge-modal');
         if (modal) modal.classList.add('hidden');
+        if (typeof closeDepositCheckoutSheet === 'function') closeDepositCheckoutSheet();
     }
 
     openWithdrawModal() {
@@ -1251,6 +1256,7 @@ function depositFromBonus(amount) {
         document.querySelectorAll('.recharge-pill').forEach(p => {
             p.classList.toggle('active', parseInt(p.dataset.amount) === amount);
         });
+        updateDepositButtonState();
     }
 }
 
@@ -1707,6 +1713,159 @@ function shareInvitePosterNative() {
     } else {
         copyInvitePosterLink();
     }
+}
+
+// ========================================================
+// FULL-SCREEN BDG DEPOSIT PAGE LOGIC (#/wallet/Recharge)
+// ========================================================
+window._selectedDepositMethod = 'UPI-QR';
+window._selectedDepositChannel = 'UPI-QR';
+
+const DEPOSIT_CHANNEL_MAP = {
+    'UPI-QR': [
+        { name: 'UPI-QR', range: 'Balance:100 - 50K' },
+        { name: 'UPI-FastQR', range: 'Balance:100 - 50K' }
+    ],
+    'UPI-QRpay': [
+        { name: 'UPI-QRpay', range: 'Balance:100 - 50K' },
+        { name: 'QRpay-VIP', range: 'Balance:500 - 50K' }
+    ],
+    'Wake UP-APP': [
+        { name: 'Wake UP-APP', range: 'Balance:100 - 50K' },
+        { name: 'PhonePe/GPay', range: 'Balance:100 - 50K' }
+    ],
+    'USDT': [
+        { name: 'USDT-TRC20', range: 'Balance:100 - 50K' }
+    ],
+    'ARPay': [
+        { name: 'ARPay (+1% Bonus)', range: 'Balance:100 - 50K' }
+    ]
+};
+
+function selectDepositMethod(method, tileEl) {
+    window._selectedDepositMethod = method;
+    document.querySelectorAll('.dep-method-tile').forEach(t => t.classList.remove('active'));
+    if (tileEl) tileEl.classList.add('active');
+
+    const channels = DEPOSIT_CHANNEL_MAP[method] || [{ name: method, range: 'Balance:100 - 50K' }];
+    window._selectedDepositChannel = channels[0].name;
+
+    const chGrid = document.getElementById('dep-channel-grid');
+    if (chGrid) {
+        chGrid.innerHTML = channels.map((ch, idx) => `
+            <div class="dep-channel-tile ${idx === 0 ? 'active' : ''}" data-channel="${ch.name}" onclick="selectDepositChannel('${ch.name}', this)">
+                <div class="dep-ch-name">${ch.name}</div>
+                <div class="dep-ch-range">${ch.range}</div>
+            </div>
+        `).join('');
+    }
+    const footerMethod = document.getElementById('dep-footer-method');
+    if (footerMethod) footerMethod.textContent = method;
+    if (window.sound) window.sound.click();
+}
+
+function selectDepositChannel(channel, el) {
+    window._selectedDepositChannel = channel;
+    document.querySelectorAll('.dep-channel-tile').forEach(c => c.classList.remove('active'));
+    if (el) el.classList.add('active');
+    const footerMethod = document.getElementById('dep-footer-method');
+    if (footerMethod) footerMethod.textContent = channel;
+    if (window.sound) window.sound.click();
+}
+
+function updateDepositButtonState() {
+    const inp = document.getElementById('recharge-amount-input');
+    const btn = document.getElementById('dep-open-pay-btn');
+    const amt = parseFloat(inp?.value || '0');
+    if (btn) {
+        if (amt >= 100) btn.classList.add('ready');
+        else btn.classList.remove('ready');
+    }
+}
+
+function clearDepositAmount() {
+    const inp = document.getElementById('recharge-amount-input');
+    if (inp) inp.value = '';
+    document.querySelectorAll('.dep-amt-btn').forEach(b => b.classList.remove('active'));
+    updateDepositButtonState();
+}
+
+function openDepositCheckoutSheet() {
+    const sm = window.stateManager;
+    if (!sm || !sm.token) {
+        if (sm) sm.showToast('Please login first to deposit funds!', 'warning');
+        openAuthModal('login');
+        return;
+    }
+    const inp = document.getElementById('recharge-amount-input');
+    const amt = parseFloat(inp?.value || '0');
+    if (!amt || amt < 100) {
+        sm.showToast('Please select or enter at least ₹100 to deposit.', 'warning');
+        return;
+    }
+
+    const ch = window._selectedDepositChannel || window._selectedDepositMethod || 'UPI-QR';
+    const isUsdt = window._selectedDepositMethod === 'USDT';
+    const payAddr = isUsdt ? 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t' : 'asgames@upi';
+    const qrPayload = isUsdt
+        ? payAddr
+        : `upi://pay?pa=asgames@upi&pn=ASGames&am=${amt.toFixed(2)}&cu=INR`;
+
+    const chLbl = document.getElementById('dep-pay-channel-lbl');
+    const amtLbl = document.getElementById('dep-pay-amount-lbl');
+    const idLbl = document.getElementById('dep-pay-id-label');
+    const idVal = document.getElementById('dep-pay-id-val');
+    const qrImg = document.getElementById('dep-pay-qr-img');
+
+    if (chLbl) chLbl.textContent = ch;
+    if (amtLbl) amtLbl.textContent = `₹${amt.toFixed(2)}`;
+    if (idLbl) idLbl.textContent = isUsdt ? 'Official USDT (TRC20) Address' : 'Official Deposit UPI ID';
+    if (idVal) idVal.textContent = payAddr;
+    if (qrImg) qrImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&margin=6&data=${encodeURIComponent(qrPayload)}`;
+
+    const sheet = document.getElementById('dep-checkout-sheet');
+    if (sheet) sheet.classList.remove('hidden');
+}
+
+function closeDepositCheckoutSheet() {
+    const sheet = document.getElementById('dep-checkout-sheet');
+    if (sheet) sheet.classList.add('hidden');
+}
+
+function copyDepositPayAddress() {
+    const val = document.getElementById('dep-pay-id-val')?.textContent || 'asgames@upi';
+    if (navigator.clipboard) navigator.clipboard.writeText(val).catch(() => {});
+    if (window.stateManager) window.stateManager.showToast(`Copied: ${val}`, 'success');
+}
+
+async function loadDepositPageHistory() {
+    const listEl = document.getElementById('dep-history-list');
+    const sm = window.stateManager;
+    if (!listEl || !sm || !sm.token) return;
+    try {
+        const res = await fetch('/api/wallet/transactions', { headers: { 'Authorization': `Bearer ${sm.token}` } });
+        const d = await res.json();
+        const deps = (d.transactions || []).filter(t => t.type === 'deposit').slice(0, 15);
+        if (deps.length === 0) {
+            listEl.innerHTML = `<div class="bdg-no-data" style="padding:30px 10px;"><div style="font-size:44px; opacity:0.35; margin-bottom:6px;">📜</div><div>No data</div></div>`;
+            return;
+        }
+        listEl.innerHTML = deps.map(t => {
+            const st = String(t.status || 'pending').toLowerCase();
+            const stColor = (st === 'approved' || st === 'completed') ? '#10b981' : (st === 'rejected' ? '#ef4444' : '#f59e0b');
+            const stText = (st === 'approved' || st === 'completed') ? 'Completed' : (st === 'rejected' ? 'Rejected' : 'Pending');
+            return `
+                <div style="display:flex; justify-content:space-between; align-items:center; padding:10px 4px; border-bottom:1px solid rgba(255,255,255,0.06);">
+                    <div>
+                        <div style="color:#fff; font-weight:700; font-size:13px;">₹${parseFloat(t.amount || 0).toFixed(2)}</div>
+                        <div style="color:#94a3b8; font-size:11px;">${t.details || 'Deposit'}</div>
+                        <div style="color:#71717a; font-size:10px;">${(t.created_at || '').replace('T', ' ').slice(0, 19)}</div>
+                    </div>
+                    <span style="font-size:11px; font-weight:700; color:${stColor}; background:rgba(255,255,255,0.05); padding:4px 9px; border-radius:6px;">${stText}</span>
+                </div>
+            `;
+        }).join('');
+    } catch (e) {}
 }
 
 // Global initialization
