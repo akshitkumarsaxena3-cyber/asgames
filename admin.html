@@ -573,8 +573,17 @@
                 if (inputUrl && d.pythonanywhere_url) inputUrl.value = d.pythonanywhere_url;
 
                 const badge = document.getElementById('pa-conn-badge');
+                const statusEl = document.getElementById('pa-sync-status');
                 if (badge) {
-                    if (d.is_connected) {
+                    if (d.is_master) {
+                        badge.style.background = '#065f46';
+                        badge.style.color = '#34d399';
+                        badge.textContent = '🟢 Master Database Active';
+                        if (statusEl) {
+                            statusEl.style.color = '#34d399';
+                            statusEl.innerHTML = '👑 <strong>Ye PythonAnywhere Server hi Master Central Database hai!</strong> Saara data directly yahan permanent SQLite me save ho raha hai. Ab aap Render site (<a href="https://asgames.onrender.com/admin" target="_blank" style="color:#fae59f; text-decoration:underline;">https://asgames.onrender.com/admin</a>) me login karke ye URL Connect kar dein!';
+                        }
+                    } else if (d.is_connected) {
                         badge.style.background = '#065f46';
                         badge.style.color = '#34d399';
                         badge.textContent = '🟢 Connected & Protected';

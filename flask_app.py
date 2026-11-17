@@ -789,6 +789,47 @@ def api_admin_all_transactions():
 
     return jsonify({'success': True, 'transactions': rows})
 
+@app.route('/api/admin/sync-status', methods=['GET'])
+def api_admin_sync_status():
+    ok, _ = verify_admin(request)
+    if not ok:
+        return jsonify({'success': False, 'message': 'Unauthorized'}), 403
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute('SELECT COUNT(*) as c FROM users')
+        u_c = cursor.fetchone()['c'] or 0
+        cursor.execute('SELECT COUNT(*) as c FROM transactions')
+        t_c = cursor.fetchone()['c'] or 0
+    return jsonify({
+        'success': True,
+        'pythonanywhere_url': 'https://backandsopport.pythonanywhere.com',
+        'is_connected': True,
+        'is_master': True,
+        'users_count': u_c,
+        'transactions_count': t_c
+    })
+
+@app.route('/api/admin/set-pythonanywhere', methods=['POST'])
+def api_admin_set_pa():
+    ok, _ = verify_admin(request)
+    if not ok:
+        return jsonify({'success': False, 'message': 'Unauthorized'}), 403
+    return jsonify({
+        'success': True,
+        'message': 'PythonAnywhere is the Master Central Database! All data is saved directly in SQLite.',
+        'syncSuccess': True
+    })
+
+@app.route('/api/admin/sync-now', methods=['POST'])
+def api_admin_sync_now():
+    ok, _ = verify_admin(request)
+    if not ok:
+        return jsonify({'success': False, 'message': 'Unauthorized'}), 403
+    return jsonify({
+        'success': True,
+        'message': 'This PythonAnywhere server is the Master Database. All data is saved permanently.'
+    })
+
 
 # ========================================================
 # CENTRAL DATA SYNC APIS (Both Sites Save & Pull Data Here)
