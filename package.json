@@ -1,0 +1,22 @@
+{
+  "name": "asgames",
+  "version": "1.0.0",
+  "description": "ASGames - Color Prediction, Aviator, Mines & K3 Lottery Gaming Platform",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "keywords": [
+    "asgames",
+    "color-prediction",
+    "lottery",
+    "aviator",
+    "mines",
+    "k3"
+  ],
+  "author": "ASGames",
+  "license": "ISC",
+  "dependencies": {
+    "express": "^4.19.2"
+  }
+}
