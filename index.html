@@ -500,6 +500,37 @@
                         </div>
                     </div>
 
+                    <!-- Invite Spin Wheel -->
+                    <div class="game-card card-wheel" data-category="original" data-open-game="wheel">
+                        <div class="card-top">
+                            <span class="game-badge-hot">FREE SPIN 🎡</span>
+                            <span class="game-sub">Win ₹198</span>
+                        </div>
+                        <div class="game-icon-large">
+                            <svg width="88" height="58" viewBox="0 0 96 60" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <circle cx="48" cy="30" r="26" fill="#EF4444" stroke="#FDE047" stroke-width="3"/>
+                                <path d="M48 30 L48 6 A24 24 0 0 1 65 13 Z" fill="#FDE067"/>
+                                <path d="M48 30 L65 13 A24 24 0 0 1 72 30 Z" fill="#FFFBEB"/>
+                                <path d="M48 30 L72 30 A24 24 0 0 1 65 47 Z" fill="#FDE067"/>
+                                <path d="M48 30 L65 47 A24 24 0 0 1 48 54 Z" fill="#FFFBEB"/>
+                                <path d="M48 30 L48 54 A24 24 0 0 1 31 47 Z" fill="#FDE067"/>
+                                <path d="M48 30 L31 47 A24 24 0 0 1 24 30 Z" fill="#FFFBEB"/>
+                                <path d="M48 30 L24 30 A24 24 0 0 1 31 13 Z" fill="#FDE067"/>
+                                <path d="M48 30 L31 13 A24 24 0 0 1 48 6 Z" fill="#FFFBEB"/>
+                                <circle cx="48" cy="30" r="9" fill="#FFF" stroke="#EF4444" stroke-width="2.5"/>
+                                <text x="48" y="33" text-anchor="middle" fill="#DC2626" font-size="8" font-weight="900" font-family="Poppins">SPIN</text>
+                                <polygon points="44,2 52,2 48,11" fill="#F59E0B" stroke="#FFF" stroke-width="1"/>
+                            </svg>
+                        </div>
+                        <div class="card-bottom">
+                            <div>
+                                <div class="game-title">Invite Wheel</div>
+                                <div class="game-sub">Spin & Cash Out</div>
+                            </div>
+                            <span class="btn-play-mini">SPIN</span>
+                        </div>
+                    </div>
+
                     <!-- 5D Lottery -->
                     <div class="game-card card-5d" data-category="lottery" data-open-game="wingo">
                         <div class="card-top">
@@ -1021,6 +1052,57 @@
                 </div>
             </div>
 
+            <!-- ============================================== -->
+            <!-- SUB-SCREEN: INVITE WHEEL (BDG TURNTABLE)       -->
+            <!-- ============================================== -->
+            <div id="game-view-wheel" class="game-view wheel-screen hidden">
+                <!-- Sunset Red Header -->
+                <div class="wheel-topbar">
+                    <button class="btn-back-home wheel-icon-btn">&#8249;</button>
+                    <span class="wheel-title">Invite Wheel</span>
+                    <div style="display:flex; gap:10px;">
+                        <button class="wheel-circle-btn" onclick="window.wheelGame.showRulesAlert()" title="Rules">?</button>
+                        <button class="wheel-circle-btn" onclick="window.wheelGame.showHistoryAlert()" title="History">📄</button>
+                    </div>
+                </div>
+
+                <!-- Amount & Cash Out Header -->
+                <div class="wheel-amount-header">
+                    <div class="wheel-subtitle">My Amount (<span id="wheel-timer-str">23:59:59</span>)</div>
+                    <div id="wheel-my-amount" class="wheel-big-amount">₹0.00</div>
+                    <button class="wheel-cashout-btn" onclick="window.wheelGame.cashOut()">CASH OUT</button>
+                    <div class="wheel-prog-wrap">
+                        <div class="wheel-prog-bar"><div id="wheel-cashout-fill" class="wheel-prog-fill"></div></div>
+                        <div id="wheel-cashout-text" class="wheel-prog-label">Only ₹200.00 more to Cash Out ₹200!</div>
+                    </div>
+                </div>
+
+                <!-- Floating Gold Coins Decoration -->
+                <div class="wheel-stage">
+                    <span class="wheel-float-coin coin-tl">🪙</span>
+                    <span class="wheel-float-coin coin-tr">🪙</span>
+                    <span class="wheel-float-coin coin-bl">🪙</span>
+                    <span class="wheel-float-coin coin-br">🪙</span>
+
+                    <div class="wheel-canvas-holder">
+                        <canvas id="wheel-canvas" width="320" height="320"></canvas>
+                        <!-- Center Glowing FREE SPIN Hub -->
+                        <button class="wheel-center-hub" onclick="window.wheelGame.spin()">
+                            <span id="wheel-hub-count" class="wheel-hub-x">X3</span>
+                            <span class="wheel-hub-label">FREE SPIN</span>
+                        </button>
+                    </div>
+                    <div class="wheel-pedestal"></div>
+                </div>
+
+                <!-- Invite For Extra Spins Bar -->
+                <div class="wheel-footer-cta">
+                    <button class="wheel-invite-btn" onclick="window.wheelGame.claimInviteSpin()">
+                        🎁 Invite Friends — Get +1 FREE SPIN
+                    </button>
+                </div>
+            </div>
+
         </main>
 
         <!-- ============================================== -->
@@ -1224,6 +1306,7 @@
     <script src="game-mines.js"></script>
     <script src="game-k3.js"></script>
     <script src="game-ludo.js"></script>
+    <script src="game-wheel.js"></script>
     <script src="app.js"></script>
 </body>
 </html>

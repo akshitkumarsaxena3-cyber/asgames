@@ -512,6 +512,9 @@ class StateManager {
         if (gameName === 'ludo' && window.ludoGame) {
             setTimeout(() => window.ludoGame.resizeCanvas(), 80);
         }
+        if (gameName === 'wheel' && window.wheelGame) {
+            setTimeout(() => window.wheelGame.resizeCanvas(), 80);
+        }
     }
 
     backToHome() {
