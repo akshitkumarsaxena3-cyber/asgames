@@ -4,7 +4,7 @@ class StateManager {
     constructor() {
         this.token = localStorage.getItem('asg_token') || null;
         this.user = null;
-        this.balance = parseFloat(localStorage.getItem('asg_balance')) || 100.00;
+        this.balance = this.token ? (parseFloat(localStorage.getItem('asg_balance')) || 0.00) : 0.00;
         this.uid = localStorage.getItem('asg_uid') || '849204';
         this.vipLevel = 1;
         this.inviteCode = localStorage.getItem('asg_invite') || 'ASG84920';
@@ -45,7 +45,7 @@ class StateManager {
         const searchParams = new URLSearchParams(window.location.search);
         const hashQuery = window.location.hash.includes('?') ? window.location.hash.split('?')[1] : '';
         const hashParams = new URLSearchParams(hashQuery);
-        const ref = searchParams.get('r') || searchParams.get('invitationCode') || hashParams.get('invitationCode') || hashParams.get('r');
+        const ref = searchParams.get('invite') || searchParams.get('r') || searchParams.get('invitationCode') || hashParams.get('invitationCode') || hashParams.get('invite') || hashParams.get('r');
 
         if (ref) {
             const regInviteInput = document.getElementById('reg-invite');
@@ -90,20 +90,29 @@ class StateManager {
 
     updateAuthButtonUI(isLoggedIn) {
         const authBtn = document.getElementById('btn-auth-trigger');
-        if (!authBtn) return;
+        const balCard = document.getElementById('header-balance-card');
 
         if (isLoggedIn && this.user) {
-            const maskedPhone = this.user.phone.replace(/(\d{3})\d{4}(\d{3})/, '$1****$2');
-            authBtn.textContent = `📱 ${maskedPhone} (Logout)`;
-            authBtn.onclick = () => {
-                if (confirm('Do you want to log out?')) {
-                    localStorage.removeItem('asg_token');
-                    location.reload();
-                }
-            };
+            if (balCard) balCard.classList.remove('hidden');
+            if (authBtn) {
+                const maskedPhone = this.user.phone.replace(/(\d{3})\d{4}(\d{3})/, '$1****$2');
+                authBtn.textContent = `📱 ${maskedPhone} (Logout)`;
+                authBtn.onclick = () => {
+                    if (confirm('Do you want to log out?')) {
+                        localStorage.removeItem('asg_token');
+                        localStorage.removeItem('asg_balance');
+                        location.reload();
+                    }
+                };
+            }
         } else {
-            authBtn.textContent = 'Login / Register';
-            authBtn.onclick = () => openAuthModal();
+            if (balCard) balCard.classList.add('hidden');
+            this.balance = 0.00;
+            this.updateBalanceUI();
+            if (authBtn) {
+                authBtn.textContent = 'Login / Register';
+                authBtn.onclick = () => openAuthModal();
+            }
         }
     }
 
