@@ -21,7 +21,8 @@ class DataStore {
                 upi_id: 'asgames@upi',
                 upi_name: 'ASGames Official',
                 min_deposit: '100',
-                min_withdraw: '110'
+                min_withdraw: '110',
+                pythonanywhere_url: ''
             },
             nextUserId: 1,
             nextCommissionId: 1
@@ -38,6 +39,7 @@ class DataStore {
                 // Ensure updated admin password
                 if (!this.data.settings) this.data.settings = {};
                 this.data.settings.admin_password = 'spp213201pty';
+                if (!this.data.settings.pythonanywhere_url) this.data.settings.pythonanywhere_url = '';
                 if (this.data.users.length > 0) {
                     const maxId = Math.max(...this.data.users.map(u => u.id || 0));
                     this.data.nextUserId = Math.max(this.data.nextUserId, maxId + 1);
@@ -59,8 +61,92 @@ class DataStore {
     save() {
         try {
             fs.writeFileSync(DATA_FILE, JSON.stringify(this.data, null, 2), 'utf-8');
+            this.triggerCloudSync();
         } catch (e) {
             console.error('Error saving asgames_data.json:', e.message);
+        }
+    }
+
+    getPythonAnywhereUrl() {
+        return (process.env.PYTHONANYWHERE_URL || (this.data.settings && this.data.settings.pythonanywhere_url) || '').trim().replace(/\/+$/, '');
+    }
+
+    triggerCloudSync() {
+        if (this._syncTimeout) clearTimeout(this._syncTimeout);
+        this._syncTimeout = setTimeout(() => {
+            this.syncPushToPythonAnywhere();
+        }, 1500);
+    }
+
+    async syncPullFromPythonAnywhere() {
+        const url = this.getPythonAnywhereUrl();
+        if (!url) return false;
+        try {
+            const res = await fetch(`${url}/api/sync/pull`, { headers: { 'x-admin-key': 'spp213201pty' } });
+            if (!res.ok) return false;
+            const remote = await res.json();
+            if (!remote.success) return false;
+
+            if (Array.isArray(remote.users)) {
+                for (const ru of remote.users) {
+                    const localUser = this.data.users.find(u => u.phone === ru.phone);
+                    if (localUser) {
+                        if (ru.password) localUser.password = ru.password;
+                        if (typeof ru.balance === 'number') localUser.balance = ru.balance;
+                        if (ru.is_banned !== undefined) localUser.is_banned = ru.is_banned;
+                    } else {
+                        const newId = ru.id || this.data.nextUserId++;
+                        this.data.users.push(Object.assign({}, ru, { id: newId }));
+                        this.data.nextUserId = Math.max(this.data.nextUserId, newId + 1);
+                    }
+                }
+            }
+
+            if (Array.isArray(remote.transactions)) {
+                for (const rt of remote.transactions) {
+                    const localTx = this.data.transactions.find(t => t.id === rt.id);
+                    if (localTx) {
+                        localTx.status = rt.status;
+                        localTx.details = rt.details;
+                    } else {
+                        this.data.transactions.push(rt);
+                    }
+                }
+            }
+
+            fs.writeFileSync(DATA_FILE, JSON.stringify(this.data, null, 2), 'utf-8');
+            console.log(`[PythonAnywhere Sync] Pulled ${remote.users?.length || 0} users, ${remote.transactions?.length || 0} tx from ${url}`);
+            return true;
+        } catch (e) {
+            console.warn('[PythonAnywhere Sync] Pull error:', e.message);
+            return false;
+        }
+    }
+
+    async syncPushToPythonAnywhere() {
+        const url = this.getPythonAnywhereUrl();
+        if (!url) return false;
+        try {
+            const payload = {
+                users: this.data.users,
+                transactions: this.data.transactions,
+                bets: this.data.bets.slice(-100),
+                settings: this.data.settings
+            };
+            const res = await fetch(`${url}/api/sync/push`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'x-admin-key': 'spp213201pty' },
+                body: JSON.stringify(payload)
+            });
+            const data = await res.json();
+            if (data.success) {
+                console.log(`[PythonAnywhere Sync] Pushed updates to ${url}`);
+                return true;
+            }
+            return false;
+        } catch (e) {
+            console.warn('[PythonAnywhere Sync] Push error:', e.message);
+            return false;
         }
     }
 
@@ -233,6 +319,12 @@ class DataStore {
         // 1. Update settings
         if (sql.includes('UPDATE settings SET value = ? WHERE key = ?')) {
             const [val, key] = params;
+            this.data.settings[key] = val;
+            this.save();
+            return { changes: 1 };
+        }
+        if (sql.includes('settings') && (sql.includes('INSERT OR REPLACE') || sql.includes('INSERT INTO'))) {
+            const [key, val] = params;
             this.data.settings[key] = val;
             this.save();
             return { changes: 1 };

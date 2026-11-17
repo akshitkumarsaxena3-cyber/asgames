@@ -128,6 +128,7 @@
                 <button class="nav-btn" onclick="switchTab('deposits')">💰 Pending Deposits</button>
                 <button class="nav-btn" onclick="switchTab('withdrawals')">💳 Pending Withdrawals</button>
                 <button class="nav-btn" onclick="switchTab('history')">📑 Financial History</button>
+                <button class="nav-btn" onclick="switchTab('sync')">☁️ Cloud Database Sync</button>
             </div>
 
             <!-- TAB 1: GAME CONTROL & RIGGING -->
@@ -266,6 +267,44 @@
                 </div>
             </div>
 
+            <!-- TAB 6: CLOUD DATABASE SYNC (PYTHONANYWHERE) -->
+            <div id="tab-sync" class="hidden">
+                <div class="card" style="border:1px solid #38bdf8;">
+                    <div class="card-title" style="color:#38bdf8; display:flex; justify-content:space-between; align-items:center;">
+                        <span>☁️ PythonAnywhere Central Cloud Database</span>
+                        <span id="pa-conn-badge" style="font-size:12px; padding:4px 8px; border-radius:4px; background:#1e293b; color:#94a3b8;">Checking connection...</span>
+                    </div>
+                    <p style="font-size:13px; color:#cbd5e1; margin:8px 0 16px; line-height:1.6;">
+                        Is feature se aapki <strong>Render website</strong> aur <strong>PythonAnywhere website</strong> dono ka saara data (Registered Players, Unke Passwords, Balances, Deposit Requests, Withdrawal Requests) hamesha ke liye <strong>PythonAnywhere</strong> me save rahega. Render restart hone par bhi 1 rupya ya 1 user ka data nahi khoega!
+                    </p>
+                    
+                    <div style="background:#0f172a; padding:16px; border-radius:8px; border:1px solid #334155; margin-bottom:16px;">
+                        <label style="font-size:13px; font-weight:700; color:#fae59f; display:block; margin-bottom:8px;">PythonAnywhere Web App URL:</label>
+                        <div style="display:flex; gap:10px; flex-wrap:wrap;">
+                            <input type="text" id="pa-sync-url" class="input-text" style="flex:1; min-width:260px; margin:0;" placeholder="https://username.pythonanywhere.com">
+                            <button class="btn-primary" style="background:#0284c7; width:auto; padding:10px 20px; font-size:13px;" onclick="savePythonAnywhereUrl()">💾 Connect & Save</button>
+                            <button class="btn-primary" style="background:#10b981; width:auto; padding:10px 20px; font-size:13px;" onclick="syncWithPythonAnywhereNow()">🔄 Sync Now</button>
+                        </div>
+                        <p id="pa-sync-status" style="font-size:12px; margin-top:10px; font-weight:600;"></p>
+                    </div>
+
+                    <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:12px;">
+                        <div style="background:#1e293b; padding:14px; border-radius:6px; text-align:center;">
+                            <div style="font-size:12px; color:#94a3b8;">Total Users Synchronized</div>
+                            <div id="pa-stat-users" style="font-size:22px; font-weight:bold; color:#fae59f; margin-top:4px;">-</div>
+                        </div>
+                        <div style="background:#1e293b; padding:14px; border-radius:6px; text-align:center;">
+                            <div style="font-size:12px; color:#94a3b8;">Total Transactions Synchronized</div>
+                            <div id="pa-stat-tx" style="font-size:22px; font-weight:bold; color:#10b981; margin-top:4px;">-</div>
+                        </div>
+                        <div style="background:#1e293b; padding:14px; border-radius:6px; text-align:center;">
+                            <div style="font-size:12px; color:#94a3b8;">Auto-Sync Status</div>
+                            <div style="font-size:14px; font-weight:bold; color:#38bdf8; margin-top:8px;">Active (Every 30s)</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
         </div>
     </div>
 
@@ -309,7 +348,7 @@
             document.querySelectorAll('.admin-nav .nav-btn').forEach(b => b.classList.remove('active'));
             if (event && event.target) event.target.classList.add('active');
 
-            ['control', 'users', 'deposits', 'withdrawals', 'history'].forEach(t => {
+            ['control', 'users', 'deposits', 'withdrawals', 'history', 'sync'].forEach(t => {
                 const el = document.getElementById('tab-' + t);
                 if (el) el.classList.add('hidden');
             });
@@ -320,6 +359,7 @@
             if (tab === 'deposits') loadDeposits();
             if (tab === 'withdrawals') loadWithdrawals();
             if (tab === 'history') loadAllHistory();
+            if (tab === 'sync') loadSyncStatus();
         }
 
         async function refreshOverview() {
@@ -521,6 +561,80 @@
                 </tr>
                 `;
             }).join('');
+        }
+
+        async function loadSyncStatus() {
+            try {
+                const res = await fetch('/api/admin/sync-status', { headers: { 'x-admin-key': adminKey } });
+                const d = await res.json();
+                if (!d.success) return;
+
+                const inputUrl = document.getElementById('pa-sync-url');
+                if (inputUrl && d.pythonanywhere_url) inputUrl.value = d.pythonanywhere_url;
+
+                const badge = document.getElementById('pa-conn-badge');
+                if (badge) {
+                    if (d.is_connected) {
+                        badge.style.background = '#065f46';
+                        badge.style.color = '#34d399';
+                        badge.textContent = '🟢 Connected & Protected';
+                    } else {
+                        badge.style.background = '#475569';
+                        badge.style.color = '#cbd5e1';
+                        badge.textContent = '⚪ Not Connected';
+                    }
+                }
+
+                document.getElementById('pa-stat-users').textContent = d.users_count;
+                document.getElementById('pa-stat-tx').textContent = d.transactions_count;
+            } catch (e) {}
+        }
+
+        async function savePythonAnywhereUrl() {
+            const url = (document.getElementById('pa-sync-url')?.value || '').trim();
+            const statusEl = document.getElementById('pa-sync-status');
+            statusEl.style.color = '#38bdf8';
+            statusEl.textContent = 'Connecting and syncing data with PythonAnywhere...';
+
+            try {
+                const res = await fetch('/api/admin/set-pythonanywhere', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'x-admin-key': adminKey },
+                    body: JSON.stringify({ url })
+                });
+                const d = await res.json();
+                if (d.success) {
+                    statusEl.style.color = d.syncSuccess ? '#10b981' : '#f59e0b';
+                    statusEl.textContent = '✓ ' + d.message;
+                    loadSyncStatus();
+                } else {
+                    statusEl.style.color = '#ef4444';
+                    statusEl.textContent = '✗ ' + d.message;
+                }
+            } catch (e) {
+                statusEl.style.color = '#ef4444';
+                statusEl.textContent = '✗ Request failed. Please check server.';
+            }
+        }
+
+        async function syncWithPythonAnywhereNow() {
+            const statusEl = document.getElementById('pa-sync-status');
+            statusEl.style.color = '#38bdf8';
+            statusEl.textContent = 'Synchronizing full database with PythonAnywhere now...';
+
+            try {
+                const res = await fetch('/api/admin/sync-now', {
+                    method: 'POST',
+                    headers: { 'x-admin-key': adminKey }
+                });
+                const d = await res.json();
+                statusEl.style.color = d.success ? '#10b981' : '#ef4444';
+                statusEl.textContent = (d.success ? '✓ ' : '✗ ') + d.message;
+                loadSyncStatus();
+            } catch (e) {
+                statusEl.style.color = '#ef4444';
+                statusEl.textContent = '✗ Sync failed. Connection error.';
+            }
         }
     </script>
 </body>

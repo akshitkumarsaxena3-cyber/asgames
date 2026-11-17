@@ -726,6 +726,56 @@ app.get('/api/admin/all-transactions', requireAdmin, async (req, res) => {
     }
 });
 
+// PythonAnywhere Central Sync Management APIs
+app.get('/api/admin/sync-status', requireAdmin, async (req, res) => {
+    try {
+        const url = DB.getPythonAnywhereUrl();
+        res.json({
+            success: true,
+            pythonanywhere_url: url,
+            is_connected: Boolean(url),
+            users_count: DB.data.users.length,
+            transactions_count: DB.data.transactions.length
+        });
+    } catch (e) {
+        res.status(500).json({ success: false, message: e.message });
+    }
+});
+
+app.post('/api/admin/set-pythonanywhere', requireAdmin, async (req, res) => {
+    try {
+        const { url } = req.body;
+        const cleanUrl = String(url || '').trim().replace(/\/+$/, '');
+        await DB.run('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ['pythonanywhere_url', cleanUrl]);
+
+        let syncSuccess = false;
+        let msg = 'PythonAnywhere URL saved.';
+        if (cleanUrl) {
+            const pullOk = await DB.syncPullFromPythonAnywhere();
+            const pushOk = await DB.syncPushToPythonAnywhere();
+            syncSuccess = pullOk || pushOk;
+            msg = syncSuccess ? 'Connected & Synced with PythonAnywhere successfully!' : 'URL saved, but could not connect. Please check URL.';
+        }
+        res.json({ success: true, message: msg, syncSuccess, pythonanywhere_url: cleanUrl });
+    } catch (e) {
+        res.status(500).json({ success: false, message: e.message });
+    }
+});
+
+app.post('/api/admin/sync-now', requireAdmin, async (req, res) => {
+    try {
+        const pullOk = await DB.syncPullFromPythonAnywhere();
+        const pushOk = await DB.syncPushToPythonAnywhere();
+        if (pullOk || pushOk) {
+            res.json({ success: true, message: 'Data synced with PythonAnywhere successfully!' });
+        } else {
+            res.json({ success: false, message: 'Sync failed. Please check PythonAnywhere URL & server status.' });
+        }
+    } catch (e) {
+        res.status(500).json({ success: false, message: e.message });
+    }
+});
+
 // Admin Panel Page
 app.get('/admin', (req, res) => {
     res.sendFile(path.join(__dirname, 'admin.html'));
@@ -738,4 +788,20 @@ app.get('*', (req, res) => {
 
 app.listen(PORT, '0.0.0.0', () => {
     console.log(`ASGames Full-Stack Server running on port ${PORT}`);
+
+    // Auto-sync with PythonAnywhere on boot and periodically
+    setTimeout(async () => {
+        if (DB.getPythonAnywhereUrl()) {
+            console.log('[PythonAnywhere] Initializing startup sync with:', DB.getPythonAnywhereUrl());
+            await DB.syncPullFromPythonAnywhere();
+            await DB.syncPushToPythonAnywhere();
+        }
+    }, 2000);
+
+    setInterval(async () => {
+        if (DB.getPythonAnywhereUrl()) {
+            await DB.syncPullFromPythonAnywhere();
+            await DB.syncPushToPythonAnywhere();
+        }
+    }, 30000);
 });
