@@ -5687,3 +5687,325 @@ body {
     color: #a1a1aa;
     font-size: 11.5px;
 }
+
+/* ======================================================== */
+/* FLAGSHIP OBSIDIAN & ROYAL GOLD UI/UX VISUAL OVERHAUL     */
+/* ======================================================== */
+:root {
+    --bg-dark: #131317;
+    --bg-card: #1e1e24;
+    --bg-card-subtle: #27272e;
+    --bg-card-hover: #303039;
+    --border-color: rgba(217, 172, 79, 0.16);
+    --primary-gold: #f5c443;
+    --gold-gradient: linear-gradient(135deg, #fff0b8 0%, #e5b755 52%, #b88224 100%);
+    --gold-gradient-btn: linear-gradient(180deg, #fae59f 0%, #d49e3a 100%);
+}
+
+body {
+    background: radial-gradient(circle at top, #1f1b14 0%, #09090b 65%) !important;
+}
+
+#app {
+    background: #131317 !important;
+    box-shadow: 0 0 60px rgba(0, 0, 0, 0.9), 0 0 1px 1px rgba(217, 172, 79, 0.22) !important;
+}
+
+/* Glassmorphic Obsidian Header */
+.app-header {
+    background: rgba(24, 24, 29, 0.92) !important;
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border-bottom: 1px solid rgba(217, 172, 79, 0.16) !important;
+}
+
+.brand-logo-img {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 1.5px solid #f5c443;
+    box-shadow: 0 0 12px rgba(245, 196, 67, 0.45);
+}
+
+.brand-badge {
+    background: linear-gradient(135deg, #fae59f, #c4933f) !important;
+    color: #2c1a03 !important;
+    border: none !important;
+    font-weight: 800 !important;
+    letter-spacing: 0.6px;
+}
+
+.header-balance-card {
+    background: linear-gradient(135deg, #25221c 0%, #1c1c22 55%, #241f16 100%) !important;
+    border: 1px solid rgba(245, 196, 67, 0.34) !important;
+    box-shadow: 0 8px 22px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 240, 184, 0.14) !important;
+}
+
+.balance-value {
+    background: linear-gradient(90deg, #fff4c4, #f5c443);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    font-weight: 800 !important;
+}
+
+.btn-deposit {
+    position: relative;
+    overflow: hidden;
+    background: linear-gradient(180deg, #fae59f 0%, #d49e3a 100%) !important;
+    color: #2b1704 !important;
+    box-shadow: 0 4px 14px rgba(217, 158, 58, 0.45) !important;
+}
+
+.btn-deposit::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -120%;
+    width: 65%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.55), transparent);
+    transform: skewX(-22deg);
+    animation: goldSheen 3.6s infinite;
+}
+
+@keyframes goldSheen {
+    0%, 72% { left: -120%; }
+    100% { left: 160%; }
+}
+
+.btn-withdraw {
+    background: rgba(255, 255, 255, 0.06) !important;
+    border: 1px solid rgba(245, 196, 67, 0.32) !important;
+    color: #fae59f !important;
+}
+
+.notice-marquee-bar {
+    background: #1b1a1e !important;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05) !important;
+    color: #d4d4d8 !important;
+}
+
+/* Luxury 3D Auto-Sliding Hero Banner Carousel */
+.hero-slider-viewport {
+    position: relative;
+    width: 100%;
+    border-radius: 16px;
+    overflow: hidden;
+    border: 1px solid rgba(245, 196, 67, 0.35);
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.55);
+}
+
+.hero-slider-track {
+    display: flex;
+    transition: transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.hero-slide {
+    min-width: 100%;
+    height: 164px;
+    background-size: cover;
+    background-position: center right;
+    position: relative;
+    display: flex;
+    align-items: center;
+    padding: 18px 16px;
+}
+
+.hero-slide-scrim {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(90deg, rgba(12, 12, 16, 0.92) 0%, rgba(12, 12, 16, 0.72) 52%, rgba(12, 12, 16, 0.12) 100%);
+}
+
+.hero-slide-content {
+    position: relative;
+    z-index: 2;
+    max-width: 66%;
+}
+
+.hero-slide-content h3 {
+    font-size: 18px;
+    font-weight: 900;
+    color: #fff4c4;
+    line-height: 1.2;
+    margin-bottom: 4px;
+    text-shadow: 0 2px 10px rgba(0, 0, 0, 0.8);
+}
+
+.hero-slide-content p {
+    font-size: 11.5px;
+    color: #e4e4e7;
+    line-height: 1.35;
+}
+
+.hero-slider-dots {
+    position: absolute;
+    bottom: 8px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 6px;
+    z-index: 4;
+}
+
+.hero-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.35);
+    cursor: pointer;
+    transition: all 0.25s;
+}
+
+.hero-dot.active {
+    width: 22px;
+    background: linear-gradient(90deg, #fae59f, #d9ac4f);
+}
+
+/* Live Stats & Category Filter Obsidian Polish */
+.stat-pill-mini {
+    background: rgba(34, 34, 42, 0.85) !important;
+    border: 1px solid rgba(245, 196, 67, 0.18) !important;
+    color: #d4d4d8 !important;
+}
+
+.cat-pill {
+    background: #23232a !important;
+    border: 1px solid rgba(255, 255, 255, 0.08) !important;
+    color: #a1a1aa !important;
+}
+
+.cat-pill.active {
+    background: linear-gradient(135deg, #fae59f 0%, #c6913a 100%) !important;
+    color: #2b1704 !important;
+    border-color: #fff0b8 !important;
+    box-shadow: 0 4px 14px rgba(217, 172, 79, 0.4) !important;
+}
+
+/* Full-Bleed 3D Artwork Game Cards */
+.game-card-3d {
+    min-height: 172px !important;
+    padding: 11px !important;
+    border: 1px solid rgba(245, 196, 67, 0.22) !important;
+    border-left: 1px solid rgba(245, 196, 67, 0.22) !important;
+    border-radius: 16px !important;
+    background: #18181d !important;
+    box-shadow: 0 10px 26px rgba(0, 0, 0, 0.52) !important;
+    isolation: isolate;
+}
+
+.game-card-art {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    z-index: 0;
+    transition: transform 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.game-card-3d:hover .game-card-art {
+    transform: scale(1.07);
+}
+
+.game-card-scrim {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    background: linear-gradient(180deg, rgba(10, 10, 14, 0.42) 0%, rgba(10, 10, 14, 0.12) 40%, rgba(10, 10, 14, 0.88) 85%, rgba(10, 10, 14, 0.96) 100%);
+}
+
+.game-card-3d .card-top,
+.game-card-3d .card-bottom {
+    position: relative;
+    z-index: 2;
+}
+
+.game-tag-glass {
+    background: rgba(15, 15, 20, 0.65);
+    backdrop-filter: blur(8px);
+    color: #f4f4f5;
+    font-size: 9.5px;
+    font-weight: 700;
+    padding: 3px 7px;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+}
+
+.game-card-3d .game-title {
+    font-size: 15px !important;
+    font-weight: 800 !important;
+    text-shadow: 0 2px 8px rgba(0, 0, 0, 0.85);
+}
+
+.game-card-3d .game-sub {
+    color: #d4d4d8 !important;
+    font-size: 10.5px !important;
+}
+
+.game-card-3d .btn-play-mini {
+    background: linear-gradient(135deg, #fff0b8 0%, #d49e3a 100%) !important;
+    color: #2b1704 !important;
+    font-weight: 800 !important;
+    padding: 5px 12px !important;
+    border-radius: 14px !important;
+    box-shadow: 0 3px 10px rgba(217, 172, 79, 0.45);
+}
+
+/* Luxury Podium VIP Avatars */
+.podium-avatar-img {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    object-fit: cover;
+    margin: 4px auto 8px;
+    display: block;
+}
+
+.podium-avatar-img.gold-ring {
+    width: 56px;
+    height: 56px;
+    border: 2.5px solid #fae59f;
+    box-shadow: 0 0 18px rgba(245, 196, 67, 0.6);
+}
+
+.podium-avatar-img.silver-ring {
+    border: 2px solid #cbd5e1;
+    box-shadow: 0 0 12px rgba(203, 213, 225, 0.4);
+}
+
+.podium-avatar-img.bronze-ring {
+    border: 2px solid #f59e0b;
+    box-shadow: 0 0 12px rgba(245, 158, 11, 0.4);
+}
+
+.podium-item {
+    background: linear-gradient(180deg, #272730 0%, #1c1c22 100%) !important;
+    border: 1px solid rgba(245, 196, 67, 0.18) !important;
+}
+
+.podium-1 {
+    background: linear-gradient(180deg, #3b2f16 0%, #1f1b14 100%) !important;
+    border: 1px solid rgba(245, 196, 67, 0.5) !important;
+    box-shadow: 0 8px 24px rgba(217, 172, 79, 0.25);
+}
+
+.ticker-box {
+    background: #1e1e24 !important;
+    border: 1px solid rgba(255, 255, 255, 0.06) !important;
+}
+
+/* Obsidian Glass Bottom Navigation Bar */
+.tabbar-container {
+    background: rgba(24, 24, 29, 0.94) !important;
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border-top: 1px solid rgba(245, 196, 67, 0.2) !important;
+}
+
+.bdg-acc-avatar {
+    padding: 2px !important;
+    border: 2.5px solid #fff4c4 !important;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4) !important;
+}

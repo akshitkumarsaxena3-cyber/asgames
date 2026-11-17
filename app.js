@@ -2137,10 +2137,30 @@ function openWithdrawHistoryDirectly() {
     }
 }
 
+// ========================================================
+// HERO 3D BANNER CAROUSEL CONTROLLER
+// ========================================================
+let _heroSlideIdx = 0;
+function goHeroSlide(idx) {
+    const track = document.getElementById('hero-slider-track');
+    const dots = document.querySelectorAll('.hero-dot');
+    if (!track) return;
+    _heroSlideIdx = idx % 2;
+    track.style.transform = `translateX(-${_heroSlideIdx * 100}%)`;
+    dots.forEach((d, i) => d.classList.toggle('active', i === _heroSlideIdx));
+}
+
+function initHeroCarousel() {
+    setInterval(() => {
+        goHeroSlide((_heroSlideIdx + 1) % 2);
+    }, 4500);
+}
+
 // Global initialization
 window.addEventListener('DOMContentLoaded', () => {
     window.stateManager = new StateManager();
     applyLanguage(currentLang);
+    initHeroCarousel();
     window.stateManager.showSplashLoader('Loading ASGames VIP...', 850);
 
     // Automatically show Extra First Deposit Bonus modal right after login!
