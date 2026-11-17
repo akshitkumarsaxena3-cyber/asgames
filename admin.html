@@ -182,6 +182,122 @@
                         </div>
                     </div>
                 </div>
+
+                <!-- AVIATOR CONTROL CARD -->
+                <div class="card" style="border-color: rgba(239,68,68,0.35);">
+                    <div class="card-title">
+                        <span>✈️ Aviator Crash Control</span>
+                        <span id="aviator-mode-badge" style="color: #f87171; font-size: 12px;">Active: RANDOM</span>
+                    </div>
+                    <div class="mode-row">
+                        <div class="mode-chip" id="avi-random" onclick="updateExtraControl({aviator_mode:'random'})">
+                            <h4>🎲 Fair Random</h4>
+                            <p>Natural flight multiplier</p>
+                        </div>
+                        <div class="mode-chip" id="avi-early" onclick="updateExtraControl({aviator_mode:'early_crash'})">
+                            <h4>💥 Early Crash (House Win)</h4>
+                            <p>Always crashes 1.04x – 1.29x</p>
+                        </div>
+                        <div class="mode-chip" id="avi-high" onclick="updateExtraControl({aviator_mode:'high_flight'})">
+                            <h4>🚀 High Flight</h4>
+                            <p>Flies high 8x – 30x</p>
+                        </div>
+                    </div>
+                    <div style="margin-top:12px; display:flex; flex-wrap:wrap; gap:8px; align-items:center;">
+                        <span style="font-size:12px; color:#fae59f; font-weight:600;">Force Exact Crash Point:</span>
+                        <button class="btn-action" style="background:#ef4444; color:#fff;" onclick="forceAviatorCrash(1.05)">1.05x</button>
+                        <button class="btn-action" style="background:#f97316; color:#fff;" onclick="forceAviatorCrash(1.30)">1.30x</button>
+                        <button class="btn-action" style="background:#eab308; color:#111;" onclick="forceAviatorCrash(2.00)">2.00x</button>
+                        <button class="btn-action" style="background:#10b981; color:#fff;" onclick="forceAviatorCrash(5.00)">5.00x</button>
+                        <button class="btn-action" style="background:#8b5cf6; color:#fff;" onclick="forceAviatorCrash(15.00)">15.00x</button>
+                        <input type="number" step="0.1" id="avi-custom-crash" class="input-text" style="width:95px; margin:0; padding:6px 8px;" placeholder="e.g. 1.85">
+                        <button class="btn-action btn-approve" onclick="forceAviatorCrash(parseFloat(document.getElementById('avi-custom-crash').value)||1.5)">Set Exact</button>
+                    </div>
+                    <p id="avi-status" style="font-size:12px; color:#10b981; margin-top:8px;"></p>
+                </div>
+
+                <!-- MINES CONTROL CARD -->
+                <div class="card" style="border-color: rgba(6,182,212,0.35);">
+                    <div class="card-title">
+                        <span>💎 Mines 5x5 Bomb Control</span>
+                        <span id="mines-mode-badge" style="color: #38bdf8; font-size: 12px;">Active: RANDOM</span>
+                    </div>
+                    <div class="mode-row">
+                        <div class="mode-chip" id="mines-random" onclick="updateExtraControl({mines_mode:'random'})">
+                            <h4>🎲 Fair Random</h4>
+                            <p>Unbiased random bombs</p>
+                        </div>
+                        <div class="mode-chip" id="mines-house" onclick="updateExtraControl({mines_mode:'house_profit'})">
+                            <h4>💣 House Profit Trap</h4>
+                            <p>Explodes after max safe clicks</p>
+                        </div>
+                        <div class="mode-chip" id="mines-easy" onclick="updateExtraControl({mines_mode:'easy_win'})">
+                            <h4>💎 Easy Win Mode</h4>
+                            <p>First 4 clicks guaranteed safe</p>
+                        </div>
+                    </div>
+                    <div style="margin-top:12px; display:flex; flex-wrap:wrap; gap:8px; align-items:center;">
+                        <span style="font-size:12px; color:#fae59f; font-weight:600;">Trap Mode — Max Safe Gems Allowed:</span>
+                        <button class="btn-action" style="background:#ef4444; color:#fff;" onclick="setMinesTrap(0)">0 (1st Click Bomb)</button>
+                        <button class="btn-action" style="background:#f97316; color:#fff;" onclick="setMinesTrap(1)">1 Gem -> Bomb</button>
+                        <button class="btn-action" style="background:#eab308; color:#111;" onclick="setMinesTrap(2)">2 Gems -> Bomb</button>
+                        <button class="btn-action" style="background:#10b981; color:#fff;" onclick="setMinesTrap(3)">3 Gems -> Bomb</button>
+                    </div>
+                    <p id="mines-status" style="font-size:12px; color:#38bdf8; margin-top:8px;"></p>
+                </div>
+
+                <!-- K3 DICE CONTROL CARD -->
+                <div class="card" style="border-color: rgba(139,92,246,0.35);">
+                    <div class="card-title">
+                        <span>🎲 K3 Dice Lottery Control</span>
+                        <span id="k3-mode-badge" style="color: #a78bfa; font-size: 12px;">Active: RANDOM</span>
+                    </div>
+                    <div class="mode-row">
+                        <div class="mode-chip" id="k3-random" onclick="updateExtraControl({k3_mode:'random'})">
+                            <h4>🎲 Fair Random</h4>
+                            <p>Natural 3 dice roll</p>
+                        </div>
+                        <div class="mode-chip" id="k3-small" onclick="updateExtraControl({k3_mode:'small'})">
+                            <h4>🔵 Force SMALL (3-10)</h4>
+                            <p>Next draw guaranteed Small</p>
+                        </div>
+                        <div class="mode-chip" id="k3-big" onclick="updateExtraControl({k3_mode:'big'})">
+                            <h4>🟡 Force BIG (11-18)</h4>
+                            <p>Next draw guaranteed Big</p>
+                        </div>
+                    </div>
+                    <div style="margin-top:12px; display:flex; flex-wrap:wrap; gap:8px; align-items:center;">
+                        <span style="font-size:12px; color:#fae59f; font-weight:600;">Force Exact 3 Dice:</span>
+                        <button class="btn-action" style="background:#334155; color:#fff;" onclick="forceK3Dice('1,1,1')">1-1-1 (Sum 3)</button>
+                        <button class="btn-action" style="background:#334155; color:#fff;" onclick="forceK3Dice('2,3,4')">2-3-4 (Sum 9)</button>
+                        <button class="btn-action" style="background:#334155; color:#fff;" onclick="forceK3Dice('4,5,6')">4-5-6 (Sum 15)</button>
+                        <button class="btn-action" style="background:#7c3aed; color:#fff;" onclick="forceK3Dice('6,6,6')">6-6-6 (Triple 18)</button>
+                    </div>
+                    <p id="k3-status" style="font-size:12px; color:#a78bfa; margin-top:8px;"></p>
+                </div>
+
+                <!-- LUDO CASH CONTROL CARD -->
+                <div class="card" style="border-color: rgba(245,158,11,0.4);">
+                    <div class="card-title">
+                        <span>👑 Ludo Supreme Cash Control</span>
+                        <span id="ludo-mode-badge" style="color: #fbbf24; font-size: 12px;">Active: FAIR</span>
+                    </div>
+                    <div class="mode-row">
+                        <div class="mode-chip" id="ludo-fair" onclick="updateExtraControl({ludo_mode:'fair'})">
+                            <h4>⚖️ Fair Ludo Dice</h4>
+                            <p>Equal dice odds for player & bot</p>
+                        </div>
+                        <div class="mode-chip" id="ludo-bot" onclick="updateExtraControl({ludo_mode:'bot_win'})">
+                            <h4>🤖 House Profit (Bot Wins)</h4>
+                            <p>Bot gets lucky 6s & higher dice</p>
+                        </div>
+                        <div class="mode-chip" id="ludo-player" onclick="updateExtraControl({ludo_mode:'player_win'})">
+                            <h4>🏆 Player Easy Win</h4>
+                            <p>Player gets frequent 6s to win</p>
+                        </div>
+                    </div>
+                    <p id="ludo-status" style="font-size:12px; color:#fbbf24; margin-top:8px;"></p>
+                </div>
             </div>
 
             <!-- TAB 2: USERS -->
@@ -409,7 +525,86 @@
                 document.getElementById('wag-red').textContent = `₹${d.wagers.red || 0}`;
                 document.getElementById('wag-big').textContent = `₹${d.wagers.big || 0}`;
                 document.getElementById('wag-small').textContent = `₹${d.wagers.small || 0}`;
+
+                // Aviator Active Mode UI
+                const aviMode = d.aviatorMode || 'random';
+                const aviBadge = document.getElementById('aviator-mode-badge');
+                if (aviBadge) aviBadge.textContent = `Active: ${aviMode.toUpperCase()}` + (aviMode === 'manual' ? ` (${d.aviatorCrash}x)` : '');
+                ['avi-random', 'avi-early', 'avi-high'].forEach(id => document.getElementById(id)?.classList.remove('active'));
+                if (aviMode === 'random') document.getElementById('avi-random')?.classList.add('active');
+                if (aviMode === 'early_crash' || aviMode === 'house_edge') document.getElementById('avi-early')?.classList.add('active');
+                if (aviMode === 'high_flight') document.getElementById('avi-high')?.classList.add('active');
+
+                // Mines Active Mode UI
+                const mMode = d.minesMode || 'random';
+                const mBadge = document.getElementById('mines-mode-badge');
+                if (mBadge) mBadge.textContent = `Active: ${mMode.toUpperCase()}` + (mMode === 'house_profit' ? ` (Max ${d.minesMaxSafe || 1} Safe)` : '');
+                ['mines-random', 'mines-house', 'mines-easy'].forEach(id => document.getElementById(id)?.classList.remove('active'));
+                if (mMode === 'random') document.getElementById('mines-random')?.classList.add('active');
+                if (mMode === 'house_profit') document.getElementById('mines-house')?.classList.add('active');
+                if (mMode === 'easy_win') document.getElementById('mines-easy')?.classList.add('active');
+
+                // K3 Active Mode UI
+                const kMode = d.k3Mode || 'random';
+                const kBadge = document.getElementById('k3-mode-badge');
+                if (kBadge) kBadge.textContent = `Active: ${kMode.toUpperCase()}` + (kMode === 'manual' ? ` (${d.k3Dice})` : '');
+                ['k3-random', 'k3-small', 'k3-big'].forEach(id => document.getElementById(id)?.classList.remove('active'));
+                if (kMode === 'random') document.getElementById('k3-random')?.classList.add('active');
+                if (kMode === 'small') document.getElementById('k3-small')?.classList.add('active');
+                if (kMode === 'big') document.getElementById('k3-big')?.classList.add('active');
+
+                // Ludo Active Mode UI
+                const lMode = d.ludoMode || 'fair';
+                const lBadge = document.getElementById('ludo-mode-badge');
+                if (lBadge) lBadge.textContent = `Active: ${lMode.toUpperCase()}`;
+                ['ludo-fair', 'ludo-bot', 'ludo-player'].forEach(id => document.getElementById(id)?.classList.remove('active'));
+                if (lMode === 'fair') document.getElementById('ludo-fair')?.classList.add('active');
+                if (lMode === 'bot_win') document.getElementById('ludo-bot')?.classList.add('active');
+                if (lMode === 'player_win') document.getElementById('ludo-player')?.classList.add('active');
             } catch (e) {}
+        }
+
+        async function updateExtraControl(payload) {
+            await fetch('/api/admin/control', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'x-admin-key': adminKey },
+                body: JSON.stringify(payload)
+            });
+            if (payload.aviator_mode) document.getElementById('avi-status').textContent = `✓ Aviator set to ${payload.aviator_mode.toUpperCase()}`;
+            if (payload.mines_mode) document.getElementById('mines-status').textContent = `✓ Mines set to ${payload.mines_mode.toUpperCase()}`;
+            if (payload.k3_mode) document.getElementById('k3-status').textContent = `✓ K3 Dice set to ${payload.k3_mode.toUpperCase()}`;
+            if (payload.ludo_mode) document.getElementById('ludo-status').textContent = `✓ Ludo Cash set to ${payload.ludo_mode.toUpperCase()}`;
+            refreshOverview();
+        }
+
+        async function forceAviatorCrash(mult) {
+            await fetch('/api/admin/control', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'x-admin-key': adminKey },
+                body: JSON.stringify({ aviator_mode: 'manual', aviator_crash: mult })
+            });
+            document.getElementById('avi-status').textContent = `✓ Next Aviator flight forced to crash at ${mult}x!`;
+            refreshOverview();
+        }
+
+        async function setMinesTrap(maxSafe) {
+            await fetch('/api/admin/control', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'x-admin-key': adminKey },
+                body: JSON.stringify({ mines_mode: 'house_profit', mines_max_safe: maxSafe })
+            });
+            document.getElementById('mines-status').textContent = `✓ Mines Trap Active: Guaranteed Bomb after ${maxSafe} gem(s)!`;
+            refreshOverview();
+        }
+
+        async function forceK3Dice(diceStr) {
+            await fetch('/api/admin/control', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'x-admin-key': adminKey },
+                body: JSON.stringify({ k3_mode: 'manual', k3_dice: diceStr })
+            });
+            document.getElementById('k3-status').textContent = `✓ Next K3 Dice forced to [${diceStr}]!`;
+            refreshOverview();
         }
 
         async function setGameMode(mode) {

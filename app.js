@@ -393,7 +393,41 @@ class StateManager {
         if (tabName === 'wallet') this.renderTransactions();
     }
 
+    showSplashLoader(label = 'Loading Secure Casino Engine...', durationMs = 500) {
+        const overlay = document.getElementById('app-splash-loader');
+        const fill = document.getElementById('splash-progress-fill');
+        const pct = document.getElementById('splash-percent');
+        const status = document.getElementById('splash-status-text');
+        if (!overlay) return;
+
+        overlay.classList.remove('fade-out');
+        overlay.style.display = 'flex';
+        if (status) status.textContent = label;
+
+        let p = 0;
+        const step = 100 / Math.max(8, durationMs / 35);
+        const iv = setInterval(() => {
+            p = Math.min(100, p + step);
+            if (fill) fill.style.width = `${Math.floor(p)}%`;
+            if (pct) pct.textContent = `${Math.floor(p)}%`;
+            if (p >= 100) {
+                clearInterval(iv);
+                overlay.classList.add('fade-out');
+                setTimeout(() => { overlay.style.display = 'none'; }, 280);
+            }
+        }, 35);
+    }
+
     openGameView(gameName) {
+        const labels = {
+            wingo: 'Loading Win Go Live Arena...',
+            aviator: 'Connecting Aviator Flight Radar...',
+            mines: 'Preparing 5x5 Diamond Vault...',
+            k3: 'Warming Up K3 Dice Table...',
+            ludo: 'Loading Ludo Supreme Cash Board...'
+        };
+        this.showSplashLoader(labels[gameName] || 'Loading Game Engine...', 420);
+
         const homeMain = document.getElementById('home-main-content');
         if (homeMain) homeMain.classList.add('hidden');
 
@@ -406,7 +440,10 @@ class StateManager {
         }
 
         if (gameName === 'aviator' && window.aviatorGame) {
-            setTimeout(() => window.aviatorGame.resizeCanvas(), 50);
+            setTimeout(() => window.aviatorGame.resizeCanvas(), 80);
+        }
+        if (gameName === 'ludo' && window.ludoGame) {
+            setTimeout(() => window.ludoGame.resizeCanvas(), 80);
         }
     }
 
@@ -829,4 +866,5 @@ async function submitRegister() {
 // Global initialization
 window.addEventListener('DOMContentLoaded', () => {
     window.stateManager = new StateManager();
+    window.stateManager.showSplashLoader('Loading ASGames VIP...', 850);
 });

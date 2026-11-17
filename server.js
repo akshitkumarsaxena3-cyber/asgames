@@ -587,6 +587,13 @@ app.get('/api/admin/overview', requireAdmin, async (req, res) => {
             isLocked,
             gameMode: modeSetting ? modeSetting.value : 'random',
             manualNumber: manualSetting ? manualSetting.value : '',
+            aviatorMode: (DB.data.settings && DB.data.settings.aviator_mode) || 'random',
+            aviatorCrash: (DB.data.settings && DB.data.settings.aviator_crash) || '2.00',
+            minesMode: (DB.data.settings && DB.data.settings.mines_mode) || 'random',
+            minesMaxSafe: (DB.data.settings && DB.data.settings.mines_max_safe) || '1',
+            k3Mode: (DB.data.settings && DB.data.settings.k3_mode) || 'random',
+            k3Dice: (DB.data.settings && DB.data.settings.k3_dice) || '1,2,3',
+            ludoMode: (DB.data.settings && DB.data.settings.ludo_mode) || 'fair',
             stats: {
                 users: totalUsers.count,
                 totalBalance: Math.floor((totalBalance.total || 0) * 100) / 100,
@@ -601,16 +608,47 @@ app.get('/api/admin/overview', requireAdmin, async (req, res) => {
     }
 });
 
+app.get('/api/game/all-rigging', async (req, res) => {
+    try {
+        const s = DB.data.settings || {};
+        res.json({
+            success: true,
+            aviator_mode: s.aviator_mode || 'random',
+            aviator_crash: parseFloat(s.aviator_crash || '2.00'),
+            aviator_force_ts: parseInt(s.aviator_force_ts || '0'),
+            mines_mode: s.mines_mode || 'random',
+            mines_max_safe: parseInt(s.mines_max_safe || '1'),
+            k3_mode: s.k3_mode || 'random',
+            k3_dice: s.k3_dice || '1,2,3',
+            ludo_mode: s.ludo_mode || 'fair'
+        });
+    } catch (e) {
+        res.status(500).json({ success: false, message: e.message });
+    }
+});
+
 app.post('/api/admin/control', requireAdmin, async (req, res) => {
     try {
-        const { mode, manual_number } = req.body;
-        if (mode) {
-            await DB.run('UPDATE settings SET value = ? WHERE key = ?', [mode, 'game_mode']);
-        }
-        if (manual_number !== undefined) {
-            await DB.run('UPDATE settings SET value = ? WHERE key = ?', [String(manual_number), 'manual_number']);
-        }
-        res.json({ success: true, message: 'Game outcome settings updated successfully!' });
+        const {
+            mode, manual_number,
+            aviator_mode, aviator_crash, aviator_force_ts,
+            mines_mode, mines_max_safe,
+            k3_mode, k3_dice,
+            ludo_mode
+        } = req.body;
+
+        if (mode) await DB.run('UPDATE settings SET value = ? WHERE key = ?', [mode, 'game_mode']);
+        if (manual_number !== undefined) await DB.run('UPDATE settings SET value = ? WHERE key = ?', [String(manual_number), 'manual_number']);
+        if (aviator_mode) await DB.run('UPDATE settings SET value = ? WHERE key = ?', [aviator_mode, 'aviator_mode']);
+        if (aviator_crash !== undefined) await DB.run('UPDATE settings SET value = ? WHERE key = ?', [String(aviator_crash), 'aviator_crash']);
+        if (aviator_force_ts !== undefined) await DB.run('UPDATE settings SET value = ? WHERE key = ?', [String(aviator_force_ts), 'aviator_force_ts']);
+        if (mines_mode) await DB.run('UPDATE settings SET value = ? WHERE key = ?', [mines_mode, 'mines_mode']);
+        if (mines_max_safe !== undefined) await DB.run('UPDATE settings SET value = ? WHERE key = ?', [String(mines_max_safe), 'mines_max_safe']);
+        if (k3_mode) await DB.run('UPDATE settings SET value = ? WHERE key = ?', [k3_mode, 'k3_mode']);
+        if (k3_dice) await DB.run('UPDATE settings SET value = ? WHERE key = ?', [String(k3_dice), 'k3_dice']);
+        if (ludo_mode) await DB.run('UPDATE settings SET value = ? WHERE key = ?', [ludo_mode, 'ludo_mode']);
+
+        res.json({ success: true, message: 'All Game Rigging & Control settings updated successfully!' });
     } catch (e) {
         res.status(500).json({ success: false, message: e.message });
     }

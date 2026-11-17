@@ -13,6 +13,20 @@
 
     <div id="app">
 
+        <!-- Luxury App & Game Loading Splash Screen -->
+        <div id="app-splash-loader" class="splash-loader-overlay">
+            <div class="splash-emblem">
+                <div class="splash-ring"></div>
+                <span class="splash-crown">👑</span>
+            </div>
+            <h1 class="splash-brand">ASGames VIP</h1>
+            <p id="splash-status-text" class="splash-status">Loading Secure Casino Engine...</p>
+            <div class="splash-progress-track">
+                <div id="splash-progress-fill" class="splash-progress-fill"></div>
+            </div>
+            <span id="splash-percent" class="splash-percent">0%</span>
+        </div>
+
         <!-- Toast Notifications Area -->
         <div id="toast-container"></div>
 
@@ -369,6 +383,35 @@
                             <div>
                                 <div class="game-title">K3 Lottery</div>
                                 <div class="game-sub">Sum & Dice</div>
+                            </div>
+                            <span class="btn-play-mini">PLAY</span>
+                        </div>
+                    </div>
+
+                    <!-- Ludo Supreme Cash -->
+                    <div class="game-card card-ludo" data-category="original" data-open-game="ludo">
+                        <div class="card-top">
+                            <span class="game-badge-hot">1.9x CASH 👑</span>
+                            <span class="game-sub">Live Ludo</span>
+                        </div>
+                        <div class="game-icon-large">
+                            <svg width="88" height="58" viewBox="0 0 96 60" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <rect x="18" y="4" width="52" height="52" rx="8" fill="#F8FAFC" stroke="#F5C443" stroke-width="2"/>
+                                <rect x="20" y="6" width="21" height="21" rx="4" fill="#10B981"/>
+                                <rect x="47" y="6" width="21" height="21" rx="4" fill="#F59E0B"/>
+                                <rect x="20" y="33" width="21" height="21" rx="4" fill="#EF4444"/>
+                                <rect x="47" y="33" width="21" height="21" rx="4" fill="#3B82F6"/>
+                                <circle cx="44" cy="30" r="7" fill="#F5C443" stroke="#FFF" stroke-width="1.5"/>
+                                <rect x="64" y="34" width="20" height="20" rx="5" fill="#FFFFFF" stroke="#EF4444" stroke-width="1.5" transform="rotate(12 74 44)"/>
+                                <circle cx="71" cy="41" r="2" fill="#DC2626"/>
+                                <circle cx="77" cy="47" r="2" fill="#DC2626"/>
+                                <circle cx="74" cy="44" r="2" fill="#DC2626"/>
+                            </svg>
+                        </div>
+                        <div class="card-bottom">
+                            <div>
+                                <div class="game-title">Ludo Cash</div>
+                                <div class="game-sub">Play & Win 1.9x</div>
                             </div>
                             <span class="btn-play-mini">PLAY</span>
                         </div>
@@ -835,6 +878,66 @@
                 </div>
             </div>
 
+            <!-- ============================================== -->
+            <!-- SUB-SCREEN: LUDO SUPREME CASH                  -->
+            <!-- ============================================== -->
+            <div id="game-view-ludo" class="game-view hidden">
+                <div class="game-subnav">
+                    <button class="btn-back-home">‹ Back</button>
+                    <span class="game-header-title">👑 Ludo Cash Supreme</span>
+                    <span class="game-wallet-mini user-balance-val">₹0.00</span>
+                </div>
+
+                <!-- Scoreboard Bar -->
+                <div class="ludo-scoreboard">
+                    <div class="ludo-player-box ludo-red-box">
+                        <span style="font-size:11px; color:#fecaca;">🔴 YOU (RED)</span>
+                        <strong id="ludo-player-score" style="font-size:20px; color:#fff;">0</strong>
+                    </div>
+                    <div class="ludo-turns-box">
+                        <span style="font-size:10px; color:#fae59f;">TURNS LEFT</span>
+                        <strong id="ludo-turns-left" style="font-size:18px; color:#fde047;">24</strong>
+                    </div>
+                    <div class="ludo-player-box ludo-yellow-box">
+                        <span style="font-size:11px; color:#fde68a;">🟡 OPPONENT</span>
+                        <strong id="ludo-bot-score" style="font-size:20px; color:#fff;">0</strong>
+                    </div>
+                </div>
+
+                <!-- Status Banner -->
+                <div id="ludo-status-text" class="ludo-status-banner">Select entry fee & tap START MATCH to win 1.9x cash!</div>
+
+                <!-- 15x15 Canvas Board -->
+                <div class="ludo-board-wrapper">
+                    <canvas id="ludo-canvas" width="360" height="360"></canvas>
+                </div>
+
+                <!-- Lobby Controls (Entry Fee Selection) -->
+                <div id="ludo-lobby-controls" class="ludo-controls-card">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                        <span style="font-size:12px; color:#94a3b8; font-weight:600;">Select Entry Fee:</span>
+                        <span style="font-size:13px; color:#10b981; font-weight:800;">Win Prize: <span id="ludo-prize-val">₹95</span></span>
+                    </div>
+                    <div class="ludo-fee-grid">
+                        <button class="ludo-fee-pill" data-fee="10" onclick="window.ludoGame.setEntryFee(10)">₹10</button>
+                        <button class="ludo-fee-pill active" data-fee="50" onclick="window.ludoGame.setEntryFee(50)">₹50</button>
+                        <button class="ludo-fee-pill" data-fee="100" onclick="window.ludoGame.setEntryFee(100)">₹100</button>
+                        <button class="ludo-fee-pill" data-fee="500" onclick="window.ludoGame.setEntryFee(500)">₹500</button>
+                        <button class="ludo-fee-pill" data-fee="1000" onclick="window.ludoGame.setEntryFee(1000)">₹1,000</button>
+                    </div>
+                    <button class="btn-full btn-gold" style="margin-top:12px; font-size:14px; font-weight:800;" onclick="window.ludoGame.startMatch()">🎲 START LUDO CASH MATCH</button>
+                </div>
+
+                <!-- Active Match Dice Controls -->
+                <div id="ludo-play-controls" class="ludo-controls-card hidden">
+                    <div style="display:flex; align-items:center; justify-content:space-between; gap:14px;">
+                        <div id="ludo-dice-face" class="ludo-dice-cube">⚅</div>
+                        <button id="btn-ludo-roll" class="btn-full btn-gold" style="flex:1; padding:16px; font-size:16px; font-weight:900; letter-spacing:1px;" onclick="window.ludoGame.rollDice(false)">🎲 ROLL DICE</button>
+                    </div>
+                    <p style="font-size:11px; color:#94a3b8; text-align:center; margin-top:8px;">Tip: Capture opponent tokens (+25 pts) & roll 6 for bonus turns!</p>
+                </div>
+            </div>
+
         </main>
 
         <!-- ============================================== -->
@@ -1037,6 +1140,7 @@
     <script src="game-aviator.js"></script>
     <script src="game-mines.js"></script>
     <script src="game-k3.js"></script>
+    <script src="game-ludo.js"></script>
     <script src="app.js"></script>
 </body>
 </html>

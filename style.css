@@ -2384,3 +2384,224 @@ body {
     font-weight: 800 !important;
     box-shadow: 0 3px 8px rgba(245, 196, 67, 0.35);
 }
+
+
+/* ========================================================
+   LUXURY APP & GAME LOADING SPLASH SCREEN
+======================================================== */
+.splash-loader-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    background: radial-gradient(circle at center, #1b2449 0%, #070a15 100%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    transition: opacity 0.28s ease;
+}
+
+.splash-loader-overlay.fade-out {
+    opacity: 0;
+    pointer-events: none;
+}
+
+.splash-emblem {
+    position: relative;
+    width: 88px;
+    height: 88px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 16px;
+}
+
+.splash-ring {
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    border: 3px solid rgba(245, 196, 67, 0.2);
+    border-top-color: #f5c443;
+    border-right-color: #fde047;
+    animation: spinRing 0.9s linear infinite;
+    box-shadow: 0 0 24px rgba(245, 196, 67, 0.35);
+}
+
+@keyframes spinRing {
+    100% { transform: rotate(360deg); }
+}
+
+.splash-crown {
+    font-size: 38px;
+    filter: drop-shadow(0 0 12px rgba(245, 196, 67, 0.8));
+}
+
+.splash-brand {
+    font-size: 26px;
+    font-weight: 900;
+    background: linear-gradient(135deg, #fff5c2 0%, #f5c443 50%, #d97706 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    letter-spacing: 1px;
+    margin-bottom: 6px;
+}
+
+.splash-status {
+    font-size: 12px;
+    color: #94a3b8;
+    margin-bottom: 18px;
+}
+
+.splash-progress-track {
+    width: 240px;
+    height: 7px;
+    background: rgba(30, 41, 59, 0.9);
+    border-radius: 20px;
+    overflow: hidden;
+    border: 1px solid rgba(245, 196, 67, 0.3);
+}
+
+.splash-progress-fill {
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(90deg, #f5c443 0%, #fde047 50%, #10b981 100%);
+    border-radius: 20px;
+    transition: width 0.05s linear;
+}
+
+.splash-percent {
+    font-size: 12px;
+    font-weight: 700;
+    color: #fae59f;
+    margin-top: 8px;
+}
+
+/* ========================================================
+   LUDO SUPREME CASH ARENA STYLES
+======================================================== */
+.card-ludo:hover {
+    border-color: #f59e0b;
+    box-shadow: 0 8px 24px rgba(245, 158, 11, 0.35);
+    transform: translateY(-2px);
+}
+
+.ludo-scoreboard {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    gap: 10px;
+    padding: 10px 14px;
+    align-items: center;
+}
+
+.ludo-player-box {
+    border-radius: 12px;
+    padding: 8px 12px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.ludo-red-box {
+    background: linear-gradient(135deg, rgba(220, 38, 38, 0.35), rgba(127, 29, 29, 0.5));
+    border-color: rgba(248, 113, 113, 0.5);
+}
+
+.ludo-yellow-box {
+    background: linear-gradient(135deg, rgba(217, 119, 6, 0.35), rgba(120, 53, 15, 0.5));
+    border-color: rgba(251, 191, 36, 0.5);
+}
+
+.ludo-turns-box {
+    background: rgba(15, 23, 42, 0.85);
+    border: 1px solid rgba(245, 196, 67, 0.45);
+    border-radius: 12px;
+    padding: 8px 14px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.ludo-status-banner {
+    margin: 0 14px 10px;
+    padding: 9px 14px;
+    background: rgba(30, 41, 59, 0.85);
+    border: 1px solid rgba(245, 196, 67, 0.3);
+    border-radius: 10px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #fae59f;
+    text-align: center;
+}
+
+.ludo-board-wrapper {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 6px 12px;
+}
+
+#ludo-canvas {
+    border-radius: 12px;
+    border: 3px solid #f5c443;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6), 0 0 16px rgba(245, 196, 67, 0.25);
+    cursor: pointer;
+}
+
+.ludo-controls-card {
+    margin: 12px 14px;
+    padding: 14px;
+    background: linear-gradient(145deg, #1b2344 0%, #11162c 100%);
+    border: 1px solid rgba(245, 196, 67, 0.28);
+    border-radius: 14px;
+}
+
+.ludo-fee-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 6px;
+}
+
+.ludo-fee-pill {
+    background: #0f172a;
+    border: 1px solid #334155;
+    color: #cbd5e1;
+    padding: 8px 4px;
+    border-radius: 8px;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.ludo-fee-pill.active {
+    background: var(--gold-gradient);
+    color: #1c1002;
+    border-color: #fde047;
+    box-shadow: 0 2px 10px rgba(245, 196, 67, 0.4);
+}
+
+.ludo-dice-cube {
+    width: 60px;
+    height: 60px;
+    background: linear-gradient(145deg, #ffffff 0%, #e2e8f0 100%);
+    color: #dc2626;
+    font-size: 42px;
+    border-radius: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid #f5c443;
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.45);
+    line-height: 1;
+}
+
+.ludo-dice-cube.rolling {
+    animation: diceSpin 0.2s linear infinite;
+}
+
+@keyframes diceSpin {
+    0% { transform: rotate(0deg) scale(1.06); }
+    50% { transform: rotate(180deg) scale(0.95); }
+    100% { transform: rotate(360deg) scale(1.06); }
+}

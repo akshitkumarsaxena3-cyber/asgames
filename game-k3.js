@@ -81,18 +81,46 @@ class K3Game {
         }
     }
 
-    rollDiceAndDraw() {
+    async rollDiceAndDraw() {
         if (window.sound) window.sound.diceRoll();
 
         // Animate rolling
         const cup = document.getElementById('k3-cup');
         if (cup) cup.classList.add('shaking');
 
+        // Fetch Admin Control settings for K3
+        let k3Mode = 'random';
+        let k3Manual = '1,2,3';
+        try {
+            const res = await fetch('/api/game/all-rigging');
+            const d = await res.json();
+            if (d.success) {
+                k3Mode = d.k3_mode || 'random';
+                k3Manual = d.k3_dice || '1,2,3';
+            }
+        } catch (e) {}
+
         setTimeout(() => {
             if (cup) cup.classList.remove('shaking');
-            const d1 = Math.floor(Math.random() * 6) + 1;
-            const d2 = Math.floor(Math.random() * 6) + 1;
-            const d3 = Math.floor(Math.random() * 6) + 1;
+            let d1 = Math.floor(Math.random() * 6) + 1;
+            let d2 = Math.floor(Math.random() * 6) + 1;
+            let d3 = Math.floor(Math.random() * 6) + 1;
+
+            if (k3Mode === 'manual') {
+                const parts = k3Manual.split(',').map(n => Math.max(1, Math.min(6, parseInt(n) || 1)));
+                if (parts.length === 3) [d1, d2, d3] = parts;
+            } else if (k3Mode === 'small') {
+                // Ensure sum <= 10
+                d1 = Math.floor(Math.random() * 3) + 1;
+                d2 = Math.floor(Math.random() * 3) + 1;
+                d3 = Math.floor(Math.random() * 3) + 1;
+            } else if (k3Mode === 'big') {
+                // Ensure sum >= 11
+                d1 = Math.floor(Math.random() * 3) + 4;
+                d2 = Math.floor(Math.random() * 3) + 4;
+                d3 = Math.floor(Math.random() * 3) + 4;
+            }
+
             this.dice = [d1, d2, d3];
             const sum = d1 + d2 + d3;
             const size = sum >= 11 ? 'Big' : 'Small';

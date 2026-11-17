@@ -35,12 +35,24 @@ class MinesGame {
         if (input) input.value = this.betAmount;
     }
 
-    startGame() {
+    async startGame() {
         if (this.isPlaying) return;
         if (this.sm.balance < this.betAmount) {
             this.sm.showToast('Insufficient balance for Mines!', 'error');
             return;
         }
+
+        // Fetch Admin Control settings
+        this.rigMode = 'random';
+        this.maxSafe = 1;
+        try {
+            const res = await fetch('/api/game/all-rigging');
+            const d = await res.json();
+            if (d.success) {
+                this.rigMode = d.mines_mode || 'random';
+                this.maxSafe = isNaN(parseInt(d.mines_max_safe)) ? 1 : parseInt(d.mines_max_safe);
+            }
+        } catch (e) {}
 
         // Deduct balance
         this.sm.deductBalance(this.betAmount, `Mines Game (${this.mineCount} Mines)`);
@@ -82,8 +94,18 @@ class MinesGame {
 
         tileEl.classList.add('revealed');
 
+        // Apply Admin Rigging Control
+        let isBomb = this.minePositions.has(index);
+        if (this.rigMode === 'house_profit' && this.revealedCount >= this.maxSafe) {
+            isBomb = true;
+            this.minePositions.add(index);
+        } else if (this.rigMode === 'easy_win' && this.revealedCount < 4) {
+            isBomb = false;
+            this.minePositions.delete(index);
+        }
+
         // Check if bomb
-        if (this.minePositions.has(index)) {
+        if (isBomb) {
             // Hit Bomb!
             tileEl.classList.add('is-bomb');
             tileEl.innerHTML = '💣';

