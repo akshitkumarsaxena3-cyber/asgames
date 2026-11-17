@@ -439,6 +439,39 @@
                     </div>
                     <p id="gmail-save-status" style="font-size:12px; margin-top:8px; font-weight:600;"></p>
                 </div>
+
+                <!-- GIFT CODE GENERATOR & MANAGER -->
+                <div class="card" style="border:1px solid #d9ac4f; margin-top:16px;">
+                    <div class="card-title" style="color:#fae59f; display:flex; justify-content:space-between; align-items:center;">
+                        <span>🎁 Gift Code Generator & Manager</span>
+                        <span id="gift-count-badge" style="font-size:12px; padding:4px 8px; border-radius:4px; background:#3b2f13; color:#fae59f;">0 Codes</span>
+                    </div>
+                    <p style="font-size:12px; color:#cbd5e1; margin:8px 0 12px; line-height:1.5;">
+                        Custom Gift Codes banayein — players <strong>Account → 🎁 Gifts</strong> me code daal kar instant cash reward claim kar sakte hain! (Code khaali chhodne par auto-generate hoga)
+                    </p>
+                    <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
+                        <input type="text" id="admin-gift-code" class="input-text" style="flex:1.2; min-width:150px; margin:0; text-transform:uppercase;" placeholder="Code (e.g. ASG100 or blank)">
+                        <input type="number" id="admin-gift-amt" class="input-text" style="flex:0.8; min-width:110px; margin:0;" value="50" min="1" placeholder="Amount (₹)">
+                        <input type="number" id="admin-gift-uses" class="input-text" style="flex:0.8; min-width:110px; margin:0;" value="100" min="1" placeholder="Max Uses">
+                        <button class="btn-primary" style="background:linear-gradient(90deg, #fae59f, #c4933f); color:#3b2608; font-weight:800; width:auto; padding:10px 20px; font-size:13px;" onclick="createAdminGift()">🎁 Create Gift Code</button>
+                    </div>
+                    <p id="gift-create-status" style="font-size:12px; margin-top:8px; font-weight:600;"></p>
+                    <div class="table-wrap" style="margin-top:12px; max-height:240px; overflow-y:auto;">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Gift Code</th>
+                                    <th>Reward (₹)</th>
+                                    <th>Claims (Used / Max)</th>
+                                    <th>Created</th>
+                                </tr>
+                            </thead>
+                            <tbody id="admin-gifts-tbody">
+                                <tr><td colspan="4" style="text-align:center; color:#94a3b8;">Loading gift codes...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
             </div>
 
         </div>
@@ -834,6 +867,69 @@
                 document.getElementById('pa-stat-tx').textContent = d.transactions_count;
             } catch (e) {}
             loadGmailSettings();
+            loadAdminGifts();
+        }
+
+        async function loadAdminGifts() {
+            const tbody = document.getElementById('admin-gifts-tbody');
+            const badge = document.getElementById('gift-count-badge');
+            if (!tbody) return;
+            try {
+                const res = await fetch('/api/admin/gifts', { headers: { 'x-admin-key': adminKey } });
+                const d = await res.json();
+                if (!d.success) return;
+                const list = d.gifts || [];
+                if (badge) badge.textContent = `${list.length} Code${list.length === 1 ? '' : 's'}`;
+                if (list.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; color:#94a3b8;">No gift codes created yet.</td></tr>';
+                    return;
+                }
+                tbody.innerHTML = list.map(g => {
+                    const used = Array.isArray(g.claimed_by) ? g.claimed_by.length : 0;
+                    const max = g.max_uses || 100;
+                    const dt = (g.created_at || '').slice(0, 16).replace('T', ' ');
+                    return `<tr>
+                        <td><strong style="color:#fae59f; letter-spacing:0.6px;">${g.code}</strong></td>
+                        <td style="color:#10b981; font-weight:700;">₹${Number(g.amount || 0).toFixed(2)}</td>
+                        <td><span class="badge ${used >= max ? 'badge-red' : 'badge-green'}">${used} / ${max}</span></td>
+                        <td style="font-size:11px; color:#94a3b8;">${dt || '-'}</td>
+                    </tr>`;
+                }).join('');
+            } catch (e) {
+                tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; color:#ef4444;">Failed to load gift codes.</td></tr>';
+            }
+        }
+
+        async function createAdminGift() {
+            const codeInp = document.getElementById('admin-gift-code');
+            const amtInp = document.getElementById('admin-gift-amt');
+            const usesInp = document.getElementById('admin-gift-uses');
+            const st = document.getElementById('gift-create-status');
+            const code = (codeInp?.value || '').trim().toUpperCase();
+            const amount = parseFloat(amtInp?.value || '50');
+            const max_uses = parseInt(usesInp?.value || '100', 10);
+            if (!amount || amount <= 0) {
+                st.style.color = '#ef4444';
+                st.textContent = '✗ Please enter a valid reward amount (> 0).';
+                return;
+            }
+            st.style.color = '#38bdf8';
+            st.textContent = 'Creating gift code...';
+            try {
+                const res = await fetch('/api/admin/create-gift', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'x-admin-key': adminKey },
+                    body: JSON.stringify({ code, amount, max_uses })
+                });
+                const d = await res.json();
+                st.style.color = d.success ? '#10b981' : '#ef4444';
+                st.textContent = (d.success ? '✓ ' : '✗ ') + d.message;
+                if (d.success && codeInp) codeInp.value = '';
+                loadAdminGifts();
+            } catch (e) {
+                st.style.color = '#ef4444';
+                st.textContent = '✗ Failed to create gift code.';
+            }
         }
 
         async function loadGmailSettings() {

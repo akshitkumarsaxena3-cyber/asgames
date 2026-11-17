@@ -976,6 +976,69 @@ app.post('/api/admin/gmail-settings', requireAdmin, async (req, res) => {
     }
 });
 
+// ========================================================
+// GIFT CODE REDEMPTION & ADMIN GENERATOR APIS
+// ========================================================
+app.post('/api/gift/redeem', requireAuth, async (req, res) => {
+    try {
+        const code = String(req.body.code || '').trim().toUpperCase();
+        if (!code) return res.json({ success: false, message: 'Please enter a gift code.' });
+
+        if (!Array.isArray(DB.data.gift_codes)) DB.data.gift_codes = [];
+        const gift = DB.data.gift_codes.find(g => g.code.toUpperCase() === code);
+        if (!gift) return res.json({ success: false, message: 'Invalid or expired gift code!' });
+
+        if (!Array.isArray(gift.claimed_by)) gift.claimed_by = [];
+        if (gift.claimed_by.includes(req.user.id)) {
+            return res.json({ success: false, message: 'You have already redeemed this gift code!' });
+        }
+        if (gift.claimed_by.length >= (gift.max_uses || 100)) {
+            return res.json({ success: false, message: 'This gift code has reached its maximum claim limit!' });
+        }
+
+        gift.claimed_by.push(req.user.id);
+        await DB.run('UPDATE users SET balance = balance + ? WHERE id = ?', [gift.amount, req.user.id]);
+        await DB.run('INSERT INTO transactions (id, user_id, type, amount, status, details) VALUES (?, ?, ?, ?, ?, ?)',
+            ['GFT' + Date.now(), req.user.id, 'deposit', gift.amount, 'approved', `Gift Code: ${gift.code}`]);
+        DB.save();
+
+        res.json({ success: true, amount: gift.amount, message: `🎉 Gift code ${gift.code} redeemed! ₹${gift.amount} added to wallet.` });
+    } catch (e) {
+        res.status(500).json({ success: false, message: e.message });
+    }
+});
+
+app.get('/api/gift/history', requireAuth, async (req, res) => {
+    const list = (DB.data.transactions || [])
+        .filter(t => t.user_id === req.user.id && String(t.id || '').startsWith('GFT'))
+        .reverse()
+        .slice(0, 30);
+    res.json({ success: true, history: list });
+});
+
+app.get('/api/admin/gifts', requireAdmin, async (req, res) => {
+    if (!Array.isArray(DB.data.gift_codes)) DB.data.gift_codes = [];
+    res.json({ success: true, gifts: [...DB.data.gift_codes].reverse() });
+});
+
+app.post('/api/admin/create-gift', requireAdmin, async (req, res) => {
+    try {
+        const code = String(req.body.code || ('ASG' + Math.floor(10000 + Math.random() * 90000))).trim().toUpperCase();
+        const amount = parseFloat(req.body.amount || 50);
+        const max_uses = parseInt(req.body.max_uses || 100);
+        if (!code || amount <= 0) return res.json({ success: false, message: 'Valid gift code & amount required.' });
+        if (!Array.isArray(DB.data.gift_codes)) DB.data.gift_codes = [];
+        if (DB.data.gift_codes.some(g => g.code.toUpperCase() === code)) {
+            return res.json({ success: false, message: 'Gift code already exists!' });
+        }
+        DB.data.gift_codes.push({ code, amount, max_uses, claimed_by: [], created_at: new Date().toISOString() });
+        DB.save();
+        res.json({ success: true, code, message: `Gift code ${code} (₹${amount}, ${max_uses} uses) created!` });
+    } catch (e) {
+        res.status(500).json({ success: false, message: e.message });
+    }
+});
+
 // PythonAnywhere Central Sync Management APIs
 app.get('/api/admin/sync-status', requireAdmin, async (req, res) => {
     try {

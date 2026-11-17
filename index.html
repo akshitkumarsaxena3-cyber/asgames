@@ -237,6 +237,46 @@
             </div>
         </div>
 
+        <!-- Redeem Gift Code Full Screen (BDG-Style) -->
+        <div id="redeem-gift-modal" class="bdg-auth-overlay hidden">
+            <div class="bdg-auth-shell" style="background:#1c1c1e;">
+                <!-- Metallic Gold Top Banner -->
+                <div class="rg-gold-header">
+                    <button class="bdg-back-btn" style="color:#ffffff;" onclick="closeRedeemGiftModal()">&#8249;</button>
+                </div>
+
+                <div class="rg-body">
+                    <!-- Gift Code Input Card -->
+                    <div class="rg-card">
+                        <div class="rg-card-title">Please enter the gift code below</div>
+                        <input type="text" id="gift-code-input" class="rg-input" placeholder="Please enter gift code">
+                        <button class="bdg-btn-gold" style="margin:14px 0 0;" onclick="redeemGiftCode()">Receive</button>
+                    </div>
+
+                    <!-- History Card -->
+                    <div class="rg-card">
+                        <div class="rg-sec-hdr"><span class="bdg-gold-ico">📅</span> <span>History</span></div>
+                        <div id="gift-history-list">
+                            <div class="bdg-no-data" style="padding:32px 10px;">
+                                <div style="font-size:44px; opacity:0.35; margin-bottom:6px;">📜</div>
+                                <div>No data</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Redemption Notes Card -->
+                    <div class="rg-card">
+                        <div class="rg-sec-hdr"><span class="bdg-gold-ico">📒</span> <span>Redemption Notes</span></div>
+                        <div class="rg-notes-box">
+                            <div class="rg-note-row"><span class="rg-diamond">◆</span><span>One code claims one gift. Cash is credited directly; coupons go to "My Top-Up Coupons".</span></div>
+                            <div class="rg-note-row"><span class="rg-diamond">◆</span><span>Coupons have a spending threshold and a validity period, please use them before they expire.</span></div>
+                            <div class="rg-note-row"><span class="rg-diamond">◆</span><span>Each account can redeem each gift code only once. Contact Admin or join our official channel for daily gift codes!</span></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- Floating Right-Side Quick Shortcuts (Like BDG Win!) -->
         <div class="home-floating-rail">
             <button class="float-rail-btn float-gift" onclick="openFirstDepositModal(true)" title="First Deposit Bonus">🎁</button>
@@ -1587,7 +1627,7 @@
                         <div class="bdg-acc-row-l"><span class="bdg-gold-ico">✉️</span><span>Notification</span></div>
                         <span class="bdg-arrow">›</span>
                     </div>
-                    <div class="bdg-acc-row" onclick="openFirstDepositModal(true)">
+                    <div class="bdg-acc-row" onclick="openRedeemGiftModal()">
                         <div class="bdg-acc-row-l"><span class="bdg-gold-ico">🎁</span><span>Gifts</span></div>
                         <span class="bdg-arrow">›</span>
                     </div>

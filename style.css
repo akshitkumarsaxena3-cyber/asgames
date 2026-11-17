@@ -4371,3 +4371,86 @@ body {
     background: #065f46;
     color: #6ee7b7;
 }
+
+
+/* ========================================================
+   BDG-STYLE REDEEM GIFT CODE SCREEN
+======================================================== */
+.rg-gold-header {
+    background: linear-gradient(135deg, #f6dc99 0%, #d4a143 55%, #b98223 100%);
+    padding: 14px 16px 56px;
+}
+
+.rg-body {
+    padding: 0 14px 36px;
+    margin-top: -38px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.rg-card {
+    background: #2c2c30;
+    border-radius: 12px;
+    padding: 16px;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+}
+
+.rg-card-title {
+    color: #ffffff;
+    font-size: 14px;
+    font-weight: 700;
+    margin-bottom: 14px;
+}
+
+.rg-input {
+    width: 100%;
+    height: 44px;
+    background: #1f1f22;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
+    color: #ffffff;
+    font-size: 13px;
+    padding: 0 14px;
+    outline: none;
+}
+
+.rg-input:focus {
+    border-color: #d9a84e;
+}
+
+.rg-sec-hdr {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: #ffffff;
+    font-size: 14px;
+    font-weight: 700;
+    margin-bottom: 12px;
+}
+
+.rg-notes-box {
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+    padding: 14px 12px;
+    background: rgba(0, 0, 0, 0.15);
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.rg-note-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    color: #bdbdc4;
+    font-size: 12px;
+    line-height: 1.5;
+}
+
+.rg-diamond {
+    color: #d9a84e;
+    font-size: 11px;
+    margin-top: 2px;
+}

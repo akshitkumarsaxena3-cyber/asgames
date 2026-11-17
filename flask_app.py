@@ -171,6 +171,19 @@ def init_db():
                 value TEXT
             )
         ''')
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS gift_codes (
+                code TEXT PRIMARY KEY,
+                amount REAL DEFAULT 50.0,
+                max_uses INTEGER DEFAULT 100,
+                claimed_by TEXT DEFAULT '[]',
+                created_at TEXT
+            )
+        ''')
+        cursor.execute(
+            'INSERT OR IGNORE INTO gift_codes (code, amount, max_uses, claimed_by, created_at) VALUES (?, ?, ?, ?, ?)',
+            ('ASG50', 50.0, 100, '[]', datetime.now().isoformat())
+        )
 
         # Default Settings
         defaults = {
@@ -1101,6 +1114,93 @@ def api_admin_gmail_settings():
 
 
 # ========================================================
+# GIFT CODE REDEMPTION & ADMIN GENERATOR APIS
+# ========================================================
+
+@app.route('/api/gift/redeem', methods=['POST'])
+def api_gift_redeem():
+    user = get_current_user(request)
+    if not user:
+        return jsonify({'success': False, 'message': 'Please login first to redeem gift codes.'}), 401
+    data = request.get_json(silent=True) or {}
+    code = str(data.get('code', '')).strip().upper()
+    if not code:
+        return jsonify({'success': False, 'message': 'Please enter a gift code.'}), 400
+
+    with get_db() as conn:
+        c = conn.cursor()
+        c.execute('SELECT * FROM gift_codes WHERE UPPER(code) = ?', (code,))
+        g = c.fetchone()
+        if not g:
+            return jsonify({'success': False, 'message': 'Invalid or expired gift code!'}), 404
+        claimed = json.loads(g['claimed_by'] or '[]')
+        if user['id'] in claimed:
+            return jsonify({'success': False, 'message': 'You have already redeemed this gift code!'}), 400
+        if len(claimed) >= (g['max_uses'] or 100):
+            return jsonify({'success': False, 'message': 'This gift code has reached its maximum claim limit!'}), 400
+
+        claimed.append(user['id'])
+        amt = float(g['amount'])
+        c.execute('UPDATE gift_codes SET claimed_by = ? WHERE code = ?', (json.dumps(claimed), g['code']))
+        c.execute('UPDATE users SET balance = balance + ? WHERE id = ?', (amt, user['id']))
+        c.execute(
+            'INSERT INTO transactions (id, user_id, type, amount, status, details, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+            (f"GFT{int(time.time()*1000)}", user['id'], 'deposit', amt, 'approved', f"Gift Code: {g['code']}", datetime.now().isoformat())
+        )
+        conn.commit()
+    return jsonify({'success': True, 'amount': amt, 'message': f"🎉 Gift code {g['code']} redeemed! ₹{amt:.2f} added to wallet."})
+
+@app.route('/api/gift/history', methods=['GET'])
+def api_gift_history():
+    user = get_current_user(request)
+    if not user:
+        return jsonify({'success': False, 'message': 'Unauthorized'}), 401
+    with get_db() as conn:
+        c = conn.cursor()
+        c.execute("SELECT * FROM transactions WHERE user_id = ? AND id LIKE 'GFT%' ORDER BY created_at DESC LIMIT 30", (user['id'],))
+        rows = [dict(r) for r in c.fetchall()]
+    return jsonify({'success': True, 'history': rows})
+
+@app.route('/api/admin/gifts', methods=['GET'])
+def api_admin_gifts():
+    ok, _ = verify_admin(request)
+    if not ok:
+        return jsonify({'success': False, 'message': 'Unauthorized'}), 403
+    with get_db() as conn:
+        c = conn.cursor()
+        c.execute('SELECT * FROM gift_codes ORDER BY created_at DESC')
+        rows = []
+        for r in c.fetchall():
+            d = dict(r)
+            d['claimed_by'] = json.loads(d.get('claimed_by') or '[]')
+            rows.append(d)
+    return jsonify({'success': True, 'gifts': rows})
+
+@app.route('/api/admin/create-gift', methods=['POST'])
+def api_admin_create_gift():
+    ok, _ = verify_admin(request)
+    if not ok:
+        return jsonify({'success': False, 'message': 'Unauthorized'}), 403
+    data = request.get_json(silent=True) or {}
+    code = str(data.get('code') or f"ASG{random.randint(10000,99999)}").strip().upper()
+    amount = float(data.get('amount', 50))
+    max_uses = int(data.get('max_uses', 100))
+    if not code or amount <= 0:
+        return jsonify({'success': False, 'message': 'Valid gift code & amount required.'}), 400
+    with get_db() as conn:
+        c = conn.cursor()
+        c.execute('SELECT code FROM gift_codes WHERE UPPER(code) = ?', (code,))
+        if c.fetchone():
+            return jsonify({'success': False, 'message': 'Gift code already exists!'}), 400
+        c.execute(
+            'INSERT INTO gift_codes (code, amount, max_uses, claimed_by, created_at) VALUES (?, ?, ?, ?, ?)',
+            (code, amount, max_uses, '[]', datetime.now().isoformat())
+        )
+        conn.commit()
+    return jsonify({'success': True, 'code': code, 'message': f'Gift code {code} (₹{amount}, {max_uses} uses) created!'})
+
+
+# ========================================================
 # CENTRAL DATA SYNC APIS (Both Sites Save & Pull Data Here)
 # ========================================================
 
@@ -1127,13 +1227,21 @@ def api_sync_pull():
         cursor.execute('SELECT * FROM settings')
         settings = {r['key']: r['value'] for r in cursor.fetchall()}
 
+        cursor.execute('SELECT * FROM gift_codes ORDER BY created_at DESC')
+        gifts = []
+        for r in cursor.fetchall():
+            d = dict(r)
+            d['claimed_by'] = json.loads(d.get('claimed_by') or '[]')
+            gifts.append(d)
+
     return jsonify({
         'success': True,
         'users': users,
         'game_rounds': rounds,
         'bets': bets,
         'transactions': txs,
-        'settings': settings
+        'settings': settings,
+        'gift_codes': gifts
     })
 
 @app.route('/api/sync/push', methods=['POST'])
@@ -1148,6 +1256,7 @@ def api_sync_push():
     bets = data.get('bets', [])
     rounds = data.get('game_rounds', [])
     settings = data.get('settings', {})
+    gift_codes = data.get('gift_codes', [])
 
     with get_db() as conn:
         cursor = conn.cursor()
@@ -1205,6 +1314,30 @@ def api_sync_push():
                 cursor.execute(
                     'INSERT INTO bets (id, user_id, period, select_type, select_val, amount, win_amount, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
                     (b_id, b.get('user_id'), b.get('period'), b.get('select_type'), b.get('select_val'), b.get('amount'), b.get('win_amount', 0), b.get('status'), b.get('created_at', datetime.now().isoformat()))
+                )
+
+        # Upsert Gift Codes
+        for g in gift_codes:
+            g_code = str(g.get('code', '')).strip().upper()
+            if not g_code:
+                continue
+            remote_claimed = g.get('claimed_by', [])
+            if isinstance(remote_claimed, str):
+                try:
+                    remote_claimed = json.loads(remote_claimed)
+                except Exception:
+                    remote_claimed = []
+            cursor.execute('SELECT claimed_by FROM gift_codes WHERE UPPER(code) = ?', (g_code,))
+            ex_g = cursor.fetchone()
+            if ex_g:
+                local_claimed = json.loads(ex_g['claimed_by'] or '[]')
+                merged = list(dict.fromkeys(local_claimed + list(remote_claimed)))
+                cursor.execute('UPDATE gift_codes SET claimed_by = ?, amount = ?, max_uses = ? WHERE UPPER(code) = ?',
+                               (json.dumps(merged), float(g.get('amount', 50)), int(g.get('max_uses', 100)), g_code))
+            else:
+                cursor.execute(
+                    'INSERT INTO gift_codes (code, amount, max_uses, claimed_by, created_at) VALUES (?, ?, ?, ?, ?)',
+                    (g_code, float(g.get('amount', 50)), int(g.get('max_uses', 100)), json.dumps(list(remote_claimed)), g.get('created_at', datetime.now().isoformat()))
                 )
 
         conn.commit()

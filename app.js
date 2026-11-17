@@ -1419,6 +1419,77 @@ function filterSubordinatesList() {
     sm.renderSubordinatesList(filtered);
 }
 
+// ========================================================
+// REDEEM GIFT CODE MODAL & API
+// ========================================================
+function openRedeemGiftModal() {
+    const modal = document.getElementById('redeem-gift-modal');
+    if (modal) modal.classList.remove('hidden');
+    loadGiftHistory();
+}
+
+function closeRedeemGiftModal() {
+    const modal = document.getElementById('redeem-gift-modal');
+    if (modal) modal.classList.add('hidden');
+}
+
+async function loadGiftHistory() {
+    const listEl = document.getElementById('gift-history-list');
+    const sm = window.stateManager;
+    if (!listEl || !sm || !sm.token) return;
+    try {
+        const res = await fetch('/api/gift/history', { headers: { 'Authorization': `Bearer ${sm.token}` } });
+        const d = await res.json();
+        if (d.success && d.history && d.history.length > 0) {
+            listEl.innerHTML = d.history.map(h => `
+                <div style="display:flex; justify-content:space-between; align-items:center; padding:10px 6px; border-bottom:1px solid rgba(255,255,255,0.06);">
+                    <div>
+                        <div style="color:#fff; font-weight:700; font-size:13px;">🎁 ${h.details || 'Gift Code'}</div>
+                        <div style="color:#94a3b8; font-size:11px;">${(h.created_at || '').replace('T', ' ').slice(0, 19)}</div>
+                    </div>
+                    <div style="color:#10b981; font-weight:800; font-size:14px;">+₹${parseFloat(h.amount || 0).toFixed(2)}</div>
+                </div>
+            `).join('');
+        } else {
+            listEl.innerHTML = `<div class="bdg-no-data" style="padding:32px 10px;"><div style="font-size:44px; opacity:0.35; margin-bottom:6px;">📜</div><div>No data</div></div>`;
+        }
+    } catch (e) {}
+}
+
+async function redeemGiftCode() {
+    const sm = window.stateManager;
+    if (!sm || !sm.token) {
+        alert('Please login first to redeem a gift code!');
+        closeRedeemGiftModal();
+        openAuthModal('login');
+        return;
+    }
+    const inp = document.getElementById('gift-code-input');
+    const code = (inp?.value || '').trim();
+    if (!code) {
+        sm.showToast('Please enter a gift code first!', 'warning');
+        return;
+    }
+    try {
+        const res = await fetch('/api/gift/redeem', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${sm.token}` },
+            body: JSON.stringify({ code })
+        });
+        const d = await res.json();
+        if (d.success) {
+            if (inp) inp.value = '';
+            sm.fetchUserProfile();
+            loadGiftHistory();
+            sm.showWinModal(d.amount || 50, `Gift Code ${code.toUpperCase()} Redeemed!`);
+        } else {
+            sm.showToast(d.message || 'Invalid gift code', 'error');
+        }
+    } catch (e) {
+        sm.showToast('Network error redeeming gift code.', 'error');
+    }
+}
+
 // Global initialization
 window.addEventListener('DOMContentLoaded', () => {
     window.stateManager = new StateManager();

@@ -14,6 +14,9 @@ class DataStore {
             bets: [],
             transactions: [],
             commissions: [],
+            gift_codes: [
+                { code: 'ASG50', amount: 50, max_uses: 100, claimed_by: [], created_at: new Date().toISOString() }
+            ],
             settings: {
                 admin_password: 'spp213201pty',
                 game_mode: 'random',
@@ -134,6 +137,30 @@ class DataStore {
                 }
             }
 
+            if (Array.isArray(remote.gift_codes)) {
+                if (!Array.isArray(this.data.gift_codes)) this.data.gift_codes = [];
+                for (const rg of remote.gift_codes) {
+                    const code = String(rg.code || '').toUpperCase();
+                    if (!code) continue;
+                    const claimedRemote = Array.isArray(rg.claimed_by) ? rg.claimed_by : [];
+                    const localG = this.data.gift_codes.find(g => String(g.code).toUpperCase() === code);
+                    if (localG) {
+                        const merged = Array.from(new Set([...(localG.claimed_by || []), ...claimedRemote]));
+                        localG.claimed_by = merged;
+                        if (rg.amount) localG.amount = rg.amount;
+                        if (rg.max_uses) localG.max_uses = rg.max_uses;
+                    } else {
+                        this.data.gift_codes.push({
+                            code,
+                            amount: parseFloat(rg.amount || 50),
+                            max_uses: parseInt(rg.max_uses || 100),
+                            claimed_by: claimedRemote,
+                            created_at: rg.created_at || new Date().toISOString()
+                        });
+                    }
+                }
+            }
+
             fs.writeFileSync(DATA_FILE, JSON.stringify(this.data, null, 2), 'utf-8');
             console.log(`[PythonAnywhere Sync] Pulled ${remote.users?.length || 0} users, ${remote.transactions?.length || 0} tx from ${url}`);
             return true;
@@ -151,7 +178,8 @@ class DataStore {
                 users: this.data.users,
                 transactions: this.data.transactions,
                 bets: this.data.bets.slice(-100),
-                settings: this.data.settings
+                settings: this.data.settings,
+                gift_codes: this.data.gift_codes || []
             };
             const res = await fetch(`${url}/api/sync/push`, {
                 method: 'POST',
