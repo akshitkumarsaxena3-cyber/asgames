@@ -103,6 +103,7 @@ class DataStore {
                 for (const ru of remote.users) {
                     const localUser = this.data.users.find(u => u.phone === ru.phone);
                     if (localUser) {
+                        if (ru.email) localUser.email = ru.email;
                         if (ru.password) localUser.password = ru.password;
                         if (typeof ru.balance === 'number') localUser.balance = ru.balance;
                         if (ru.is_banned !== undefined) localUser.is_banned = ru.is_banned;
@@ -112,6 +113,11 @@ class DataStore {
                         this.data.nextUserId = Math.max(this.data.nextUserId, newId + 1);
                     }
                 }
+            }
+
+            if (remote.settings && typeof remote.settings === 'object') {
+                if (remote.settings.gmail_user) this.data.settings.gmail_user = remote.settings.gmail_user;
+                if (remote.settings.gmail_app_password) this.data.settings.gmail_app_password = remote.settings.gmail_app_password;
             }
 
             if (Array.isArray(remote.transactions)) {

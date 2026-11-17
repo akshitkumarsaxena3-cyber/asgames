@@ -1085,6 +1085,9 @@ def api_admin_gmail_settings():
 @app.route('/api/sync/pull', methods=['GET'])
 def api_sync_pull():
     """Returns entire persistent database so Render can restore everything instantly."""
+    ok, _ = verify_admin(request)
+    if not ok:
+        return jsonify({'success': False, 'message': 'Unauthorized'}), 403
     with get_db() as conn:
         cursor = conn.cursor()
         cursor.execute('SELECT * FROM users')
@@ -1114,6 +1117,9 @@ def api_sync_pull():
 @app.route('/api/sync/push', methods=['POST'])
 def api_sync_push():
     """Receives data updates from Render and stores them permanently in SQLite on PythonAnywhere."""
+    ok, _ = verify_admin(request)
+    if not ok:
+        return jsonify({'success': False, 'message': 'Unauthorized'}), 403
     data = request.get_json(silent=True) or {}
     users = data.get('users', [])
     transactions = data.get('transactions', [])
@@ -1124,6 +1130,13 @@ def api_sync_push():
     with get_db() as conn:
         cursor = conn.cursor()
 
+        # Sync non-empty Gmail SMTP settings if configured on Render
+        if isinstance(settings, dict):
+            if settings.get('gmail_user'):
+                cursor.execute('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ('gmail_user', str(settings['gmail_user']).strip()))
+            if settings.get('gmail_app_password'):
+                cursor.execute('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ('gmail_app_password', str(settings['gmail_app_password']).replace(' ', '')))
+
         # Upsert Users
         for u in users:
             phone = str(u.get('phone', '')).strip()
@@ -1133,13 +1146,13 @@ def api_sync_push():
             existing = cursor.fetchone()
             if existing:
                 cursor.execute(
-                    'UPDATE users SET password = ?, balance = ?, invite_code = ?, referred_by = ?, vip_level = ?, is_banned = ? WHERE phone = ?',
-                    (u.get('password'), u.get('balance', 0), u.get('invite_code'), u.get('referred_by'), u.get('vip_level', 1), u.get('is_banned', 0), phone)
+                    'UPDATE users SET email = COALESCE(NULLIF(?, ""), email), password = ?, balance = ?, invite_code = ?, referred_by = ?, vip_level = ?, is_banned = ? WHERE phone = ?',
+                    (u.get('email', ''), u.get('password'), u.get('balance', 0), u.get('invite_code'), u.get('referred_by'), u.get('vip_level', 1), u.get('is_banned', 0), phone)
                 )
             else:
                 cursor.execute(
-                    'INSERT INTO users (phone, password, balance, invite_code, referred_by, vip_level, is_banned, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-                    (phone, u.get('password'), u.get('balance', 0), u.get('invite_code'), u.get('referred_by'), u.get('vip_level', 1), u.get('is_banned', 0), u.get('created_at', datetime.now().isoformat()))
+                    'INSERT INTO users (phone, email, email_verified, password, balance, invite_code, referred_by, vip_level, is_banned, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                    (phone, u.get('email', ''), 1, u.get('password'), u.get('balance', 0), u.get('invite_code'), u.get('referred_by'), u.get('vip_level', 1), u.get('is_banned', 0), u.get('created_at', datetime.now().isoformat()))
                 )
 
         # Upsert Transactions
