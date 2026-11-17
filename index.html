@@ -1,0 +1,854 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>ASGames - Color Prediction & Lottery Gaming App</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <div id="app">
+
+        <!-- Toast Notifications Area -->
+        <div id="toast-container"></div>
+
+        <!-- Big Win Celebration Modal -->
+        <div id="win-modal" class="win-modal-overlay hidden">
+            <div class="win-modal-card">
+                <div class="win-trophy-icon">🏆</div>
+                <div class="win-title">CONGRATULATIONS!</div>
+                <div id="win-modal-amount" class="win-amount-text">₹0.00</div>
+                <div id="win-modal-desc" class="win-desc">Winning Award</div>
+                <button id="btn-close-win-modal" class="btn-win-claim">CONTINUE</button>
+            </div>
+        </div>
+
+        <!-- Recharge / Deposit Modal -->
+        <div id="recharge-modal" class="center-modal hidden">
+            <div class="modal-dialog">
+                <div class="modal-header">
+                    <h3 style="color:#fae59f; font-size:16px; font-weight:700;">Deposit Funds (Demo)</h3>
+                    <button id="recharge-modal-close" class="btn-drawer-close">&times;</button>
+                </div>
+                <div class="input-group">
+                    <label class="input-label">Select Amount (₹)</label>
+                    <div class="quick-amounts-grid">
+                        <div class="recharge-pill" data-amount="100">₹100</div>
+                        <div class="recharge-pill active" data-amount="500">₹500</div>
+                        <div class="recharge-pill" data-amount="1000">₹1,000</div>
+                        <div class="recharge-pill" data-amount="2000">₹2,000</div>
+                        <div class="recharge-pill" data-amount="5000">₹5,000</div>
+                        <div class="recharge-pill" data-amount="10000">₹10,000</div>
+                    </div>
+                    <input type="number" id="recharge-amount-input" class="form-input" value="500" placeholder="Enter amount">
+                </div>
+                <div class="input-group">
+                    <label class="input-label">Payment Channel</label>
+                    <div class="recharge-pill active" style="text-align:left; padding:10px 14px;">
+                        ⚡ UPI Pay (Google Pay / PhonePe / Paytm / Instant)
+                    </div>
+                </div>
+                <button id="btn-submit-recharge" class="btn-full btn-gold">CONFIRM DEPOSIT</button>
+            </div>
+        </div>
+
+        <!-- Withdraw Modal -->
+        <div id="withdraw-modal" class="center-modal hidden">
+            <div class="modal-dialog">
+                <div class="modal-header">
+                    <h3 style="color:#fae59f; font-size:16px; font-weight:700;">Withdraw Funds</h3>
+                    <button id="withdraw-modal-close" class="btn-drawer-close">&times;</button>
+                </div>
+                <div class="input-group">
+                    <label class="input-label">Wallet Balance</label>
+                    <div class="user-balance-val" style="font-size:18px; font-weight:700; color:#ffd875;">₹1,000.00</div>
+                </div>
+                <div class="input-group">
+                    <label class="input-label">Withdrawal Amount (Min ₹110)</label>
+                    <input type="number" id="withdraw-amount-input" class="form-input" placeholder="Enter amount to withdraw">
+                </div>
+                <div class="input-group">
+                    <label class="input-label">Bank Account / UPI ID</label>
+                    <input type="text" class="form-input" value="user@okhdfcbank (Verified)" readonly>
+                </div>
+                <p style="font-size:11px; color:#94a3b8; margin-bottom:14px;">* Withdrawals are processed within 1-24 hours. 24/7 instant settlement.</p>
+                <button id="btn-submit-withdraw" class="btn-full btn-gold">SUBMIT WITHDRAWAL</button>
+            </div>
+        </div>
+
+        <!-- Top Header -->
+        <header class="app-header">
+            <div class="header-top-row">
+                <div class="brand-box">
+                    <span class="brand-icon">👑</span>
+                    <span class="brand-title">ASGames</span>
+                    <span class="brand-badge">PRO</span>
+                </div>
+                <div class="header-actions">
+                    <div class="ping-tag"><span>●</span> 19ms</div>
+                    <button id="sound-toggle-btn" class="icon-btn" title="Toggle Sound">🔊</button>
+                </div>
+            </div>
+
+            <!-- Header Balance Bar -->
+            <div class="header-balance-card">
+                <div class="balance-info">
+                    <div class="balance-label-row">
+                        <span class="balance-label">Total Balance</span>
+                        <button id="btn-refresh-balance" class="btn-refresh" title="Refresh">🔄</button>
+                    </div>
+                    <span class="balance-value user-balance-val">₹1,000.00</span>
+                </div>
+                <div class="balance-btns">
+                    <button class="btn-deposit trigger-recharge">+ Deposit</button>
+                    <button class="btn-withdraw trigger-withdraw">Withdraw</button>
+                </div>
+            </div>
+        </header>
+
+        <!-- Notice Marquee -->
+        <div class="notice-marquee-bar">
+            <span class="marquee-icon">📢</span>
+            <div class="marquee-content">
+                <span class="marquee-text">🔥 Welcome to ASGames! Process withdrawals within 1-24 hours. Complete KYC for instant payouts. Member Mem***KAA just received ₹2,940 on Win Go 1Min! Daily sign-in bonus active.</span>
+            </div>
+        </div>
+
+        <!-- ============================================== -->
+        <!-- TAB 1: HOME VIEW                               -->
+        <!-- ============================================== -->
+        <main id="tab-home" class="tab-view">
+
+            <!-- HOME MAIN CONTENT (CARDS & LEADERBOARD) -->
+            <div id="home-main-content">
+                <!-- Promo Carousel Banner -->
+                <div class="promo-carousel-container">
+                    <div class="promo-banner-card">
+                        <div class="promo-text">
+                            <h3>100% First Deposit Bonus</h3>
+                            <p>Recharge ₹500 & Get ₹500 Extra Cash!</p>
+                            <button class="promo-btn-mini trigger-recharge">CLAIM NOW</button>
+                        </div>
+                        <div class="promo-graphic">🎰</div>
+                    </div>
+                </div>
+
+                <!-- Category Navigation Pills -->
+                <nav class="category-filter-nav">
+                    <button class="cat-pill active" data-cat="all">🎯 Popular</button>
+                    <button class="cat-pill" data-cat="lottery">🎰 Lottery</button>
+                    <button class="cat-pill" data-cat="original">🚀 Original</button>
+                    <button class="cat-pill" data-cat="casino">🃏 Casino</button>
+                    <button class="cat-pill" data-cat="slots">🍒 Slots</button>
+                </nav>
+
+                <!-- Game Cards Grid -->
+                <div class="games-grid">
+                    <!-- Win Go -->
+                    <div class="game-card card-wingo" data-category="lottery" data-open-game="wingo">
+                        <div class="card-top">
+                            <span class="game-badge-hot">HOT 🔥</span>
+                            <span class="game-sub">Win Go 1Min</span>
+                        </div>
+                        <div class="game-icon-large">🟢🟣🔴</div>
+                        <div class="card-bottom">
+                            <div>
+                                <div class="game-title">Win Go</div>
+                                <div class="game-sub">Color & Numbers</div>
+                            </div>
+                            <span class="btn-play-mini">PLAY</span>
+                        </div>
+                    </div>
+
+                    <!-- Aviator -->
+                    <div class="game-card card-aviator" data-category="original" data-open-game="aviator">
+                        <div class="card-top">
+                            <span class="game-badge-hot">POPULAR</span>
+                            <span class="game-sub">Crash Multiplier</span>
+                        </div>
+                        <div class="game-icon-large">✈️</div>
+                        <div class="card-bottom">
+                            <div>
+                                <div class="game-title">Aviator</div>
+                                <div class="game-sub">Cash Out 100x</div>
+                            </div>
+                            <span class="btn-play-mini">PLAY</span>
+                        </div>
+                    </div>
+
+                    <!-- Mines -->
+                    <div class="game-card card-mines" data-category="original" data-open-game="mines">
+                        <div class="card-top">
+                            <span class="game-badge-new">NEW ⭐</span>
+                            <span class="game-sub">5x5 Grid</span>
+                        </div>
+                        <div class="game-icon-large">💎</div>
+                        <div class="card-bottom">
+                            <div>
+                                <div class="game-title">Mines</div>
+                                <div class="game-sub">Find Gems</div>
+                            </div>
+                            <span class="btn-play-mini">PLAY</span>
+                        </div>
+                    </div>
+
+                    <!-- K3 Dice -->
+                    <div class="game-card card-k3" data-category="lottery" data-open-game="k3">
+                        <div class="card-top">
+                            <span class="game-badge-hot">HOT</span>
+                            <span class="game-sub">3 Dice</span>
+                        </div>
+                        <div class="game-icon-large">🎲</div>
+                        <div class="card-bottom">
+                            <div>
+                                <div class="game-title">K3 Lottery</div>
+                                <div class="game-sub">Sum & Dice</div>
+                            </div>
+                            <span class="btn-play-mini">PLAY</span>
+                        </div>
+                    </div>
+
+                    <!-- 5D Lottery -->
+                    <div class="game-card card-5d" data-category="lottery" data-open-game="wingo">
+                        <div class="card-top">
+                            <span class="game-badge-new">5D</span>
+                            <span class="game-sub">Quick Draw</span>
+                        </div>
+                        <div class="game-icon-large">🎱</div>
+                        <div class="card-bottom">
+                            <div>
+                                <div class="game-title">5D Lottery</div>
+                                <div class="game-sub">Digit Match</div>
+                            </div>
+                            <span class="btn-play-mini">PLAY</span>
+                        </div>
+                    </div>
+
+                    <!-- Slots -->
+                    <div class="game-card card-slots" data-category="slots" data-open-game="aviator">
+                        <div class="card-top">
+                            <span class="game-badge-hot">JACKPOT</span>
+                            <span class="game-sub">Super Ace</span>
+                        </div>
+                        <div class="game-icon-large">🍒</div>
+                        <div class="card-bottom">
+                            <div>
+                                <div class="game-title">Slots</div>
+                                <div class="game-sub">Spin & Win</div>
+                            </div>
+                            <span class="btn-play-mini">PLAY</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Winning Information Feed -->
+                <section class="winning-feed-section">
+                    <div class="section-header">
+                        <span class="section-title">🏆 Winning Information</span>
+                        <span style="font-size:11px; color:#10b981;">Live Updates ●</span>
+                    </div>
+                    <div class="ticker-box" id="winning-ticker-list">
+                        <!-- Populated by StateManager -->
+                    </div>
+                </section>
+
+                <!-- Today's Earnings Rank (Leaderboard) -->
+                <section class="winning-feed-section">
+                    <div class="section-header">
+                        <span class="section-title">👑 Today's Earnings Chart</span>
+                    </div>
+                    <div class="rank-podium">
+                        <div class="podium-item podium-2">
+                            <div class="crown-badge">🥈</div>
+                            <div class="podium-avatar">👨‍💼</div>
+                            <div class="podium-name">Mem***VUN</div>
+                            <div class="podium-amount">₹16,209,200.00</div>
+                        </div>
+                        <div class="podium-item podium-1">
+                            <div class="crown-badge">👑</div>
+                            <div class="podium-avatar">🤵</div>
+                            <div class="podium-name">Mem***UKX</div>
+                            <div class="podium-amount">₹22,695,232.00</div>
+                        </div>
+                        <div class="podium-item podium-3">
+                            <div class="crown-badge">🥉</div>
+                            <div class="podium-avatar">👩‍💼</div>
+                            <div class="podium-name">Mem***DHD</div>
+                            <div class="podium-amount">₹6,414,456.00</div>
+                        </div>
+                    </div>
+                </section>
+            </div>
+
+            <!-- ============================================== -->
+            <!-- SUB-SCREEN: WIN GO GAME                        -->
+            <!-- ============================================== -->
+            <div id="game-view-wingo" class="game-view hidden">
+                <div class="game-subnav">
+                    <button class="btn-back-home">‹ Back</button>
+                    <span class="game-header-title">Win Go Lottery</span>
+                    <button class="icon-btn" onclick="alert('Win Go Rules:\nGreen: 1,3,7,9 (x2), 5 (x1.5)\nRed: 2,4,6,8 (x2), 0 (x1.5)\nViolet: 0,5 (x4.5)\nNumbers: 0-9 (x9)\nBig: 5-9 (x2)\nSmall: 0-4 (x2)')">❓</button>
+                </div>
+
+                <!-- Win Go Mode Selector -->
+                <div class="wingo-mode-tabs">
+                    <div class="mode-tab active" onclick="window.wingoGame.switchMode('30s'); this.parentElement.querySelectorAll('.mode-tab').forEach(t=>t.classList.remove('active')); this.classList.add('active');">Win Go 30s</div>
+                    <div class="mode-tab" onclick="window.wingoGame.switchMode('1m'); this.parentElement.querySelectorAll('.mode-tab').forEach(t=>t.classList.remove('active')); this.classList.add('active');">Win Go 1Min</div>
+                    <div class="mode-tab" onclick="window.wingoGame.switchMode('3m'); this.parentElement.querySelectorAll('.mode-tab').forEach(t=>t.classList.remove('active')); this.classList.add('active');">Win Go 3Min</div>
+                    <div class="mode-tab" onclick="window.wingoGame.switchMode('5m'); this.parentElement.querySelectorAll('.mode-tab').forEach(t=>t.classList.remove('active')); this.classList.add('active');">Win Go 5Min</div>
+                </div>
+
+                <!-- Issue & Timer Display -->
+                <div class="wingo-clock-card">
+                    <div class="period-box">
+                        <span class="period-title">Period Issue</span>
+                        <span id="wingo-period" class="period-number">2026111710001</span>
+                    </div>
+                    <div class="timer-box-wrapper">
+                        <span class="timer-title">Time Remaining</span>
+                        <div id="wingo-timer-digits" class="timer-digits">
+                            <span class="timer-box">0</span>
+                            <span class="timer-box">0</span>
+                            <span class="timer-sep">:</span>
+                            <span class="timer-box">3</span>
+                            <span class="timer-box">0</span>
+                        </div>
+                        <span id="wingo-timer" class="hidden">00:30</span>
+                    </div>
+                </div>
+
+                <!-- Betting Board -->
+                <div class="betting-board">
+                    <!-- Locked Overlay during last 5 seconds -->
+                    <div id="wingo-lock-overlay" class="lock-overlay hidden">
+                        <div class="lock-clock-icon">⏳</div>
+                        <div class="lock-title">DRAWING IN PROGRESS</div>
+                        <div class="lock-sub">Betting is locked for current period</div>
+                    </div>
+
+                    <!-- 3-Color Buttons -->
+                    <div class="color-buttons-row">
+                        <button class="btn-bet-color btn-green" onclick="window.wingoGame.openBetModal('color', 'green')">
+                            <span class="btn-name">Green</span>
+                            <span class="btn-payout">2x</span>
+                        </button>
+                        <button class="btn-bet-color btn-violet" onclick="window.wingoGame.openBetModal('color', 'violet')">
+                            <span class="btn-name">Violet</span>
+                            <span class="btn-payout">4.5x</span>
+                        </button>
+                        <button class="btn-bet-color btn-red" onclick="window.wingoGame.openBetModal('color', 'red')">
+                            <span class="btn-name">Red</span>
+                            <span class="btn-payout">2x</span>
+                        </button>
+                    </div>
+
+                    <!-- Numbers 0-9 Grid -->
+                    <div class="numbers-grid">
+                        <button class="btn-number num-0" onclick="window.wingoGame.openBetModal('number', 0)">0<span class="num-payout">9x</span></button>
+                        <button class="btn-number num-1" onclick="window.wingoGame.openBetModal('number', 1)">1<span class="num-payout">9x</span></button>
+                        <button class="btn-number num-2" onclick="window.wingoGame.openBetModal('number', 2)">2<span class="num-payout">9x</span></button>
+                        <button class="btn-number num-3" onclick="window.wingoGame.openBetModal('number', 3)">3<span class="num-payout">9x</span></button>
+                        <button class="btn-number num-4" onclick="window.wingoGame.openBetModal('number', 4)">4<span class="num-payout">9x</span></button>
+                        <button class="btn-number num-5" onclick="window.wingoGame.openBetModal('number', 5)">5<span class="num-payout">9x</span></button>
+                        <button class="btn-number num-6" onclick="window.wingoGame.openBetModal('number', 6)">6<span class="num-payout">9x</span></button>
+                        <button class="btn-number num-7" onclick="window.wingoGame.openBetModal('number', 7)">7<span class="num-payout">9x</span></button>
+                        <button class="btn-number num-8" onclick="window.wingoGame.openBetModal('number', 8)">8<span class="num-payout">9x</span></button>
+                        <button class="btn-number num-9" onclick="window.wingoGame.openBetModal('number', 9)">9<span class="num-payout">9x</span></button>
+                    </div>
+
+                    <!-- Big / Small Buttons -->
+                    <div class="size-buttons-row">
+                        <button class="btn-size btn-big" onclick="window.wingoGame.openBetModal('size', 'big')">
+                            <span>Big (5-9)</span>
+                            <small>2x Payout</small>
+                        </button>
+                        <button class="btn-size btn-small" onclick="window.wingoGame.openBetModal('size', 'small')">
+                            <span>Small (0-4)</span>
+                            <small>2x Payout</small>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Win Go History Tabs (Game Record / Trend / My Bets) -->
+                <div class="wingo-history-tabs">
+                    <button class="wingo-nav-tab active" onclick="document.querySelectorAll('.wingo-history-content').forEach(c=>c.classList.add('hidden')); document.getElementById('wingo-tab-records').classList.remove('hidden'); document.querySelectorAll('.wingo-nav-tab').forEach(t=>t.classList.remove('active')); this.classList.add('active');">Game Record</button>
+                    <button class="wingo-nav-tab" onclick="document.querySelectorAll('.wingo-history-content').forEach(c=>c.classList.add('hidden')); document.getElementById('wingo-tab-trend').classList.remove('hidden'); document.querySelectorAll('.wingo-nav-tab').forEach(t=>t.classList.remove('active')); this.classList.add('active'); window.wingoGame.renderTrend();">Chart Trend</button>
+                    <button class="wingo-nav-tab" onclick="document.querySelectorAll('.wingo-history-content').forEach(c=>c.classList.add('hidden')); document.getElementById('wingo-tab-mybets').classList.remove('hidden'); document.querySelectorAll('.wingo-nav-tab').forEach(t=>t.classList.remove('active')); this.classList.add('active'); window.wingoGame.renderMyBets();">My History</button>
+                </div>
+
+                <!-- Records View -->
+                <div id="wingo-tab-records" class="wingo-history-content">
+                    <div class="table-container">
+                        <table class="custom-table">
+                            <thead>
+                                <tr>
+                                    <th>Period</th>
+                                    <th>Number</th>
+                                    <th>Big/Small</th>
+                                    <th>Color</th>
+                                </tr>
+                            </thead>
+                            <tbody id="wingo-history-tbody">
+                                <!-- Populated dynamically -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Trend Chart View -->
+                <div id="wingo-tab-trend" class="wingo-history-content hidden">
+                    <div class="trend-grid-wrapper" id="wingo-trend-grid">
+                        <!-- Populated dynamically -->
+                    </div>
+                </div>
+
+                <!-- My Bets View -->
+                <div id="wingo-tab-mybets" class="wingo-history-content hidden">
+                    <div id="wingo-mybets-list" class="bets-list-container">
+                        <!-- Populated dynamically -->
+                    </div>
+                </div>
+
+                <!-- Draw Reveal Popup Notification -->
+                <div id="wingo-draw-reveal" class="draw-reveal-modal hidden">
+                    <!-- Populated dynamically -->
+                </div>
+
+                <!-- Betting Drawer / Modal (Slide-up Bottom Sheet) -->
+                <div id="wingo-bet-modal" class="bottom-sheet-modal hidden">
+                    <div class="bottom-sheet-content">
+                        <div class="drawer-header">
+                            <span id="wingo-modal-title" class="drawer-title">Win Go 30s</span>
+                            <span id="wingo-modal-badge" class="modal-bet-badge">Green</span>
+                            <button class="btn-drawer-close" onclick="window.wingoGame.closeBetModal()">&times;</button>
+                        </div>
+
+                        <!-- Balance display -->
+                        <div style="font-size:12px; color:#94a3b8; margin-bottom:12px;">
+                            Wallet: <strong class="user-balance-val" style="color:#ffd875;">₹1,000.00</strong>
+                        </div>
+
+                        <!-- Base Contract Money Selector -->
+                        <div class="drawer-section-title">Contract Money</div>
+                        <div class="pills-selector-row">
+                            <div class="btn-pill btn-money active" data-amount="1" onclick="window.wingoGame.setContractMoney(1)">₹1</div>
+                            <div class="btn-pill btn-money" data-amount="10" onclick="window.wingoGame.setContractMoney(10)">₹10</div>
+                            <div class="btn-pill btn-money" data-amount="100" onclick="window.wingoGame.setContractMoney(100)">₹100</div>
+                            <div class="btn-pill btn-money" data-amount="1000" onclick="window.wingoGame.setContractMoney(1000)">₹1,000</div>
+                        </div>
+
+                        <!-- Multipliers Row -->
+                        <div class="drawer-section-title">Multiplier</div>
+                        <div class="pills-selector-row">
+                            <div class="btn-pill btn-mult active" data-mult="1" onclick="window.wingoGame.setMultiplier(1)">x1</div>
+                            <div class="btn-pill btn-mult" data-mult="5" onclick="window.wingoGame.setMultiplier(5)">x5</div>
+                            <div class="btn-pill btn-mult" data-mult="10" onclick="window.wingoGame.setMultiplier(10)">x10</div>
+                            <div class="btn-pill btn-mult" data-mult="20" onclick="window.wingoGame.setMultiplier(20)">x20</div>
+                            <div class="btn-pill btn-mult" data-mult="50" onclick="window.wingoGame.setMultiplier(50)">x50</div>
+                            <div class="btn-pill btn-mult" data-mult="100" onclick="window.wingoGame.setMultiplier(100)">x100</div>
+                        </div>
+
+                        <!-- Quantity Stepper -->
+                        <div class="drawer-section-title">Quantity</div>
+                        <div class="stepper-row">
+                            <button class="btn-step" onclick="window.wingoGame.changeQuantity(-1)">−</button>
+                            <input type="number" id="wingo-modal-qty" class="step-input" value="1" min="1" onchange="window.wingoGame.setQuantityFromInput(this.value)">
+                            <button class="btn-step" onclick="window.wingoGame.changeQuantity(1)">+</button>
+                        </div>
+
+                        <!-- Total Bet Display -->
+                        <div class="drawer-summary-row">
+                            <span style="font-size:12px; color:#94a3b8;">Total Contract:</span>
+                            <span id="wingo-modal-total" class="summary-total">₹10</span>
+                        </div>
+
+                        <!-- Agree terms -->
+                        <div style="font-size:11px; color:#94a3b8; margin-bottom:14px;">
+                            <label style="cursor:pointer; display:flex; align-items:center; gap:6px;">
+                                <input type="checkbox" checked style="accent-color:#f5c443;"> I agree to PRE-SALE RULES
+                            </label>
+                        </div>
+
+                        <!-- Actions -->
+                        <div class="drawer-actions-row">
+                            <button class="btn-drawer-cancel" onclick="window.wingoGame.closeBetModal()">Cancel</button>
+                            <button id="wingo-modal-confirm" class="btn-drawer-confirm" onclick="window.wingoGame.confirmBet()">Bet ₹10</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ============================================== -->
+            <!-- SUB-SCREEN: AVIATOR CRASH GAME                 -->
+            <!-- ============================================== -->
+            <div id="game-view-aviator" class="game-view hidden">
+                <div class="game-subnav">
+                    <button class="btn-back-home">‹ Back</button>
+                    <span class="game-header-title">Aviator</span>
+                    <button class="icon-btn" onclick="alert('Aviator Rules:\nPlace bet before takeoff.\nCash out before the plane flies away!\nMultiplier starts at 1.00x and can exceed 100x!')">❓</button>
+                </div>
+
+                <!-- Past Multipliers Pills -->
+                <div class="aviator-history-bar" id="aviator-history-pills">
+                    <!-- Populated dynamically -->
+                </div>
+
+                <!-- Radar Canvas Screen -->
+                <div class="aviator-radar-container">
+                    <canvas id="aviator-canvas"></canvas>
+                    <div id="aviator-multiplier" class="aviator-live-multiplier">1.00x</div>
+                </div>
+
+                <!-- Bet Controls -->
+                <div class="aviator-controls-card">
+                    <div class="aviator-bet-row">
+                        <div style="flex:1;">
+                            <label class="input-label">Bet Amount (₹)</label>
+                            <input type="number" id="aviator-bet-input" class="form-input" value="50" onchange="window.aviatorGame.setBetAmount(parseFloat(this.value))">
+                        </div>
+                        <div style="display:flex; align-items:flex-end; gap:6px;">
+                            <button class="btn-pill" onclick="window.aviatorGame.setBetAmount(50)">₹50</button>
+                            <button class="btn-pill" onclick="window.aviatorGame.setBetAmount(100)">₹100</button>
+                            <button class="btn-pill" onclick="window.aviatorGame.setBetAmount(500)">₹500</button>
+                        </div>
+                    </div>
+
+                    <!-- Main Bet / Cashout Button -->
+                    <button id="aviator-action-btn" class="btn-aviator btn-bet" onclick="window.aviatorGame.handleActionClick()">
+                        <span>PLACE BET</span>
+                        <small>₹50</small>
+                    </button>
+                </div>
+            </div>
+
+            <!-- ============================================== -->
+            <!-- SUB-SCREEN: MINES GAME                         -->
+            <!-- ============================================== -->
+            <div id="game-view-mines" class="game-view hidden">
+                <div class="game-subnav">
+                    <button class="btn-back-home">‹ Back</button>
+                    <span class="game-header-title">Mines 5x5</span>
+                    <button class="icon-btn" onclick="alert('Mines Rules:\nClick tiles to find emerald diamonds 💎.\nAvoid bombs 💣!\nMultiplier increases every gem revealed. Cash out anytime!')">❓</button>
+                </div>
+
+                <!-- Stats Bar -->
+                <div class="mines-stats-bar">
+                    <div class="stat-item">
+                        <span class="stat-label">Multiplier</span>
+                        <span id="mines-current-mult" class="stat-val">1.00x</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Potential Win</span>
+                        <span id="mines-current-profit" class="stat-val">₹20.00</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Mines</span>
+                        <select id="mines-count-select" class="form-input" style="padding:2px 8px; font-size:12px; height:auto; width:auto;" onchange="window.minesGame.setMineCount(this.value)">
+                            <option value="1">1 Mine</option>
+                            <option value="3" selected>3 Mines</option>
+                            <option value="5">5 Mines</option>
+                            <option value="10">10 Mines</option>
+                            <option value="24">24 Mines</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- 5x5 Grid -->
+                <div class="mines-grid-container" id="mines-grid">
+                    <!-- Populated dynamically -->
+                </div>
+
+                <!-- Controls -->
+                <div class="aviator-controls-card">
+                    <div class="aviator-bet-row">
+                        <div style="flex:1;">
+                            <label class="input-label">Stake (₹)</label>
+                            <input type="number" id="mines-bet-input" class="form-input" value="20" onchange="window.minesGame.setBetAmount(parseFloat(this.value))">
+                        </div>
+                        <div style="display:flex; align-items:flex-end; gap:6px;">
+                            <button class="btn-pill" onclick="window.minesGame.setBetAmount(20)">₹20</button>
+                            <button class="btn-pill" onclick="window.minesGame.setBetAmount(50)">₹50</button>
+                            <button class="btn-pill" onclick="window.minesGame.setBetAmount(200)">₹200</button>
+                        </div>
+                    </div>
+
+                    <button id="mines-start-btn" class="btn-full btn-gold" onclick="window.minesGame.startGame()">
+                        <span>START GAME</span>
+                        <small style="display:block; font-size:11px;">Bet ₹20</small>
+                    </button>
+                    <button id="mines-cashout-btn" class="btn-full btn-gold hidden" style="background:var(--gradient-green); color:#fff;" onclick="window.minesGame.cashOut()">
+                        <span>CASH OUT</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- ============================================== -->
+            <!-- SUB-SCREEN: K3 LOTTERY                         -->
+            <!-- ============================================== -->
+            <div id="game-view-k3" class="game-view hidden">
+                <div class="game-subnav">
+                    <button class="btn-back-home">‹ Back</button>
+                    <span class="game-header-title">K3 Dice Lottery</span>
+                    <button class="icon-btn" onclick="alert('K3 Dice Rules:\n3 Dice rolled each 30s.\nPredict Total Sum (3-18), Big (11-18) or Small (3-10), Odd or Even!')">❓</button>
+                </div>
+
+                <!-- Period & Timer -->
+                <div class="wingo-clock-card">
+                    <div class="period-box">
+                        <span class="period-title">K3 Period</span>
+                        <span id="k3-period" class="period-number">2026111730001</span>
+                    </div>
+                    <div class="timer-box-wrapper">
+                        <span class="timer-title">Time Left</span>
+                        <span id="k3-timer" style="font-size:20px; font-weight:800; color:#ffd875;">00:30</span>
+                    </div>
+                </div>
+
+                <!-- Dice Rolling Cup Area -->
+                <div id="k3-cup" class="k3-cup-area">
+                    <div id="k3-dice-container" class="dice-row">
+                        <!-- 3 dice -->
+                    </div>
+                    <div id="k3-sum-display" style="font-size:14px; font-weight:700; color:#fae59f;">Sum: 12 (Big)</div>
+                </div>
+
+                <!-- Fast Bet Options -->
+                <div class="betting-board">
+                    <div class="size-buttons-row" style="margin-bottom:12px;">
+                        <button class="btn-size btn-big" onclick="window.k3Game.placeBet('size', 'Big')">
+                            <span>Big (11-18)</span>
+                            <small>2x</small>
+                        </button>
+                        <button class="btn-size btn-small" onclick="window.k3Game.placeBet('size', 'Small')">
+                            <span>Small (3-10)</span>
+                            <small>2x</small>
+                        </button>
+                    </div>
+                    <div class="size-buttons-row">
+                        <button class="btn-size" style="background:#8b5cf6;" onclick="window.k3Game.placeBet('parity', 'Odd')">
+                            <span>Odd</span>
+                            <small>2x</small>
+                        </button>
+                        <button class="btn-size" style="background:#ec4899;" onclick="window.k3Game.placeBet('parity', 'Even')">
+                            <span>Even</span>
+                            <small>2x</small>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- K3 History Table -->
+                <div class="table-container">
+                    <table class="custom-table">
+                        <thead>
+                            <tr>
+                                <th>Period</th>
+                                <th>Dice</th>
+                                <th>Sum</th>
+                                <th>Size</th>
+                                <th>Parity</th>
+                            </tr>
+                        </thead>
+                        <tbody id="k3-history-tbody">
+                            <!-- Populated dynamically -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+        </main>
+
+        <!-- ============================================== -->
+        <!-- TAB 2: ACTIVITY VIEW                           -->
+        <!-- ============================================== -->
+        <main id="tab-activity" class="tab-view hidden" style="padding:16px;">
+            <h2 style="font-size:18px; color:#fae59f; margin-bottom:14px;">🎁 Activity Center</h2>
+
+            <!-- 7-Day Check-in Card -->
+            <div class="activity-card">
+                <div class="section-header">
+                    <span class="section-title">📅 7-Day Attendance Reward</span>
+                </div>
+                <p style="font-size:11px; color:#94a3b8; margin-bottom:14px;">Sign in consecutively for 7 days to get up to ₹100 extra cash bonus!</p>
+                <div class="checkin-grid" id="checkin-grid">
+                    <!-- Populated dynamically -->
+                </div>
+                <button id="btn-claim-checkin" class="btn-full btn-gold">CLAIM TODAY'S REWARD</button>
+            </div>
+
+            <!-- Lucky Wheel Card -->
+            <div class="activity-card" style="text-align:center;">
+                <div class="section-header">
+                    <span class="section-title">🎡 Daily Lucky Roulette</span>
+                </div>
+                <p style="font-size:11px; color:#94a3b8;">Spin the wheel to win up to ₹500 free bonus every day!</p>
+                <div class="wheel-container">
+                    <div class="wheel-pointer">▼</div>
+                    <div id="wheel-canvas" class="wheel-canvas"></div>
+                </div>
+                <button id="btn-spin-wheel" class="btn-full btn-gold">SPIN WHEEL FOR FREE</button>
+            </div>
+        </main>
+
+        <!-- ============================================== -->
+        <!-- TAB 3: PROMOTION / GET ₹500 VIEW               -->
+        <!-- ============================================== -->
+        <main id="tab-promotion" class="tab-view hidden" style="padding:16px;">
+            <h2 style="font-size:18px; color:#fae59f; margin-bottom:14px;">💰 Agent Promotion (Get ₹500)</h2>
+
+            <!-- Referral Card -->
+            <div class="activity-card">
+                <div style="font-size:14px; font-weight:700; color:#fae59f; margin-bottom:8px;">Invite Friends & Earn Commission</div>
+                <p style="font-size:12px; color:#94a3b8; margin-bottom:14px;">Earn lifetime betting rebate commissions from your invited members across 3 tiers!</p>
+
+                <div class="input-group">
+                    <label class="input-label">Your Invitation Code (UID: <span id="promo-uid">849204</span>)</label>
+                    <div id="promo-code" style="font-size:20px; font-weight:800; color:#ffd875; background:#0f1322; padding:10px; border-radius:8px; text-align:center; border:1px solid #2e3860;">ASG98421</div>
+                </div>
+
+                <div class="input-group">
+                    <label class="input-label">Invitation Link</label>
+                    <input type="text" id="promo-link" class="form-input" readonly>
+                </div>
+
+                <button id="btn-copy-promo" class="btn-full btn-gold" style="margin-bottom:14px;">COPY INVITATION LINK</button>
+
+                <div class="input-group">
+                    <label class="input-label">Commission Available</label>
+                    <div style="display:flex; justify-content:space-between; align-items:center; background:#181e35; padding:10px 14px; border-radius:10px;">
+                        <span style="font-size:18px; font-weight:800; color:#10b981;">₹345.50</span>
+                        <button id="btn-claim-commission" class="btn-deposit" style="padding:6px 14px;">CLAIM CASH</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Commission Ladder -->
+            <div class="activity-card">
+                <div class="section-title" style="margin-bottom:10px;">Tiered Rebate Commission</div>
+                <div style="font-size:12px; color:#e2e8f0; line-height:1.6;">
+                    <p>🥇 <strong>Tier 1 Subordinates:</strong> 0.6% on all turnover</p>
+                    <p>🥈 <strong>Tier 2 Subordinates:</strong> 0.18% on all turnover</p>
+                    <p>🥉 <strong>Tier 3 Subordinates:</strong> 0.05% on all turnover</p>
+                </div>
+            </div>
+        </main>
+
+        <!-- ============================================== -->
+        <!-- TAB 4: WALLET VIEW                             -->
+        <!-- ============================================== -->
+        <main id="tab-wallet" class="tab-view hidden" style="padding:16px;">
+            <h2 style="font-size:18px; color:#fae59f; margin-bottom:14px;">💳 Wallet Management</h2>
+
+            <div class="activity-card" style="background:linear-gradient(135deg, #242c50 0%, #151a32 100%);">
+                <div style="font-size:12px; color:#94a3b8;">Total Assets</div>
+                <div class="user-balance-val" style="font-size:26px; font-weight:900; color:#ffd875; margin:6px 0 16px;">₹1,000.00</div>
+                <div style="display:flex; gap:10px;">
+                    <button class="btn-deposit trigger-recharge" style="flex:1; padding:10px;">+ Quick Deposit</button>
+                    <button class="btn-withdraw trigger-withdraw" style="flex:1; padding:10px;">Withdrawal</button>
+                </div>
+            </div>
+
+            <!-- Transaction History -->
+            <div class="section-header">
+                <span class="section-title">📝 Recent Transactions</span>
+            </div>
+            <div id="transactions-list" class="bets-list-container">
+                <!-- Populated dynamically -->
+            </div>
+        </main>
+
+        <!-- ============================================== -->
+        <!-- TAB 5: ACCOUNT VIEW                            -->
+        <!-- ============================================== -->
+        <main id="tab-account" class="tab-view hidden" style="padding:16px;">
+            <div class="account-profile-card">
+                <div class="profile-avatar">🤴</div>
+                <div class="profile-info">
+                    <span class="profile-uid">UID: <span id="account-uid">849204</span></span>
+                    <span style="font-size:12px; color:#94a3b8;">+91 98*** **420</span>
+                    <span class="vip-badge-pill">VIP 3 PLATINUM</span>
+                </div>
+            </div>
+
+            <!-- Quick Stats -->
+            <div class="stats-grid-row">
+                <div class="stat-box">
+                    <div id="stat-total-bets" class="stat-box-num">0</div>
+                    <div class="stat-box-lbl">Total Bets</div>
+                </div>
+                <div class="stat-box">
+                    <div id="stat-win-rate" class="stat-box-num">0%</div>
+                    <div class="stat-box-lbl">Win Rate</div>
+                </div>
+                <div class="stat-box">
+                    <div id="stat-total-won" class="stat-box-num">₹0</div>
+                    <div class="stat-box-lbl">Total Won</div>
+                </div>
+            </div>
+
+            <!-- Menu Rows -->
+            <div class="menu-list-card">
+                <div class="menu-item-row" onclick="window.stateManager.openRechargeModal()">
+                    <span>💰 Deposit / Recharge</span>
+                    <span>›</span>
+                </div>
+                <div class="menu-item-row" onclick="window.stateManager.openWithdrawModal()">
+                    <span>💳 Withdraw Funds</span>
+                    <span>›</span>
+                </div>
+                <div class="menu-item-row" onclick="window.stateManager.switchTab('wallet')">
+                    <span>📑 Financial Records</span>
+                    <span>›</span>
+                </div>
+                <div class="menu-item-row" onclick="window.sound.toggle(); alert('Audio Toggled');">
+                    <span>🔊 Sound Effects</span>
+                    <span>Toggle</span>
+                </div>
+                <div class="menu-item-row" id="btn-reset-demo" style="color:#ef4444;">
+                    <span>🔄 Reset Demo Balance (₹1,000)</span>
+                    <span>›</span>
+                </div>
+            </div>
+        </main>
+
+        <!-- ============================================== -->
+        <!-- BOTTOM FIXED NAVIGATION BAR                    -->
+        <!-- ============================================== -->
+        <nav class="tabbar-container">
+            <div class="tabbar-item active" data-tab="home">
+                <span class="tabbar-icon">🏠</span>
+                <span>Home</span>
+            </div>
+            <div class="tabbar-item" data-tab="activity">
+                <span class="tabbar-icon">🎁</span>
+                <span>Activity</span>
+            </div>
+            <div class="tabbar-item" data-tab="promotion">
+                <span class="badge-dot">HOT</span>
+                <span class="tabbar-icon">💰</span>
+                <span>Get ₹500</span>
+            </div>
+            <div class="tabbar-item" data-tab="wallet">
+                <span class="tabbar-icon">💳</span>
+                <span>Wallet</span>
+            </div>
+            <div class="tabbar-item" data-tab="account">
+                <span class="tabbar-icon">👤</span>
+                <span>Account</span>
+            </div>
+        </nav>
+
+    </div>
+
+    <!-- Scripts -->
+    <script src="audio.js"></script>
+    <script src="game-wingo.js"></script>
+    <script src="game-aviator.js"></script>
+    <script src="game-mines.js"></script>
+    <script src="game-k3.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>

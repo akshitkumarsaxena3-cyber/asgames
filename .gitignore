@@ -1,0 +1,6 @@
+# Node / Python / OS artifacts
+.DS_Store
+Thumbs.db
+*.log
+*.tmp
+__pycache__/
