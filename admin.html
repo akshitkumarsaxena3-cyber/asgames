@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ASGames - Super Admin Control Center</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-dark: #0e1222;
+            --bg-card: #171d36;
+            --bg-card-subtle: #21294c;
+            --border: #29345e;
+            --gold: #f5c443;
+            --gold-gradient: linear-gradient(135deg, #fae59f 0%, #c4933f 100%);
+            --green: #10b981;
+            --red: #ef4444;
+            --violet: #8b5cf6;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Poppins', sans-serif; }
+        body { background: var(--bg-dark); color: #fff; min-height: 100vh; padding: 20px; }
+        .container { max-width: 1200px; margin: 0 auto; }
+        .hidden { display: none !important; }
+        
+        /* Header */
+        header { display: flex; justify-content: space-between; align-items: center; padding-bottom: 20px; border-bottom: 1px solid var(--border); margin-bottom: 20px; }
+        .logo { font-size: 24px; font-weight: 800; background: var(--gold-gradient); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .badge { background: rgba(16, 185, 129, 0.2); border: 1px solid var(--green); color: var(--green); padding: 3px 8px; border-radius: 6px; font-size: 11px; }
+
+        /* Login */
+        .login-card { max-width: 380px; margin: 100px auto; background: var(--bg-card); border: 1px solid var(--border); border-radius: 16px; padding: 30px; text-align: center; }
+        .input-text { width: 100%; background: #0b0e1a; border: 1px solid var(--border); padding: 12px; border-radius: 8px; color: #fff; margin: 14px 0 20px; font-size: 14px; }
+        .btn-primary { width: 100%; background: var(--gold-gradient); border: none; padding: 12px; border-radius: 8px; font-weight: 700; color: #1a1505; cursor: pointer; font-size: 14px; }
+
+        /* Stats Grid */
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-bottom: 24px; }
+        .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; padding: 18px; }
+        .stat-val { font-size: 28px; font-weight: 800; color: var(--gold); margin-top: 6px; }
+        .stat-lbl { font-size: 12px; color: #94a3b8; }
+
+        /* Tabs Nav */
+        .admin-nav { display: flex; gap: 10px; margin-bottom: 20px; border-bottom: 1px solid var(--border); padding-bottom: 10px; }
+        .nav-btn { background: var(--bg-card); border: 1px solid var(--border); color: #94a3b8; padding: 10px 18px; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 13px; }
+        .nav-btn.active { background: var(--gold-gradient); color: #1a1505; border-color: var(--gold); }
+
+        /* Control Card */
+        .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 14px; padding: 20px; margin-bottom: 24px; }
+        .card-title { font-size: 16px; font-weight: 700; color: var(--gold); margin-bottom: 16px; display: flex; align-items: center; justify-content: space-between; }
+        
+        /* Game Control Numbers */
+        .numbers-picker { display: grid; grid-template-columns: repeat(10, 1fr); gap: 8px; margin: 16px 0; }
+        .num-pick-btn { padding: 14px 6px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-card-subtle); color: #fff; font-size: 18px; font-weight: 800; cursor: pointer; text-align: center; }
+        .num-pick-btn:hover, .num-pick-btn.selected { border-color: var(--gold); background: #3b2f15; color: var(--gold); }
+
+        /* Mode Selector */
+        .mode-row { display: flex; gap: 12px; margin-bottom: 16px; }
+        .mode-chip { flex: 1; padding: 14px; border: 1px solid var(--border); border-radius: 10px; background: var(--bg-card-subtle); text-align: center; cursor: pointer; }
+        .mode-chip.active { border-color: var(--gold); background: #2f2510; }
+        .mode-chip h4 { color: #fae59f; margin-bottom: 4px; font-size: 14px; }
+        .mode-chip p { font-size: 11px; color: #94a3b8; }
+
+        /* Live Wagers */
+        .wagers-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-top: 14px; }
+        .wager-box { background: #0c0f1c; padding: 10px; border-radius: 8px; text-align: center; border: 1px solid var(--border); }
+        .wager-title { font-size: 11px; color: #94a3b8; }
+        .wager-amt { font-size: 16px; font-weight: 700; color: #fff; margin-top: 2px; }
+
+        /* Tables */
+        table { width: 100%; border-collapse: collapse; font-size: 13px; text-align: left; }
+        th { background: #0e1222; padding: 12px; color: #94a3b8; border-bottom: 1px solid var(--border); }
+        td { padding: 12px; border-bottom: 1px solid rgba(255, 255, 255, 0.05); }
+        .btn-action { padding: 5px 12px; border-radius: 6px; border: none; font-size: 12px; font-weight: 600; cursor: pointer; }
+        .btn-approve { background: var(--green); color: #fff; }
+        .btn-reject { background: var(--red); color: #fff; margin-left: 6px; }
+        .btn-ban { background: #dc2626; color: #fff; }
+        .btn-unban { background: #2563eb; color: #fff; }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <!-- Login Screen -->
+        <div id="login-view" class="login-card">
+            <h2 class="logo">ASGames Admin</h2>
+            <p style="font-size: 12px; color: #94a3b8; margin: 8px 0 20px;">Super Control & Rigging Panel</p>
+            <input type="password" id="admin-pass" class="input-text" placeholder="Enter Admin Password (default: admin123)">
+            <button class="btn-primary" onclick="loginAdmin()">ENTER CONTROL CENTER</button>
+            <p id="login-err" style="color: #ef4444; font-size: 12px; margin-top: 12px;"></p>
+        </div>
+
+        <!-- Dashboard View -->
+        <div id="dashboard-view" class="hidden">
+            <header>
+                <div>
+                    <span class="logo">ASGames Admin</span>
+                    <span class="badge">LIVE ENGINE</span>
+                </div>
+                <div>
+                    <span id="live-timer-status" style="font-size: 14px; font-weight: 700; color: var(--gold); margin-right: 16px;">Period: -- | 00:30</span>
+                    <button class="btn-action btn-reject" onclick="logoutAdmin()">Logout</button>
+                </div>
+            </header>
+
+            <!-- Stats -->
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-lbl">Total Registered Players</div>
+                    <div class="stat-val" id="stat-users">0</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-lbl">Platform User Balances</div>
+                    <div class="stat-val" id="stat-balance">₹0.00</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-lbl">Pending Deposits</div>
+                    <div class="stat-val" id="stat-deposits" style="color: #60a5fa;">0</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-lbl">Pending Withdrawals</div>
+                    <div class="stat-val" id="stat-withdrawals" style="color: #f87171;">0</div>
+                </div>
+            </div>
+
+            <!-- Navigation Tabs -->
+            <div class="admin-nav">
+                <button class="nav-btn active" onclick="switchTab('control')">🎮 Game Rigging & Control</button>
+                <button class="nav-btn" onclick="switchTab('users')">👥 User Management</button>
+                <button class="nav-btn" onclick="switchTab('deposits')">💰 Pending Deposits</button>
+                <button class="nav-btn" onclick="switchTab('withdrawals')">💳 Pending Withdrawals</button>
+            </div>
+
+            <!-- TAB 1: GAME CONTROL & RIGGING -->
+            <div id="tab-control">
+                <div class="card">
+                    <div class="card-title">
+                        <span>Win Go Outcome Decision Engine</span>
+                        <span id="current-mode-badge" style="color: #10b981; font-size: 12px;">Active: Random RNG</span>
+                    </div>
+
+                    <div class="mode-row">
+                        <div class="mode-chip" id="chip-random" onclick="setGameMode('random')">
+                            <h4>🎲 Fair Random RNG</h4>
+                            <p>Standard unbiased lottery draw</p>
+                        </div>
+                        <div class="mode-chip" id="chip-house" onclick="setGameMode('house_edge')">
+                            <h4>📉 Smart House-Edge (Profit Max)</h4>
+                            <p>Auto-picks outcome paying lowest wagers</p>
+                        </div>
+                        <div class="mode-chip" id="chip-manual" onclick="setGameMode('manual')">
+                            <h4>🎯 1-Click Manual Force</h4>
+                            <p>Force exact winning number for next draw</p>
+                        </div>
+                    </div>
+
+                    <div id="manual-picker-area">
+                        <p style="font-size: 13px; color: #fae59f; font-weight: 600;">Force Next Round Winning Number (0 - 9):</p>
+                        <div class="numbers-picker">
+                            <button class="num-pick-btn" onclick="setManualNumber(0)">0</button>
+                            <button class="num-pick-btn" onclick="setManualNumber(1)">1</button>
+                            <button class="num-pick-btn" onclick="setManualNumber(2)">2</button>
+                            <button class="num-pick-btn" onclick="setManualNumber(3)">3</button>
+                            <button class="num-pick-btn" onclick="setManualNumber(4)">4</button>
+                            <button class="num-pick-btn" onclick="setManualNumber(5)">5</button>
+                            <button class="num-pick-btn" onclick="setManualNumber(6)">6</button>
+                            <button class="num-pick-btn" onclick="setManualNumber(7)">7</button>
+                            <button class="num-pick-btn" onclick="setManualNumber(8)">8</button>
+                            <button class="num-pick-btn" onclick="setManualNumber(9)">9</button>
+                        </div>
+                        <p id="manual-status" style="font-size: 12px; color: #10b981; font-weight: 600;"></p>
+                    </div>
+
+                    <div style="margin-top: 24px;">
+                        <h4 style="font-size: 14px; color: #fff; margin-bottom: 10px;">Live Wagers on Current Round:</h4>
+                        <div class="wagers-row">
+                            <div class="wager-box"><div class="wager-title">🟢 Green</div><div class="wager-amt" id="wag-green">₹0</div></div>
+                            <div class="wager-box"><div class="wager-title">🟣 Violet</div><div class="wager-amt" id="wag-violet">₹0</div></div>
+                            <div class="wager-box"><div class="wager-title">🔴 Red</div><div class="wager-amt" id="wag-red">₹0</div></div>
+                            <div class="wager-box"><div class="wager-title">🟡 Big</div><div class="wager-amt" id="wag-big">₹0</div></div>
+                            <div class="wager-box"><div class="wager-title">🔵 Small</div><div class="wager-amt" id="wag-small">₹0</div></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB 2: USERS -->
+            <div id="tab-users" class="hidden">
+                <div class="card">
+                    <div class="card-title">Registered Players</div>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Phone</th>
+                                <th>Balance</th>
+                                <th>Invite Code</th>
+                                <th>Referred By</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="users-tbody"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- TAB 3: DEPOSITS -->
+            <div id="tab-deposits" class="hidden">
+                <div class="card">
+                    <div class="card-title">Pending Recharge Requests</div>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Tx ID</th>
+                                <th>User Phone</th>
+                                <th>Amount</th>
+                                <th>Details / UTR</th>
+                                <th>Time</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="deposits-tbody"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- TAB 4: WITHDRAWALS -->
+            <div id="tab-withdrawals" class="hidden">
+                <div class="card">
+                    <div class="card-title">Pending Withdrawal Requests</div>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Tx ID</th>
+                                <th>User Phone</th>
+                                <th>Amount</th>
+                                <th>Bank / UPI</th>
+                                <th>Time</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="withdrawals-tbody"></tbody>
+                    </table>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <script>
+        let adminKey = localStorage.getItem('asg_admin_key') || '';
+
+        if (adminKey) {
+            showDashboard();
+        }
+
+        async function loginAdmin() {
+            const pass = document.getElementById('admin-pass').value;
+            const res = await fetch('/api/admin/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ password: pass })
+            });
+            const data = await res.json();
+            if (data.success) {
+                adminKey = data.adminKey;
+                localStorage.setItem('asg_admin_key', adminKey);
+                showDashboard();
+            } else {
+                document.getElementById('login-err').textContent = data.message;
+            }
+        }
+
+        function logoutAdmin() {
+            localStorage.removeItem('asg_admin_key');
+            location.reload();
+        }
+
+        function showDashboard() {
+            document.getElementById('login-view').classList.add('hidden');
+            document.getElementById('dashboard-view').classList.remove('hidden');
+            refreshOverview();
+            setInterval(refreshOverview, 2000);
+        }
+
+        function switchTab(tab) {
+            document.querySelectorAll('.admin-nav .nav-btn').forEach(b => b.classList.remove('active'));
+            event.target.classList.add('active');
+
+            ['control', 'users', 'deposits', 'withdrawals'].forEach(t => {
+                document.getElementById('tab-' + t).classList.add('hidden');
+            });
+            document.getElementById('tab-' + tab).classList.remove('hidden');
+
+            if (tab === 'users') loadUsers();
+            if (tab === 'deposits') loadDeposits();
+            if (tab === 'withdrawals') loadWithdrawals();
+        }
+
+        async function refreshOverview() {
+            try {
+                const res = await fetch('/api/admin/overview', {
+                    headers: { 'x-admin-key': adminKey }
+                });
+                const d = await res.json();
+                if (!d.success) return;
+
+                document.getElementById('live-timer-status').textContent = `Period: ${d.currentPeriod} | 00:${String(d.remainingSeconds).padStart(2, '0')} ${d.isLocked ? '[LOCKED]' : ''}`;
+                document.getElementById('stat-users').textContent = d.stats.users;
+                document.getElementById('stat-balance').textContent = `₹${d.stats.totalBalance.toFixed(2)}`;
+                document.getElementById('stat-deposits').textContent = d.stats.pendingDeposits;
+                document.getElementById('stat-withdrawals').textContent = d.stats.pendingWithdrawals;
+
+                document.getElementById('current-mode-badge').textContent = `Active Mode: ${d.gameMode.toUpperCase()}` + (d.manualNumber !== '' ? ` (Forced #${d.manualNumber})` : '');
+                
+                ['random', 'house', 'manual'].forEach(m => document.getElementById('chip-' + m).classList.remove('active'));
+                if (d.gameMode === 'random') document.getElementById('chip-random').classList.add('active');
+                if (d.gameMode === 'house_edge') document.getElementById('chip-house').classList.add('active');
+                if (d.gameMode === 'manual') document.getElementById('chip-manual').classList.add('active');
+
+                // Live Wagers
+                document.getElementById('wag-green').textContent = `₹${d.wagers.green || 0}`;
+                document.getElementById('wag-violet').textContent = `₹${d.wagers.violet || 0}`;
+                document.getElementById('wag-red').textContent = `₹${d.wagers.red || 0}`;
+                document.getElementById('wag-big').textContent = `₹${d.wagers.big || 0}`;
+                document.getElementById('wag-small').textContent = `₹${d.wagers.small || 0}`;
+            } catch (e) {}
+        }
+
+        async function setGameMode(mode) {
+            await fetch('/api/admin/control', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'x-admin-key': adminKey },
+                body: JSON.stringify({ mode })
+            });
+            refreshOverview();
+        }
+
+        async function setManualNumber(num) {
+            await fetch('/api/admin/control', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'x-admin-key': adminKey },
+                body: JSON.stringify({ mode: 'manual', manual_number: num })
+            });
+            document.getElementById('manual-status').textContent = `✓ Outcome forced to Number ${num} for next round!`;
+            refreshOverview();
+        }
+
+        async function loadUsers() {
+            const res = await fetch('/api/admin/users', { headers: { 'x-admin-key': adminKey } });
+            const d = await res.json();
+            const tbody = document.getElementById('users-tbody');
+            tbody.innerHTML = d.users.map(u => `
+                <tr>
+                    <td>${u.id}</td>
+                    <td><strong>${u.phone}</strong></td>
+                    <td style="color:var(--gold); font-weight:700;">₹${u.balance.toFixed(2)}</td>
+                    <td>${u.invite_code}</td>
+                    <td>${u.referred_by || '-'}</td>
+                    <td><span style="color:${u.is_banned ? 'red' : 'lightgreen'}">${u.is_banned ? 'Banned' : 'Active'}</span></td>
+                    <td>
+                        <button class="btn-action ${u.is_banned ? 'btn-unban' : 'btn-ban'}" onclick="toggleBan(${u.id}, ${u.is_banned ? 0 : 1})">${u.is_banned ? 'Unban' : 'Ban'}</button>
+                        <button class="btn-action" style="background:#4b5563; color:#fff;" onclick="adjustBalance(${u.id})">Adjust ₹</button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        async function toggleBan(id, isBanned) {
+            await fetch('/api/admin/toggle-ban', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'x-admin-key': adminKey },
+                body: JSON.stringify({ user_id: id, is_banned: isBanned })
+            });
+            loadUsers();
+        }
+
+        async function adjustBalance(id) {
+            const amt = prompt('Enter amount to ADD (positive e.g. 500) or DEDUCT (negative e.g. -200):');
+            if (!amt) return;
+            await fetch('/api/admin/adjust-balance', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'x-admin-key': adminKey },
+                body: JSON.stringify({ user_id: id, amount: parseFloat(amt) })
+            });
+            loadUsers();
+            refreshOverview();
+        }
+
+        async function loadDeposits() {
+            const res = await fetch('/api/admin/deposits', { headers: { 'x-admin-key': adminKey } });
+            const d = await res.json();
+            const tbody = document.getElementById('deposits-tbody');
+            if (d.deposits.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; color:#94a3b8;">No pending deposits</td></tr>`;
+                return;
+            }
+            tbody.innerHTML = d.deposits.map(t => `
+                <tr>
+                    <td>${t.id}</td>
+                    <td><strong>${t.phone}</strong></td>
+                    <td style="color:#10b981; font-weight:700;">₹${t.amount}</td>
+                    <td>${t.details}</td>
+                    <td>${t.created_at}</td>
+                    <td>
+                        <button class="btn-action btn-approve" onclick="approveDeposit('${t.id}')">Approve</button>
+                        <button class="btn-action btn-reject" onclick="rejectDeposit('${t.id}')">Reject</button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        async function approveDeposit(txId) {
+            await fetch('/api/admin/approve-deposit', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'x-admin-key': adminKey },
+                body: JSON.stringify({ tx_id: txId })
+            });
+            loadDeposits();
+            refreshOverview();
+        }
+
+        async function rejectDeposit(txId) {
+            await fetch('/api/admin/reject-deposit', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'x-admin-key': adminKey },
+                body: JSON.stringify({ tx_id: txId })
+            });
+            loadDeposits();
+        }
+
+        async function loadWithdrawals() {
+            const res = await fetch('/api/admin/withdrawals', { headers: { 'x-admin-key': adminKey } });
+            const d = await res.json();
+            const tbody = document.getElementById('withdrawals-tbody');
+            if (d.withdrawals.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; color:#94a3b8;">No pending withdrawals</td></tr>`;
+                return;
+            }
+            tbody.innerHTML = d.withdrawals.map(t => `
+                <tr>
+                    <td>${t.id}</td>
+                    <td><strong>${t.phone}</strong></td>
+                    <td style="color:#ef4444; font-weight:700;">₹${t.amount}</td>
+                    <td>${t.details}</td>
+                    <td>${t.created_at}</td>
+                    <td>
+                        <button class="btn-action btn-approve" onclick="approveWithdrawal('${t.id}')">Approve & Paid</button>
+                        <button class="btn-action btn-reject" onclick="rejectWithdrawal('${t.id}')">Reject & Refund</button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        async function approveWithdrawal(txId) {
+            await fetch('/api/admin/approve-withdrawal', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'x-admin-key': adminKey },
+                body: JSON.stringify({ tx_id: txId })
+            });
+            loadWithdrawals();
+            refreshOverview();
+        }
+
+        async function rejectWithdrawal(txId) {
+            await fetch('/api/admin/reject-withdrawal', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'x-admin-key': adminKey },
+                body: JSON.stringify({ tx_id: txId })
+            });
+            loadWithdrawals();
+            refreshOverview();
+        }
+    </script>
+</body>
+</html>

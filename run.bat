@@ -1,12 +1,15 @@
 @echo off
-title ASGames Game Platform
+title ASGames Full-Stack Platform
 color 0E
 echo ========================================================
-echo               ASG WIN - GAMING PLATFORM
+echo               ASGAMES - FULL-STACK PLATFORM
 echo ========================================================
 echo.
-echo Starting Local Web Server on Port 8000...
+echo Starting ASGames Server on Port 10000...
 echo.
-start "" "http://localhost:8000"
-python -m http.server 8000
+echo [PLAYER APP]  http://localhost:10000
+echo [ADMIN PANEL] http://localhost:10000/admin (Pass: admin123)
+echo.
+start "" "http://localhost:10000"
+node server.js
 pause

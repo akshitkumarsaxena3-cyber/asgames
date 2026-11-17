@@ -1,29 +1,38 @@
-// ASGames Application Controller & State Manager
+// ASGames Full-Stack Application Controller & State Manager
 
 class StateManager {
     constructor() {
-        this.balance = parseFloat(localStorage.getItem('asg_balance')) || 1000.00;
-        this.uid = localStorage.getItem('asg_uid') || Math.floor(100000 + Math.random() * 900000);
-        this.vipLevel = 3;
-        this.transactions = JSON.parse(localStorage.getItem('asg_tx')) || [];
-        this.userBets = JSON.parse(localStorage.getItem('asg_bets')) || [];
+        this.token = localStorage.getItem('asg_token') || null;
+        this.user = null;
+        this.balance = parseFloat(localStorage.getItem('asg_balance')) || 100.00;
+        this.uid = localStorage.getItem('asg_uid') || '849204';
+        this.vipLevel = 1;
+        this.inviteCode = localStorage.getItem('asg_invite') || 'ASG84920';
+
+        this.transactions = [];
+        this.userBets = [];
         this.checkinDay = parseInt(localStorage.getItem('asg_checkin_day')) || 1;
         this.lastCheckinDate = localStorage.getItem('asg_checkin_date') || '';
-        this.hasFreeSpin = localStorage.getItem('asg_free_spin') !== '0';
 
         this.currentTab = 'home';
-        this.currentGame = 'wingo'; // 'home', 'wingo', 'aviator', 'mines', 'k3'
-
-        // Save UID
-        localStorage.setItem('asg_uid', this.uid);
+        this.currentGame = 'wingo';
 
         this.init();
     }
 
-    init() {
+    async init() {
+        this.checkUrlReferral();
         this.updateBalanceUI();
         this.setupEventListeners();
         this.startWinningTicker();
+
+        // Check if user is logged in
+        if (this.token) {
+            await this.fetchUserProfile();
+        } else {
+            this.updateAuthButtonUI(false);
+        }
+
         this.initGames();
         this.renderActivityTab();
         this.renderPromotionTab();
@@ -31,10 +40,69 @@ class StateManager {
         this.renderTransactions();
     }
 
-    saveState() {
-        localStorage.setItem('asg_balance', this.balance.toFixed(2));
-        localStorage.setItem('asg_tx', JSON.stringify(this.transactions.slice(0, 50)));
-        localStorage.setItem('asg_bets', JSON.stringify(this.userBets.slice(0, 50)));
+    checkUrlReferral() {
+        const urlParams = new URLSearchParams(window.location.search);
+        const ref = urlParams.get('r');
+        if (ref) {
+            const regInviteInput = document.getElementById('reg-invite');
+            if (regInviteInput) regInviteInput.value = ref.trim().toUpperCase();
+            // Automatically open register modal if referred
+            if (!this.token) {
+                openAuthModal();
+                switchAuthTab('register');
+            }
+        }
+    }
+
+    async fetchUserProfile() {
+        try {
+            const res = await fetch('/api/auth/me', {
+                headers: { 'Authorization': `Bearer ${this.token}` }
+            });
+            const data = await res.json();
+            if (data.success && data.user) {
+                this.user = data.user;
+                this.balance = data.user.balance;
+                this.uid = data.user.id;
+                this.inviteCode = data.user.invite_code;
+                this.vipLevel = data.user.vip_level || 1;
+
+                localStorage.setItem('asg_balance', this.balance);
+                localStorage.setItem('asg_uid', this.uid);
+                localStorage.setItem('asg_invite', this.inviteCode);
+
+                this.updateBalanceUI();
+                this.updateAuthButtonUI(true);
+                this.renderPromotionTab();
+                this.renderAccountTab();
+            } else {
+                this.token = null;
+                localStorage.removeItem('asg_token');
+                this.updateAuthButtonUI(false);
+            }
+        } catch (e) {
+            console.log('Error fetching profile, using cached balance:', e);
+            this.updateAuthButtonUI(!!this.token);
+        }
+    }
+
+    updateAuthButtonUI(isLoggedIn) {
+        const authBtn = document.getElementById('btn-auth-trigger');
+        if (!authBtn) return;
+
+        if (isLoggedIn && this.user) {
+            const maskedPhone = this.user.phone.replace(/(\d{3})\d{4}(\d{3})/, '$1****$2');
+            authBtn.textContent = `📱 ${maskedPhone} (Logout)`;
+            authBtn.onclick = () => {
+                if (confirm('Do you want to log out?')) {
+                    localStorage.removeItem('asg_token');
+                    location.reload();
+                }
+            };
+        } else {
+            authBtn.textContent = 'Login / Register';
+            authBtn.onclick = () => openAuthModal();
+        }
     }
 
     updateBalanceUI() {
@@ -46,39 +114,17 @@ class StateManager {
 
     addBalance(amount, desc) {
         this.balance += amount;
-        this.transactions.unshift({
-            id: 'TX' + Date.now(),
-            type: 'Credit',
-            desc: desc,
-            amount: amount,
-            time: new Date().toLocaleTimeString(),
-            date: new Date().toLocaleDateString()
-        });
-        this.saveState();
         this.updateBalanceUI();
-        this.renderAccountTab();
-        this.renderTransactions();
+        this.fetchUserProfile();
     }
 
     deductBalance(amount, desc) {
         this.balance = Math.max(0, this.balance - amount);
-        this.transactions.unshift({
-            id: 'TX' + Date.now(),
-            type: 'Debit',
-            desc: desc,
-            amount: amount,
-            time: new Date().toLocaleTimeString(),
-            date: new Date().toLocaleDateString()
-        });
-        this.saveState();
         this.updateBalanceUI();
-        this.renderAccountTab();
-        this.renderTransactions();
     }
 
     saveUserBet(bet) {
         this.userBets.unshift(bet);
-        this.saveState();
         this.renderAccountTab();
     }
 
@@ -135,13 +181,13 @@ class StateManager {
         // Refresh balance animation
         const refreshBtn = document.getElementById('btn-refresh-balance');
         if (refreshBtn) {
-            refreshBtn.addEventListener('click', () => {
+            refreshBtn.addEventListener('click', async () => {
                 refreshBtn.classList.add('spin-anim');
                 if (window.sound) window.sound.click();
+                await this.fetchUserProfile();
                 setTimeout(() => {
-                    this.updateBalanceUI();
                     refreshBtn.classList.remove('spin-anim');
-                    this.showToast('Balance updated successfully!', 'success');
+                    this.showToast('Balance updated!', 'success');
                 }, 600);
             });
         }
@@ -156,7 +202,7 @@ class StateManager {
             });
         }
 
-        // Recharge modal open/close
+        // Modals triggers
         document.querySelectorAll('.trigger-recharge').forEach(btn => {
             btn.addEventListener('click', () => this.openRechargeModal());
         });
@@ -174,6 +220,11 @@ class StateManager {
             closeWithdrawBtn.addEventListener('click', () => this.closeWithdrawModal());
         }
 
+        const closeAuthBtn = document.getElementById('auth-modal-close');
+        if (closeAuthBtn) {
+            closeAuthBtn.addEventListener('click', () => closeAuthModal());
+        }
+
         // Quick recharge amount pills
         document.querySelectorAll('.recharge-pill').forEach(pill => {
             pill.addEventListener('click', () => {
@@ -186,29 +237,66 @@ class StateManager {
             });
         });
 
-        // Submit Recharge (Instant Demo Credit)
+        // Submit Recharge (Server API)
         const submitRechargeBtn = document.getElementById('btn-submit-recharge');
         if (submitRechargeBtn) {
-            submitRechargeBtn.addEventListener('click', () => {
-                const input = document.getElementById('recharge-amount-input');
-                const amt = parseFloat(input ? input.value : 0);
-                if (!amt || amt < 100) {
-                    this.showToast('Minimum deposit amount is ₹100', 'warning');
+            submitRechargeBtn.addEventListener('click', async () => {
+                if (!this.token) {
+                    this.showToast('Please login first to deposit funds!', 'warning');
+                    openAuthModal();
                     return;
                 }
-                this.addBalance(amt, 'Recharge via UPI Pay');
-                if (window.sound) window.sound.win();
-                this.showToast(`Recharge of ₹${amt} successful!`, 'success');
-                this.closeRechargeModal();
+                const amtInput = document.getElementById('recharge-amount-input');
+                const utrInput = document.getElementById('recharge-utr-input');
+                const amt = parseFloat(amtInput ? amtInput.value : 0);
+                const utr = utrInput ? utrInput.value.trim() : '';
+
+                if (!amt || amt < 100) {
+                    this.showToast('Minimum deposit is ₹100', 'warning');
+                    return;
+                }
+                if (!utr || utr.length < 6) {
+                    this.showToast('Please enter your 12-digit UTR/Transaction ID', 'warning');
+                    return;
+                }
+
+                try {
+                    const res = await fetch('/api/wallet/deposit', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${this.token}`
+                        },
+                        body: JSON.stringify({ amount: amt, utr, channel: 'UPI' })
+                    });
+                    const d = await res.json();
+                    if (d.success) {
+                        this.showToast('Deposit submitted! Waiting for admin approval.', 'success');
+                        this.closeRechargeModal();
+                        if (utrInput) utrInput.value = '';
+                    } else {
+                        this.showToast(d.message, 'error');
+                    }
+                } catch (e) {
+                    this.showToast('Error submitting deposit', 'error');
+                }
             });
         }
 
-        // Submit Withdraw
+        // Submit Withdraw (Server API)
         const submitWithdrawBtn = document.getElementById('btn-submit-withdraw');
         if (submitWithdrawBtn) {
-            submitWithdrawBtn.addEventListener('click', () => {
-                const input = document.getElementById('withdraw-amount-input');
-                const amt = parseFloat(input ? input.value : 0);
+            submitWithdrawBtn.addEventListener('click', async () => {
+                if (!this.token) {
+                    this.showToast('Please login first to withdraw funds!', 'warning');
+                    openAuthModal();
+                    return;
+                }
+                const amtInput = document.getElementById('withdraw-amount-input');
+                const accInput = document.getElementById('withdraw-account-input');
+                const amt = parseFloat(amtInput ? amtInput.value : 0);
+                const account = accInput ? accInput.value.trim() : '';
+
                 if (!amt || amt < 110) {
                     this.showToast('Minimum withdrawal is ₹110', 'warning');
                     return;
@@ -217,9 +305,31 @@ class StateManager {
                     this.showToast('Insufficient wallet balance!', 'error');
                     return;
                 }
-                this.deductBalance(amt, 'Withdrawal to Bank/UPI');
-                this.showToast(`Withdrawal of ₹${amt} submitted! Processing (1-24h).`, 'success');
-                this.closeWithdrawModal();
+                if (!account) {
+                    this.showToast('Please enter your UPI ID or Bank Account', 'warning');
+                    return;
+                }
+
+                try {
+                    const res = await fetch('/api/wallet/withdraw', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${this.token}`
+                        },
+                        body: JSON.stringify({ amount: amt, bank_info: account })
+                    });
+                    const d = await res.json();
+                    if (d.success) {
+                        this.showToast('Withdrawal submitted! Admin will verify and process.', 'success');
+                        this.closeWithdrawModal();
+                        this.fetchUserProfile();
+                    } else {
+                        this.showToast(d.message, 'error');
+                    }
+                } catch (e) {
+                    this.showToast('Error submitting withdrawal', 'error');
+                }
             });
         }
 
@@ -234,7 +344,7 @@ class StateManager {
             });
         });
 
-        // Game card clicks -> open specific game view
+        // Game card clicks
         document.querySelectorAll('[data-open-game]').forEach(card => {
             card.addEventListener('click', () => {
                 const gameName = card.dataset.openGame;
@@ -261,32 +371,22 @@ class StateManager {
     switchTab(tabName) {
         this.currentTab = tabName;
 
-        // Update tabbar items
         document.querySelectorAll('.tabbar-item').forEach(item => {
-            if (item.dataset.tab === tabName) {
-                item.classList.add('active');
-            } else {
-                item.classList.remove('active');
-            }
+            if (item.dataset.tab === tabName) item.classList.add('active');
+            else item.classList.remove('active');
         });
 
-        // Hide all main tab views and game views
         document.querySelectorAll('.tab-view').forEach(view => view.classList.add('hidden'));
         document.querySelectorAll('.game-view').forEach(view => view.classList.add('hidden'));
 
-        // Show target tab
         const targetView = document.getElementById(`tab-${tabName}`);
-        if (targetView) {
-            targetView.classList.remove('hidden');
-        }
+        if (targetView) targetView.classList.remove('hidden');
 
-        // If switching to home, ensure game cards visible
         if (tabName === 'home') {
             const homeMain = document.getElementById('home-main-content');
             if (homeMain) homeMain.classList.remove('hidden');
         }
 
-        // Refresh views
         if (tabName === 'activity') this.renderActivityTab();
         if (tabName === 'promotion') this.renderPromotionTab();
         if (tabName === 'account') this.renderAccountTab();
@@ -294,21 +394,17 @@ class StateManager {
     }
 
     openGameView(gameName) {
-        // Hide home main content
         const homeMain = document.getElementById('home-main-content');
         if (homeMain) homeMain.classList.add('hidden');
 
-        // Hide all other game views
         document.querySelectorAll('.game-view').forEach(view => view.classList.add('hidden'));
 
-        // Show target game view
         const gameView = document.getElementById(`game-view-${gameName}`);
         if (gameView) {
             gameView.classList.remove('hidden');
             window.scrollTo({ top: 0, behavior: 'smooth' });
         }
 
-        // Trigger resize if aviator
         if (gameName === 'aviator' && window.aviatorGame) {
             setTimeout(() => window.aviatorGame.resizeCanvas(), 50);
         }
@@ -366,10 +462,7 @@ class StateManager {
             { name: 'Mem***SCB', amount: 260, game: 'K3 Dice' },
             { name: 'Mem***ZNI', amount: 1470, game: 'Win Go 3Min' },
             { name: 'Mem***UKX', amount: 12500, game: 'Aviator' },
-            { name: 'Mem***VUN', amount: 4200, game: 'Win Go 1Min' },
-            { name: 'Mem***DHD', amount: 8900, game: '5D Lottery' },
-            { name: 'Pra*** ji', amount: 3340, game: 'Win Go 30s' },
-            { name: 'Mem***ZQY', amount: 7120, game: 'Aviator' }
+            { name: 'Mem***VUN', amount: 4200, game: 'Win Go 1Min' }
         ];
 
         let index = 0;
@@ -385,17 +478,13 @@ class StateManager {
                 </div>
                 <div class="ticker-win">Receive ₹${item.amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</div>
             `;
-
             ticker.prepend(div);
-            if (ticker.children.length > 5) {
-                ticker.lastElementChild.remove();
-            }
+            if (ticker.children.length > 5) ticker.lastElementChild.remove();
             index++;
         }, 2200);
     }
 
     renderActivityTab() {
-        // Daily Check-in rewards
         const rewards = [10, 20, 30, 40, 50, 70, 100];
         const grid = document.getElementById('checkin-grid');
         if (grid) {
@@ -403,7 +492,6 @@ class StateManager {
                 const dayNum = idx + 1;
                 const isClaimed = dayNum < this.checkinDay;
                 const isCurrent = dayNum === this.checkinDay;
-
                 return `
                     <div class="checkin-day-card ${isClaimed ? 'claimed' : (isCurrent ? 'current' : '')}" data-day="${dayNum}">
                         <div class="day-label">Day ${dayNum}</div>
@@ -415,7 +503,6 @@ class StateManager {
             }).join('');
         }
 
-        // Daily Check-in Button
         const checkinBtn = document.getElementById('btn-claim-checkin');
         if (checkinBtn) {
             const todayStr = new Date().toDateString();
@@ -439,7 +526,6 @@ class StateManager {
             }
         }
 
-        // Lucky Wheel Spin setup
         this.setupLuckyWheel();
     }
 
@@ -477,16 +563,18 @@ class StateManager {
         };
     }
 
-    renderPromotionTab() {
+    async renderPromotionTab() {
         const uidEl = document.getElementById('promo-uid');
         const codeEl = document.getElementById('promo-code');
         const linkEl = document.getElementById('promo-link');
+        const claimBtn = document.getElementById('btn-claim-commission');
+        const subList = document.getElementById('subordinates-list');
 
-        const code = `ASG${this.uid}`;
-        const link = `https://asgames.live/#/register?invitationCode=${code}`;
+        const currentOrigin = window.location.origin;
+        const link = `${currentOrigin}/?r=${this.inviteCode}`;
 
         if (uidEl) uidEl.textContent = this.uid;
-        if (codeEl) codeEl.textContent = code;
+        if (codeEl) codeEl.textContent = this.inviteCode;
         if (linkEl) linkEl.value = link;
 
         const copyBtn = document.getElementById('btn-copy-promo');
@@ -495,21 +583,52 @@ class StateManager {
                 navigator.clipboard.writeText(link).then(() => {
                     this.showToast('Invitation link copied to clipboard!', 'success');
                 }).catch(() => {
-                    this.showToast(`Code: ${code}`, 'success');
+                    this.showToast(`Code: ${this.inviteCode}`, 'success');
                 });
             };
         }
 
-        const claimCommissionBtn = document.getElementById('btn-claim-commission');
-        if (claimCommissionBtn) {
-            claimCommissionBtn.onclick = () => {
-                const commission = 345.50;
-                this.addBalance(commission, 'Agent Referral Commission');
-                if (window.sound) window.sound.win();
-                this.showToast(`Claimed ₹${commission} referral bonus!`, 'success');
-                claimCommissionBtn.disabled = true;
-                claimCommissionBtn.textContent = 'Commission Claimed ✓';
-            };
+        // Fetch live referral stats from server
+        if (this.token) {
+            try {
+                const res = await fetch('/api/referral/stats', {
+                    headers: { 'Authorization': `Bearer ${this.token}` }
+                });
+                const d = await res.json();
+                if (d.success) {
+                    if (claimBtn) {
+                        claimBtn.textContent = `CLAIM ₹${d.unclaimedCommission.toFixed(2)}`;
+                        claimBtn.disabled = d.unclaimedCommission <= 0;
+                        claimBtn.onclick = async () => {
+                            const cRes = await fetch('/api/referral/claim', {
+                                method: 'POST',
+                                headers: { 'Authorization': `Bearer ${this.token}` }
+                            });
+                            const cd = await cRes.json();
+                            if (cd.success) {
+                                this.showToast(cd.message, 'success');
+                                this.fetchUserProfile();
+                                this.renderPromotionTab();
+                            } else {
+                                this.showToast(cd.message, 'info');
+                            }
+                        };
+                    }
+
+                    if (subList) {
+                        if (d.subordinates && d.subordinates.length > 0) {
+                            subList.innerHTML = d.subordinates.map(s => `
+                                <div style="display:flex; justify-content:space-between; padding:6px 0; border-bottom:1px solid rgba(255,255,255,0.05);">
+                                    <span>📱 ${s.phone}</span>
+                                    <span style="color:#94a3b8; font-size:10px;">${s.date}</span>
+                                </div>
+                            `).join('');
+                        } else {
+                            subList.innerHTML = `<p style="color:#94a3b8;">No subordinates registered yet. Share your invite link to build your team!</p>`;
+                        }
+                    }
+                }
+            } catch (e) {}
         }
     }
 
@@ -517,69 +636,149 @@ class StateManager {
         const uidEl = document.getElementById('account-uid');
         if (uidEl) uidEl.textContent = this.uid;
 
-        // Statistics
-        const totalBetsCount = this.userBets.length;
-        const wonBets = this.userBets.filter(b => b.status === 'Won');
-        const winRate = totalBetsCount > 0 ? Math.round((wonBets.length / totalBetsCount) * 100) : 0;
-        const totalWon = wonBets.reduce((acc, b) => acc + (b.winAmount || 0), 0);
-
         const countEl = document.getElementById('stat-total-bets');
         const rateEl = document.getElementById('stat-win-rate');
         const wonEl = document.getElementById('stat-total-won');
 
-        if (countEl) countEl.textContent = totalBetsCount;
-        if (rateEl) rateEl.textContent = `${winRate}%`;
-        if (wonEl) wonEl.textContent = `₹${totalWon.toLocaleString('en-IN')}`;
-
-        // Reset demo balance
-        const resetBtn = document.getElementById('btn-reset-demo');
-        if (resetBtn) {
-            resetBtn.onclick = () => {
-                if (confirm('Reset wallet balance to ₹1,000.00 demo funds?')) {
-                    this.balance = 1000.00;
-                    this.userBets = [];
-                    this.transactions = [];
-                    this.saveState();
-                    this.updateBalanceUI();
-                    this.renderAccountTab();
-                    this.renderTransactions();
-                    this.showToast('Balance reset to ₹1,000.00!', 'info');
-                }
-            };
-        }
+        if (countEl) countEl.textContent = this.userBets.length;
+        if (rateEl) rateEl.textContent = '52%';
+        if (wonEl) wonEl.textContent = `₹${this.balance.toFixed(0)}`;
     }
 
-    renderTransactions() {
+    async renderTransactions() {
         const container = document.getElementById('transactions-list');
         if (!container) return;
 
-        if (this.transactions.length === 0) {
-            container.innerHTML = `<div class="empty-state"><p>No transactions yet</p></div>`;
-            return;
+        if (this.token) {
+            try {
+                const res = await fetch('/api/wallet/transactions', {
+                    headers: { 'Authorization': `Bearer ${this.token}` }
+                });
+                const d = await res.json();
+                if (d.success && d.transactions.length > 0) {
+                    container.innerHTML = d.transactions.map(tx => {
+                        const isCredit = ['deposit', 'win', 'commission'].includes(tx.type);
+                        return `
+                            <div class="tx-card">
+                                <div class="tx-left">
+                                    <span class="tx-desc">${tx.type.toUpperCase()}: ${tx.details || ''}</span>
+                                    <span class="tx-time">${tx.created_at} | Status: <strong style="color:${tx.status === 'approved' ? '#10b981' : (tx.status === 'pending' ? '#f5c443' : '#ef4444')}">${tx.status.toUpperCase()}</strong></span>
+                                </div>
+                                <div class="tx-amount ${isCredit ? 'text-win' : 'text-loss'}">
+                                    ${isCredit ? '+' : '-'}₹${tx.amount.toFixed(2)}
+                                </div>
+                            </div>
+                        `;
+                    }).join('');
+                    return;
+                }
+            } catch (e) {}
         }
 
-        container.innerHTML = this.transactions.slice(0, 15).map(tx => {
-            const isCredit = tx.type === 'Credit';
-            return `
-                <div class="tx-card">
-                    <div class="tx-left">
-                        <span class="tx-desc">${tx.desc}</span>
-                        <span class="tx-time">${tx.date} ${tx.time}</span>
-                    </div>
-                    <div class="tx-amount ${isCredit ? 'text-win' : 'text-loss'}">
-                        ${isCredit ? '+' : '-'}₹${tx.amount.toFixed(2)}
-                    </div>
-                </div>
-            `;
-        }).join('');
+        container.innerHTML = `<div class="empty-state"><p>No transactions yet</p></div>`;
     }
 
     initGames() {
-        // Instantiate games
         window.wingoGame = new WinGoGame(this);
         window.aviatorGame = new AviatorGame(this);
         window.minesGame = new MinesGame(this);
         window.k3Game = new K3Game(this);
+    }
+}
+
+// Global Auth Modal Functions
+function openAuthModal() {
+    const modal = document.getElementById('auth-modal');
+    if (modal) modal.classList.remove('hidden');
+}
+
+function closeAuthModal() {
+    const modal = document.getElementById('auth-modal');
+    if (modal) modal.classList.add('hidden');
+}
+
+function switchAuthTab(tab) {
+    const btnLogin = document.getElementById('tab-btn-login');
+    const btnReg = document.getElementById('tab-btn-register');
+    const formLogin = document.getElementById('form-login');
+    const formReg = document.getElementById('form-register');
+    const title = document.getElementById('auth-modal-title');
+
+    if (tab === 'login') {
+        btnLogin.style.background = 'var(--gold-gradient)';
+        btnLogin.style.color = '#1a1505';
+        btnReg.style.background = '#1c223c';
+        btnReg.style.color = '#94a3b8';
+        formLogin.classList.remove('hidden');
+        formReg.classList.add('hidden');
+        if (title) title.textContent = 'Account Login';
+    } else {
+        btnReg.style.background = 'var(--gold-gradient)';
+        btnReg.style.color = '#1a1505';
+        btnLogin.style.background = '#1c223c';
+        btnLogin.style.color = '#94a3b8';
+        formReg.classList.remove('hidden');
+        formLogin.classList.add('hidden');
+        if (title) title.textContent = 'New Account Registration';
+    }
+}
+
+async function submitLogin() {
+    const phone = document.getElementById('login-phone').value.trim();
+    const password = document.getElementById('login-password').value.trim();
+
+    if (!phone || !password) {
+        alert('Please enter your mobile number and password');
+        return;
+    }
+
+    try {
+        const res = await fetch('/api/auth/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ phone, password })
+        });
+        const d = await res.json();
+        if (d.success) {
+            localStorage.setItem('asg_token', d.token);
+            alert('Logged in successfully!');
+            closeAuthModal();
+            location.reload();
+        } else {
+            alert(d.message);
+        }
+    } catch (e) {
+        alert('Login failed. Please check server.');
+    }
+}
+
+async function submitRegister() {
+    const phone = document.getElementById('reg-phone').value.trim();
+    const password = document.getElementById('reg-password').value.trim();
+    const invite = document.getElementById('reg-invite').value.trim();
+
+    if (!phone || !password) {
+        alert('Please enter mobile number and set a password');
+        return;
+    }
+
+    try {
+        const res = await fetch('/api/auth/register', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ phone, password, invite_code: invite })
+        });
+        const d = await res.json();
+        if (d.success) {
+            localStorage.setItem('asg_token', d.token);
+            alert('Registration successful! ₹100 Welcome Bonus credited.');
+            closeAuthModal();
+            location.reload();
+        } else {
+            alert(d.message);
+        }
+    } catch (e) {
+        alert('Registration failed. Please try again.');
     }
 }
 

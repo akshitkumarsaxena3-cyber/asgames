@@ -1,72 +1,76 @@
-# 👑 ASGames - Color Prediction & Lottery Gaming Platform
+# 👑 ASGames - Full-Stack Color Prediction, Lottery & Gaming Platform
 
-A complete, high-performance, mobile-first replica and recreation of the **ASGames / ASG Game** lottery and color prediction platform (also known as 91 Club, Daman Games, Tiranga Games).
+A complete, production-ready, full-stack **Color Prediction, Lottery, Aviator, Mines & K3 Gaming Platform** built with high-performance responsive UI, real User Authentication, a 3-Tier Referral Affiliate Network, and an advanced **Super Admin Control Center** with live outcome rigging and house-edge optimization!
 
 ---
 
-## 🎮 Included Playable Games
+## 🌟 Major Highlights & Modules
 
+### 1. 👥 User Authentication (Login & Register)
+- **Mobile Number & Password Login**.
+- **Registration with Referral / Invite Code** (e.g. `ASG84920`).
+- Auto-fills referral code from shareable invitation links (`?r=ASG...`).
+- ₹100 Welcome Signup Bonus credited automatically upon registration.
+- Persistent session authentication tokens.
+
+### 2. 💰 3-Tier Referral Affiliate Network ("Get ₹500" Promotion)
+- Every user gets a unique **Invitation Code** and 1-click shareable invite link.
+- **3 Tiers of Perpetual Turnover Rebates**:
+  - 🥇 **Tier 1 (Direct Subordinates):** **0.6%** commission on all betting turnover.
+  - 🥈 **Tier 2 (Level 2 Subordinates):** **0.18%** commission.
+  - 🥉 **Tier 3 (Level 3 Subordinates):** **0.05%** commission.
+- **Live Team Statistics**:
+  - Live count of Tier 1, Tier 2, and Tier 3 subordinates.
+  - Total Team Turnover tracker.
+  - Live Unclaimed Commission counter with **1-Click "Claim Cash"** button that transfers earned commissions straight into wallet balance!
+  - List of joined team members with registration dates.
+
+### 3. ⚙️ Super Admin Control Center (`/admin`)
+- Secure password-protected dashboard (Default password: `admin123`).
+- **🎮 Win Go Live Command & Outcome Rigging**:
+  - **Live Bet Board**: Real-time wager distribution on Green, Violet, Red, Big, Small, and Numbers 0–9.
+  - **1-Click Manual Outcome Force**: Click any number (0 to 9) to force the next round to land on that number!
+  - **📉 Smart House-Edge Mode**: Automatically tests all possible numbers (0–9) and selects the number that results in the lowest total payout, guaranteeing maximum platform profit!
+  - **🎲 Fair Random RNG Mode**: Pure unbiased random lottery draw.
+- **👥 Player Database Manager**:
+  - View all registered players, phone numbers, wallet balances, invite codes, and referral uplines.
+  - **Add or Deduct Balance (+/- ₹)** with reason.
+  - **1-Click Ban / Unban** player accounts.
+- **💳 Finance Approval Queue**:
+  - **Pending Deposits Queue**: Verify 12-digit UTR / transaction details -> 1-Click "Approve" (auto-credits user balance) or "Reject".
+  - **Pending Withdrawals Queue**: Verify payout details -> 1-Click "Approve & Paid" or "Reject & Refund" (restores user balance).
+
+### 4. 🎮 Playable Games
 1. **Win Go (Color Prediction & Number Lottery)**:
-   - Modes: `Win Go 30s`, `Win Go 1Min`, `Win Go 3Min`, `Win Go 5Min`
-   - Real-time countdown timer with urgent beeping in the last 5 seconds.
-   - Betting choices:
-     - 🟢 **Green** (x2, x1.5 with 5)
-     - 🟣 **Violet** (x4.5 on 0 and 5)
-     - 🔴 **Red** (x2, x1.5 with 0)
-     - 🔢 **Numbers 0–9** (x9 direct payout)
-     - 🟡 **Big** (5–9) / 🔵 **Small** (0–4) (x2 payout)
-   - Slide-up betting drawer with Contract Money (`₹1`, `₹10`, `₹100`, `₹1,000`), Multipliers (`x1`–`x100`), and stepper.
-   - Draw reveal animation with rolling colored balls.
-   - Live History, Parity Trend Chart, and "My Bets" record tracking.
-
+   - Synchronized server clock (30s, 1Min, 3Min, 5Min rounds).
+   - Betting on Green (2x/1.5x), Violet (4.5x), Red (2x/1.5x), Numbers 0–9 (9x), Big/Small (2x).
+   - Betting freeze overlay in the last 5 seconds.
+   - Parity records table, Trend chart, and "My Bets" history.
 2. **Aviator (Crash Multiplier Game)**:
-   - High-tech canvas radar with animated red airplane.
-   - Multiplier climbs exponentially from `1.00x` up to `100x+`.
-   - Place Bet & **Cash Out** dynamically before the plane crashes / flies away!
-   - Real-time past multiplier history pills.
-
+   - Soaring jet plane radar with real-time accelerating multiplier (1.00x to 100x+).
+   - Place bet & dynamic cashout before takeoff crashes.
 3. **Mines (5x5 Gem Hunt)**:
    - 25 tiles with configurable mine counts (1, 3, 5, 10, 24).
-   - Flip tiles to uncover emerald diamonds 💎, increasing your multiplier ladder.
-   - Avoid hidden bombs 💣 or cash out anytime to bank profits!
-
-4. **K3 Lottery (3-Dice Shaker)**:
-   - Acrylic cup with animated shaking physics.
-   - 3 3D-styled dice with dot patterns.
-   - Predict Total Sum (3–18), Big / Small, Odd / Even.
+   - Uncover emerald diamonds 💎, climb multiplier ladder, avoid bombs 💣.
+4. **K3 Dice Lottery**:
+   - 3 3D-styled dice in an animated shaker cup.
+   - Predict Sum (3–18), Big / Small, Odd / Even.
 
 ---
 
-## 💎 Platform & Economy Features
+## 🚀 How to Run
 
-- **Wallet System**:
-  - Live balance counter with instant refresh animation.
-  - **Deposit / Recharge Modal**: Demo top-ups (₹100, ₹500, ₹1,000, ₹5,000) with simulated instant UPI settlement.
-  - **Withdraw Modal**: Enter withdrawal amount, select verified bank/UPI account, simulated 1–24h processing.
-- **Activity Center**:
-  - **7-Day Attendance Check-in**: Daily claimable cash bonuses (Day 1 ₹10 up to Day 7 ₹100).
-  - **Daily Lucky Roulette**: 8-segment animated prize wheel with free daily spin.
-- **Promotion & Referral ("Get ₹500")**:
-  - Unique Invitation Code & 1-click shareable invite link.
-  - 3-tier commission ladder (Tier 1: 0.6%, Tier 2: 0.18%, Tier 3: 0.05%).
-  - Claimable agent commission.
-- **Account & VIP Club**:
-  - Platinum VIP badge, User ID, win rate %, total bets, total profit stats.
-  - Reset Demo Balance button to restore ₹1,000 anytime.
-- **Web Audio Engine**:
-  - 100% offline, zero-asset synthesized audio effects (tick-tock, urgent beeps, coin drop, win fanfare, explosion, dice roll).
+### Local Deployment
+```bash
+# 1. Install dependencies
+npm install
 
----
+# 2. Start server
+npm start
+# or double click run.bat
+```
+- Open Player App: `http://localhost:10000`
+- Open Super Admin Panel: `http://localhost:10000/admin` (Password: `admin123`)
 
-## 🚀 How to Run (1-Click Start)
-
-### Option 1: Direct Browser Launch
-Simply **double-click `index.html`** in the `ASGames_Game` folder. It runs instantly in Google Chrome, Microsoft Edge, Brave, or any modern browser.
-
-### Option 2: Local Web Server (Recommended)
-Double-click **`run.bat`**. It will automatically start a local Python HTTP server on port 8000 and open `http://localhost:8000` in your browser.
-
----
-
-## 📱 Mobile Friendly
-Designed specifically with a centered mobile phone frame on desktop screens and 100% full-screen responsive touch layout on smartphones.
+### Deploy to Render / Cloud
+Already configured with `package.json` and `server.js` for instant 1-click deployment on Render, Railway, Heroku, or VPS!

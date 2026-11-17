@@ -27,11 +27,57 @@
             </div>
         </div>
 
+        <!-- User Authentication Modal (Login / Register) -->
+        <div id="auth-modal" class="center-modal hidden">
+            <div class="modal-dialog">
+                <div class="modal-header">
+                    <h3 id="auth-modal-title" style="color:#fae59f; font-size:16px; font-weight:700;">Account Login</h3>
+                    <button id="auth-modal-close" class="btn-drawer-close">&times;</button>
+                </div>
+                <!-- Auth Tabs -->
+                <div style="display:flex; gap:10px; margin-bottom:16px; border-bottom:1px solid #29345e; padding-bottom:8px;">
+                    <button id="tab-btn-login" class="nav-btn active" style="flex:1; padding:8px; font-size:13px; font-weight:700; background:var(--gold-gradient); color:#1a1505; border:none; border-radius:6px; cursor:pointer;" onclick="switchAuthTab('login')">LOGIN</button>
+                    <button id="tab-btn-register" class="nav-btn" style="flex:1; padding:8px; font-size:13px; font-weight:700; background:#1c223c; color:#94a3b8; border:1px solid #29345e; border-radius:6px; cursor:pointer;" onclick="switchAuthTab('register')">REGISTER</button>
+                </div>
+
+                <!-- Login Form -->
+                <div id="form-login">
+                    <div class="input-group">
+                        <label class="input-label">Mobile Number</label>
+                        <input type="text" id="login-phone" class="form-input" placeholder="Enter 10-digit mobile number">
+                    </div>
+                    <div class="input-group">
+                        <label class="input-label">Password</label>
+                        <input type="password" id="login-password" class="form-input" placeholder="Enter password">
+                    </div>
+                    <button id="btn-submit-login" class="btn-full btn-gold" onclick="submitLogin()">LOGIN</button>
+                </div>
+
+                <!-- Register Form -->
+                <div id="form-register" class="hidden">
+                    <div class="input-group">
+                        <label class="input-label">Mobile Number</label>
+                        <input type="text" id="reg-phone" class="form-input" placeholder="Enter 10-digit mobile number">
+                    </div>
+                    <div class="input-group">
+                        <label class="input-label">Set Password</label>
+                        <input type="password" id="reg-password" class="form-input" placeholder="Set your password">
+                    </div>
+                    <div class="input-group">
+                        <label class="input-label">Invitation / Referral Code (Required or Optional)</label>
+                        <input type="text" id="reg-invite" class="form-input" placeholder="e.g. ASG84920">
+                    </div>
+                    <p style="font-size:11px; color:#10b981; margin-bottom:12px;">🎁 Get ₹100 Welcome Bonus instantly on registration!</p>
+                    <button id="btn-submit-register" class="btn-full btn-gold" onclick="submitRegister()">REGISTER & CLAIM ₹100</button>
+                </div>
+            </div>
+        </div>
+
         <!-- Recharge / Deposit Modal -->
         <div id="recharge-modal" class="center-modal hidden">
             <div class="modal-dialog">
                 <div class="modal-header">
-                    <h3 style="color:#fae59f; font-size:16px; font-weight:700;">Deposit Funds (Demo)</h3>
+                    <h3 style="color:#fae59f; font-size:16px; font-weight:700;">Deposit Funds (Instant UPI)</h3>
                     <button id="recharge-modal-close" class="btn-drawer-close">&times;</button>
                 </div>
                 <div class="input-group">
@@ -47,12 +93,17 @@
                     <input type="number" id="recharge-amount-input" class="form-input" value="500" placeholder="Enter amount">
                 </div>
                 <div class="input-group">
-                    <label class="input-label">Payment Channel</label>
-                    <div class="recharge-pill active" style="text-align:left; padding:10px 14px;">
-                        ⚡ UPI Pay (Google Pay / PhonePe / Paytm / Instant)
+                    <label class="input-label">Official Deposit UPI ID</label>
+                    <div style="background:#0f1322; border:1px solid #2e3860; padding:10px 14px; border-radius:8px; display:flex; justify-content:space-between; align-items:center;">
+                        <span style="font-weight:700; color:#fae59f;">asgames@upi</span>
+                        <button class="btn-action" style="background:#10b981; color:#fff;" onclick="navigator.clipboard.writeText('asgames@upi'); alert('UPI ID copied!');">Copy</button>
                     </div>
                 </div>
-                <button id="btn-submit-recharge" class="btn-full btn-gold">CONFIRM DEPOSIT</button>
+                <div class="input-group">
+                    <label class="input-label">12-Digit UTR / Transaction ID (Required)</label>
+                    <input type="text" id="recharge-utr-input" class="form-input" placeholder="Paste UTR after UPI payment">
+                </div>
+                <button id="btn-submit-recharge" class="btn-full btn-gold">SUBMIT DEPOSIT FOR APPROVAL</button>
             </div>
         </div>
 
@@ -64,8 +115,8 @@
                     <button id="withdraw-modal-close" class="btn-drawer-close">&times;</button>
                 </div>
                 <div class="input-group">
-                    <label class="input-label">Wallet Balance</label>
-                    <div class="user-balance-val" style="font-size:18px; font-weight:700; color:#ffd875;">₹1,000.00</div>
+                    <label class="input-label">Available Balance</label>
+                    <div class="user-balance-val" style="font-size:18px; font-weight:700; color:#ffd875;">₹100.00</div>
                 </div>
                 <div class="input-group">
                     <label class="input-label">Withdrawal Amount (Min ₹110)</label>
@@ -73,10 +124,10 @@
                 </div>
                 <div class="input-group">
                     <label class="input-label">Bank Account / UPI ID</label>
-                    <input type="text" class="form-input" value="user@okhdfcbank (Verified)" readonly>
+                    <input type="text" id="withdraw-account-input" class="form-input" placeholder="e.g. 9876543210@paytm or IFSC + Acc">
                 </div>
-                <p style="font-size:11px; color:#94a3b8; margin-bottom:14px;">* Withdrawals are processed within 1-24 hours. 24/7 instant settlement.</p>
-                <button id="btn-submit-withdraw" class="btn-full btn-gold">SUBMIT WITHDRAWAL</button>
+                <p style="font-size:11px; color:#94a3b8; margin-bottom:14px;">* Admin verifies and processes payouts within 1-24 hours.</p>
+                <button id="btn-submit-withdraw" class="btn-full btn-gold">REQUEST WITHDRAWAL</button>
             </div>
         </div>
 
@@ -89,6 +140,7 @@
                     <span class="brand-badge">PRO</span>
                 </div>
                 <div class="header-actions">
+                    <button id="btn-auth-trigger" class="btn-deposit" style="padding:4px 10px; font-size:11px;" onclick="openAuthModal()">Login / Register</button>
                     <div class="ping-tag"><span>●</span> 19ms</div>
                     <button id="sound-toggle-btn" class="icon-btn" title="Toggle Sound">🔊</button>
                 </div>
@@ -734,6 +786,14 @@
                     <p>🥉 <strong>Tier 3 Subordinates:</strong> 0.05% on all turnover</p>
                 </div>
             </div>
+
+            <!-- Downline Team Subordinates -->
+            <div class="activity-card">
+                <div class="section-title" style="margin-bottom:10px;">👥 My Invited Subordinates</div>
+                <div id="subordinates-list" style="font-size:12px; color:#94a3b8;">
+                    No subordinates yet. Share your invite link above!
+                </div>
+            </div>
         </main>
 
         <!-- ============================================== -->
@@ -791,6 +851,10 @@
 
             <!-- Menu Rows -->
             <div class="menu-list-card">
+                <div class="menu-item-row" onclick="window.location.href='/admin'" style="background:rgba(245,196,67,0.1); border-left:3px solid var(--primary-gold);">
+                    <span style="color:#fae59f; font-weight:700;">⚙️ Super Admin Control Center</span>
+                    <span style="color:#fae59f;">›</span>
+                </div>
                 <div class="menu-item-row" onclick="window.stateManager.openRechargeModal()">
                     <span>💰 Deposit / Recharge</span>
                     <span>›</span>

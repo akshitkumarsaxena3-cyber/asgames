@@ -70,6 +70,22 @@ class WinGoGame {
 
     init() {
         this.startTimer();
+
+        // Server synchronization
+        setInterval(async () => {
+            try {
+                const res = await fetch('/api/game/current');
+                const d = await res.json();
+                if (d.success && this.currentMode === '30s') {
+                    this.currentPeriod = d.period;
+                    this.remainingSeconds = d.remainingSeconds;
+                    this.isLocked = d.isLocked;
+                    this.updateTimerDisplay();
+                    if (this.isLocked) this.handleBettingLock();
+                    else this.handleBettingUnlock();
+                }
+            } catch (e) {}
+        }, 3000);
     }
 
     switchMode(mode) {
@@ -340,7 +356,7 @@ class WinGoGame {
         }
     }
 
-    confirmBet() {
+    async confirmBet() {
         if (!this.pendingBet) return;
         if (this.isLocked) {
             this.sm.showToast('Time is over for this issue! Waiting for next round.', 'warning');
@@ -351,6 +367,32 @@ class WinGoGame {
         if (this.sm.balance < totalBet) {
             this.sm.showToast('Insufficient balance! Please recharge.', 'error');
             return;
+        }
+
+        // If user is authenticated, sync bet with backend server
+        if (this.sm.token) {
+            try {
+                const res = await fetch('/api/game/bet', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${this.sm.token}`
+                    },
+                    body: JSON.stringify({
+                        period_id: this.currentPeriod,
+                        select_type: this.pendingBet.type,
+                        select_value: this.pendingBet.value,
+                        amount: totalBet
+                    })
+                });
+                const d = await res.json();
+                if (!d.success) {
+                    this.sm.showToast(d.message, 'error');
+                    return;
+                }
+            } catch (e) {
+                console.log('Server bet sync offline, falling back to local simulation:', e);
+            }
         }
 
         // Deduct balance
