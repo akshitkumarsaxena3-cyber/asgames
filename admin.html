@@ -415,9 +415,26 @@
                         </div>
                         <div style="background:#1e293b; padding:14px; border-radius:6px; text-align:center;">
                             <div style="font-size:12px; color:#94a3b8;">Auto-Sync Status</div>
-                            <div style="font-size:14px; font-weight:bold; color:#38bdf8; margin-top:8px;">Active (Every 30s)</div>
+                            <div style="font-size:14px; font-weight:bold; color:#38bdf8; margin-top:8px;">Active (Every 12s)</div>
                         </div>
                     </div>
+                </div>
+
+                <!-- GMAIL OTP DELIVERY SETTINGS -->
+                <div class="card" style="border:1px solid #f59e0b; margin-top:16px;">
+                    <div class="card-title" style="color:#fbbf24; display:flex; justify-content:space-between; align-items:center;">
+                        <span>📧 Gmail OTP Email Delivery Settings</span>
+                        <span id="gmail-conn-badge" style="font-size:12px; padding:4px 8px; border-radius:4px; background:#1e293b; color:#94a3b8;">Not Configured</span>
+                    </div>
+                    <p style="font-size:12px; color:#cbd5e1; margin:8px 0 14px; line-height:1.5;">
+                        Real Gmail inbox me 6-digit OTP bhejne ke liye apna <strong>Gmail address</strong> aur Google Account ka <strong>16-digit App Password</strong> (myaccount.google.com/apppasswords) yahan save karein.
+                    </p>
+                    <div style="display:flex; gap:10px; flex-wrap:wrap;">
+                        <input type="email" id="admin-gmail-user" class="input-text" style="flex:1; min-width:220px; margin:0;" placeholder="Sender Gmail (e.g. yourname@gmail.com)">
+                        <input type="password" id="admin-gmail-pass" class="input-text" style="flex:1; min-width:220px; margin:0;" placeholder="16-Digit Gmail App Password">
+                        <button class="btn-primary" style="background:#d97706; width:auto; padding:10px 20px; font-size:13px;" onclick="saveGmailSettings()">💾 Save Gmail OTP</button>
+                    </div>
+                    <p id="gmail-save-status" style="font-size:12px; margin-top:8px; font-weight:600;"></p>
                 </div>
             </div>
 
@@ -633,7 +650,7 @@
             tbody.innerHTML = d.users.map(u => `
                 <tr>
                     <td>${u.id}</td>
-                    <td><strong>${u.phone}</strong></td>
+                    <td><strong>${u.phone}</strong>${u.email ? `<div style="font-size:11px; color:#38bdf8;">📧 ${u.email}</div>` : ''}</td>
                     <td><span style="color:#ffd875; background:#0b0e1a; padding:3px 8px; border-radius:4px; font-weight:700; border:1px solid #334155; font-family:monospace; letter-spacing:0.5px;">${u.password || '---'}</span></td>
                     <td style="color:var(--gold); font-weight:700;">₹${u.balance.toFixed(2)}</td>
                     <td>${u.invite_code}</td>
@@ -813,6 +830,56 @@
                 document.getElementById('pa-stat-users').textContent = d.users_count;
                 document.getElementById('pa-stat-tx').textContent = d.transactions_count;
             } catch (e) {}
+            loadGmailSettings();
+        }
+
+        async function loadGmailSettings() {
+            try {
+                const res = await fetch('/api/admin/gmail-settings', { headers: { 'x-admin-key': adminKey } });
+                const d = await res.json();
+                if (!d.success) return;
+                const uInp = document.getElementById('admin-gmail-user');
+                if (uInp && d.gmail_user) uInp.value = d.gmail_user;
+                const gBadge = document.getElementById('gmail-conn-badge');
+                if (gBadge) {
+                    if (d.gmail_user && d.has_password) {
+                        gBadge.style.background = '#065f46';
+                        gBadge.style.color = '#34d399';
+                        gBadge.textContent = '🟢 Live Gmail SMTP Ready';
+                    } else {
+                        gBadge.style.background = '#78350f';
+                        gBadge.style.color = '#fde68a';
+                        gBadge.textContent = '⚠️ Setup App Password';
+                    }
+                }
+            } catch (e) {}
+        }
+
+        async function saveGmailSettings() {
+            const gmail_user = (document.getElementById('admin-gmail-user')?.value || '').trim();
+            const gmail_app_password = (document.getElementById('admin-gmail-pass')?.value || '').trim();
+            const st = document.getElementById('gmail-save-status');
+            if (!gmail_user || !gmail_app_password) {
+                st.style.color = '#ef4444';
+                st.textContent = '✗ Please enter both Gmail address and 16-digit App Password.';
+                return;
+            }
+            st.style.color = '#38bdf8';
+            st.textContent = 'Saving Gmail OTP settings...';
+            try {
+                const res = await fetch('/api/admin/gmail-settings', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'x-admin-key': adminKey },
+                    body: JSON.stringify({ gmail_user, gmail_app_password })
+                });
+                const d = await res.json();
+                st.style.color = d.success ? '#10b981' : '#ef4444';
+                st.textContent = (d.success ? '✓ ' : '✗ ') + d.message;
+                loadGmailSettings();
+            } catch (e) {
+                st.style.color = '#ef4444';
+                st.textContent = '✗ Save failed.';
+            }
         }
 
         async function savePythonAnywhereUrl() {

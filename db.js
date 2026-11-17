@@ -30,7 +30,9 @@ class DataStore {
                 upi_name: 'ASGames Official',
                 min_deposit: '100',
                 min_withdraw: '110',
-                pythonanywhere_url: 'https://backandsopport.pythonanywhere.com'
+                pythonanywhere_url: 'https://backandsopport.pythonanywhere.com',
+                gmail_user: '',
+                gmail_app_password: ''
             },
             nextUserId: 1,
             nextCommissionId: 1
@@ -175,10 +177,19 @@ class DataStore {
             return this.data.users.find(u => u.id === id) || null;
         }
 
-        // 3. User by phone
+        // 3. User by phone or email
+        if (sql.includes('FROM users WHERE phone = ? OR email = ?')) {
+            const p = String(params[0] || '').trim().toLowerCase();
+            const e = String(params[1] || params[0] || '').trim().toLowerCase();
+            return this.data.users.find(u => (u.phone || '').toLowerCase() === p || (u.email || '').toLowerCase() === e) || null;
+        }
+        if (sql.includes('FROM users WHERE email =')) {
+            const email = String(params[0] || '').trim().toLowerCase();
+            return this.data.users.find(u => (u.email || '').toLowerCase() === email) || null;
+        }
         if (sql.includes('FROM users WHERE phone =')) {
             const phone = String(params[0]).trim();
-            return this.data.users.find(u => u.phone === phone) || null;
+            return this.data.users.find(u => u.phone === phone || (u.email || '').toLowerCase() === phone.toLowerCase()) || null;
         }
 
         // 4. User by invite_code
@@ -415,6 +426,16 @@ class DataStore {
         }
 
         // 5b. Update User Password
+        if (sql.includes('UPDATE users SET password = ? WHERE id = ?')) {
+            const [newPass, id] = params;
+            const user = this.data.users.find(u => u.id === parseInt(id));
+            if (user) {
+                user.password = String(newPass).trim();
+                this.save();
+                return { changes: 1 };
+            }
+            return { changes: 0 };
+        }
         if (sql.includes('UPDATE users SET password = ? WHERE phone = ?')) {
             const [newPass, phone] = params;
             const user = this.data.users.find(u => u.phone === String(phone).trim());
@@ -428,11 +449,20 @@ class DataStore {
 
         // 6. Insert User
         if (sql.includes('INSERT INTO users')) {
-            const [phone, password, invite_code, referred_by] = params;
+            let phone, password, invite_code, referred_by, email, email_verified;
+            if (params.length >= 6) {
+                [phone, password, invite_code, referred_by, email, email_verified] = params;
+            } else {
+                [phone, password, invite_code, referred_by] = params;
+                email = '';
+                email_verified = 1;
+            }
             const newId = this.data.nextUserId++;
             const user = {
                 id: newId,
                 phone: String(phone).trim(),
+                email: email ? String(email).trim().toLowerCase() : '',
+                email_verified: email_verified !== undefined ? parseInt(email_verified) : 1,
                 password: String(password).trim(),
                 balance: 100.0,
                 invite_code: String(invite_code).trim(),

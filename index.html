@@ -81,6 +81,20 @@
                     </div>
 
                     <div class="bdg-field-group">
+                        <label class="bdg-label"><span class="bdg-icon">📧</span> <span data-i18n="gmail_label">Gmail (For One-Time OTP)</span></label>
+                        <div class="bdg-phone-row">
+                            <input type="email" id="reg-email" class="bdg-input" placeholder="Enter your Gmail (e.g. name@gmail.com)" data-i18n-ph="ph_gmail">
+                            <button type="button" id="btn-reg-send-otp" class="bdg-otp-btn" onclick="sendAuthOtp('register')" data-i18n="btn_send_otp">Send OTP</button>
+                        </div>
+                        <p id="reg-otp-hint" style="font-size:11px; color:#34d399; margin-top:5px;"></p>
+                    </div>
+
+                    <div class="bdg-field-group">
+                        <label class="bdg-label"><span class="bdg-icon">🔢</span> <span data-i18n="otp_label">Gmail OTP Code</span></label>
+                        <input type="text" id="reg-otp" class="bdg-input" maxlength="6" placeholder="Enter 6-digit OTP from Gmail" data-i18n-ph="ph_otp">
+                    </div>
+
+                    <div class="bdg-field-group">
                         <label class="bdg-label"><span class="bdg-icon">🔒</span> <span data-i18n="set_password">Set password</span></label>
                         <div class="bdg-pass-wrap">
                             <input type="password" id="reg-password" class="bdg-input" placeholder="Set password" data-i18n-ph="ph_set_pass">
@@ -157,11 +171,17 @@
                 <!-- Forgot Password Form -->
                 <div id="form-forgot" class="bdg-auth-body hidden">
                     <div class="bdg-field-group">
-                        <label class="bdg-label"><span class="bdg-icon">📱</span> <span data-i18n="phone_number">Phone number</span></label>
+                        <label class="bdg-label"><span class="bdg-icon">📧</span> <span data-i18n="phone_or_gmail">Registered Phone or Gmail</span></label>
                         <div class="bdg-phone-row">
-                            <select class="bdg-cc-select"><option value="+91">+91</option></select>
-                            <input type="tel" id="forgot-phone" class="bdg-input" placeholder="Please enter the phone number" data-i18n-ph="ph_phone">
+                            <input type="text" id="forgot-phone" class="bdg-input" placeholder="Enter Phone or Gmail" data-i18n-ph="ph_phone_gmail">
+                            <button type="button" id="btn-forgot-send-otp" class="bdg-otp-btn" onclick="sendAuthOtp('forgot')" data-i18n="btn_send_otp">Send OTP</button>
                         </div>
+                        <p id="forgot-otp-hint" style="font-size:11px; color:#34d399; margin-top:5px;"></p>
+                    </div>
+
+                    <div class="bdg-field-group">
+                        <label class="bdg-label"><span class="bdg-icon">🔢</span> <span data-i18n="otp_label">Gmail OTP Code</span></label>
+                        <input type="text" id="forgot-otp" class="bdg-input" maxlength="6" placeholder="Enter 6-digit OTP from Gmail" data-i18n-ph="ph_otp">
                     </div>
 
                     <div class="bdg-field-group">

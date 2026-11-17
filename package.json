@@ -17,6 +17,7 @@
   "author": "ASGames",
   "license": "ISC",
   "dependencies": {
-    "express": "^4.19.2"
+    "express": "^4.19.2",
+    "nodemailer": "^10.6.0"
   }
 }

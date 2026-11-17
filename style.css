@@ -3382,3 +3382,30 @@ body {
 .float-rail-btn:active {
     transform: scale(0.9);
 }
+
+
+/* Gmail Send OTP Gold Button */
+.bdg-otp-btn {
+    min-width: 96px;
+    height: 46px;
+    padding: 0 12px;
+    border-radius: 10px;
+    border: none;
+    background: linear-gradient(180deg, #fae59f 0%, #c4933f 100%);
+    color: #4a2a04;
+    font-size: 12px;
+    font-weight: 800;
+    cursor: pointer;
+    white-space: nowrap;
+    box-shadow: 0 4px 12px rgba(196, 147, 63, 0.35);
+    transition: transform 0.12s, opacity 0.2s;
+}
+
+.bdg-otp-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.bdg-otp-btn:active:not(:disabled) {
+    transform: scale(0.95);
+}

@@ -833,7 +833,14 @@ const I18N_DICT = {
         nav_account: 'Account',
         fdb_title: 'Extra first deposit bonus',
         fdb_sub: 'Each account can only receive rewards once',
-        fdb_no_remind: 'No more reminders today'
+        fdb_no_remind: 'No more reminders today',
+        gmail_label: 'Gmail (For One-Time OTP)',
+        otp_label: 'Gmail OTP Code',
+        btn_send_otp: 'Send OTP',
+        phone_or_gmail: 'Registered Phone or Gmail',
+        ph_gmail: 'Enter your Gmail (e.g. name@gmail.com)',
+        ph_otp: 'Enter 6-digit OTP from Gmail',
+        ph_phone_gmail: 'Enter Phone or Gmail'
     },
     hi: {
         reg_title: 'अपना फ़ोन रजिस्टर करें',
@@ -871,7 +878,14 @@ const I18N_DICT = {
         nav_account: 'अकाउंट',
         fdb_title: 'एक्स्ट्रा फर्स्ट डिपॉजिट बोनस',
         fdb_sub: 'प्रत्येक अकाउंट को यह इनाम केवल एक बार मिल सकता है',
-        fdb_no_remind: 'आज दोबारा न दिखाएं'
+        fdb_no_remind: 'आज दोबारा न दिखाएं',
+        gmail_label: 'जीमेल (एक बार OTP वेरिफिकेशन के लिए)',
+        otp_label: 'जीमेल OTP कोड',
+        btn_send_otp: 'OTP भेजें',
+        phone_or_gmail: 'रजिस्टर्ड फ़ोन या जीमेल',
+        ph_gmail: 'अपना जीमेल डालें (जैसे name@gmail.com)',
+        ph_otp: 'जीमेल पर आया 6 अंकों का OTP डालें',
+        ph_phone_gmail: 'रजिस्टर्ड फ़ोन नंबर या जीमेल डालें'
     }
 };
 
@@ -965,13 +979,78 @@ function switchAuthTab(tab) {
     }
 }
 
+async function sendAuthOtp(purpose) {
+    const isReg = (purpose === 'register');
+    const btn = document.getElementById(isReg ? 'btn-reg-send-otp' : 'btn-forgot-send-otp');
+    const hint = document.getElementById(isReg ? 'reg-otp-hint' : 'forgot-otp-hint');
+    const emailVal = isReg ? (document.getElementById('reg-email')?.value || '').trim() : '';
+    const phoneVal = !isReg ? (document.getElementById('forgot-phone')?.value || '').trim() : '';
+
+    if (isReg && (!emailVal || !emailVal.includes('@'))) {
+        alert(currentLang === 'hi' ? 'कृपया सही Gmail पता डालें (जैसे name@gmail.com)' : 'Please enter a valid Gmail address first.');
+        return;
+    }
+    if (!isReg && !phoneVal) {
+        alert(currentLang === 'hi' ? 'कृपया अपना रजिस्टर्ड फ़ोन नंबर या जीमेल डालें' : 'Please enter your registered phone number or Gmail.');
+        return;
+    }
+
+    if (btn) { btn.disabled = true; btn.textContent = '...'; }
+    if (hint) { hint.style.color = '#fae59f'; hint.textContent = 'Sending OTP to Gmail...'; }
+
+    try {
+        const res = await fetch('/api/auth/send-otp', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ purpose, email: emailVal, phone: phoneVal })
+        });
+        const d = await res.json();
+        if (d.success) {
+            if (hint) {
+                hint.style.color = '#34d399';
+                hint.textContent = d.demo_otp
+                    ? `✓ OTP: ${d.demo_otp} (Sent for ${d.masked_email})`
+                    : `✓ OTP sent to ${d.masked_email}! Check Gmail Inbox/Spam.`;
+            }
+            if (d.demo_otp) {
+                const otpInp = document.getElementById(isReg ? 'reg-otp' : 'forgot-otp');
+                if (otpInp && !otpInp.value) otpInp.placeholder = `OTP: ${d.demo_otp}`;
+            }
+            // Start 45s countdown
+            let secs = 45;
+            const iv = setInterval(() => {
+                secs--;
+                if (btn) btn.textContent = `${secs}s`;
+                if (secs <= 0) {
+                    clearInterval(iv);
+                    if (btn) {
+                        btn.disabled = false;
+                        btn.textContent = currentLang === 'hi' ? 'OTP भेजें' : 'Send OTP';
+                    }
+                }
+            }, 1000);
+        } else {
+            if (hint) { hint.style.color = '#ef4444'; hint.textContent = '✗ ' + (d.message || 'Failed to send OTP'); }
+            if (btn) { btn.disabled = false; btn.textContent = currentLang === 'hi' ? 'OTP भेजें' : 'Send OTP'; }
+        }
+    } catch (e) {
+        if (hint) { hint.style.color = '#ef4444'; hint.textContent = '✗ Network error sending OTP'; }
+        if (btn) { btn.disabled = false; btn.textContent = currentLang === 'hi' ? 'OTP भेजें' : 'Send OTP'; }
+    }
+}
+
 async function submitForgotPassword() {
     const phone = (document.getElementById('forgot-phone')?.value || '').trim();
+    const otp = (document.getElementById('forgot-otp')?.value || '').trim();
     const newPass = (document.getElementById('forgot-password')?.value || '').trim();
     const confirmPass = (document.getElementById('forgot-password-confirm')?.value || '').trim();
 
-    if (!phone || phone.length < 10) {
-        alert('Please enter a valid 10-digit registered mobile number.');
+    if (!phone) {
+        alert('Please enter your registered mobile number or Gmail.');
+        return;
+    }
+    if (!otp || otp.length < 6) {
+        alert('Please click Send OTP and enter the 6-digit OTP from your Gmail.');
         return;
     }
     if (!newPass || newPass.length < 4) {
@@ -987,11 +1066,11 @@ async function submitForgotPassword() {
         const res = await fetch('/api/auth/forgot-password', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ phone, new_password: newPass })
+            body: JSON.stringify({ phone, otp, new_password: newPass })
         });
         const d = await res.json();
         if (d.success) {
-            alert('Password reset successfully! Please log in with your new password.');
+            alert('Password reset successfully! You can now log in directly without OTP.');
             switchAuthTab('login');
             const loginPhone = document.getElementById('login-phone');
             if (loginPhone) loginPhone.value = phone;
@@ -1008,7 +1087,7 @@ async function submitLogin() {
     const password = document.getElementById('login-password').value.trim();
 
     if (!phone || !password) {
-        alert('Please enter your mobile number and password');
+        alert('Please enter your mobile number/Gmail and password');
         return;
     }
 
@@ -1034,6 +1113,8 @@ async function submitLogin() {
 
 async function submitRegister() {
     const phone = (document.getElementById('reg-phone')?.value || '').trim();
+    const email = (document.getElementById('reg-email')?.value || '').trim();
+    const otp = (document.getElementById('reg-otp')?.value || '').trim();
     const password = (document.getElementById('reg-password')?.value || '').trim();
     const confirmPassword = (document.getElementById('reg-password-confirm')?.value || '').trim();
     const invite = (document.getElementById('reg-invite')?.value || '').trim();
@@ -1041,6 +1122,14 @@ async function submitRegister() {
 
     if (!phone || phone.length < 10) {
         alert(currentLang === 'hi' ? 'कृपया 10 अंकों का सही मोबाइल नंबर डालें' : 'Please enter a valid 10-digit mobile number');
+        return;
+    }
+    if (!email || !email.includes('@')) {
+        alert(currentLang === 'hi' ? 'कृपया सही Gmail पता डालें' : 'Please enter a valid Gmail address');
+        return;
+    }
+    if (!otp || otp.length < 6) {
+        alert(currentLang === 'hi' ? 'कृपया पहले OTP भेजें पर क्लिक करें और Gmail पर आया 6 अंकों का OTP डालें' : 'Please click Send OTP and enter the 6-digit OTP sent to your Gmail');
         return;
     }
     if (!password || password.length < 4) {
@@ -1060,7 +1149,7 @@ async function submitRegister() {
         const res = await fetch('/api/auth/register', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ phone, password, invite_code: invite })
+            body: JSON.stringify({ phone, email, otp, password, invite_code: invite })
         });
         const d = await res.json();
         if (d.success) {

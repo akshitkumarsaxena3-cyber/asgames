@@ -1,8 +1,55 @@
-// ASGames Full-Stack Server - Real Auth, Referral System & Super Admin Control Center
+// ASGames Full-Stack Server - Real Auth, Gmail OTP, Referral System & Super Admin Control Center
 const express = require('express');
 const path = require('path');
 const crypto = require('crypto');
+let nodemailer = null;
+try { nodemailer = require('nodemailer'); } catch (e) {}
 const DB = require('./db.js');
+
+const otpStore = new Map(); // email -> { code, purpose, expiresAt }
+
+function maskEmail(email) {
+    if (!email || !email.includes('@')) return email;
+    const [u, d] = email.split('@');
+    return (u.slice(0, 2) + '***@' + d);
+}
+
+async function sendGmailOTP(toEmail, otpCode, purpose) {
+    const gmailUser = (process.env.GMAIL_USER || (DB.data.settings && DB.data.settings.gmail_user) || '').trim();
+    const gmailPass = (process.env.GMAIL_PASS || (DB.data.settings && DB.data.settings.gmail_app_password) || '').replace(/\s+/g, '');
+
+    if (!nodemailer || !gmailUser || !gmailPass) {
+        return { sent: false, reason: 'not_configured' };
+    }
+
+    try {
+        const transporter = nodemailer.createTransport({
+            service: 'gmail',
+            auth: { user: gmailUser, pass: gmailPass }
+        });
+
+        const title = purpose === 'forgot' ? 'Reset Your ASGames Password' : 'Verify Your ASGames Account';
+        await transporter.sendMail({
+            from: `"ASGames VIP" <${gmailUser}>`,
+            to: toEmail,
+            subject: `🔐 ${otpCode} is your ASGames ${purpose === 'forgot' ? 'Password Reset' : 'Verification'} OTP`,
+            html: `
+                <div style="font-family:Arial,sans-serif;max-width:460px;margin:0 auto;background:#121626;color:#fff;padding:24px;border-radius:14px;border:1px solid #f5c443;">
+                    <h2 style="color:#f5c443;margin:0 0 10px;text-align:center;">👑 ASGames VIP</h2>
+                    <p style="color:#cbd5e1;font-size:14px;text-align:center;">${title}</p>
+                    <div style="background:#1c223c;border:2px dashed #f5c443;border-radius:10px;padding:18px;text-align:center;margin:20px 0;">
+                        <div style="font-size:32px;font-weight:900;letter-spacing:8px;color:#fde047;">${otpCode}</div>
+                    </div>
+                    <p style="color:#94a3b8;font-size:12px;text-align:center;">This OTP is valid for 10 minutes. Do not share it with anyone.</p>
+                </div>
+            `
+        });
+        return { sent: true };
+    } catch (e) {
+        console.error('[Gmail OTP Error]:', e.message);
+        return { sent: false, reason: e.message };
+    }
+}
 
 const app = express();
 const PORT = process.env.PORT || 10000;
@@ -252,19 +299,96 @@ setTimeout(async () => {
 }, 1000);
 
 // ========================================================
-// USER AUTHENTICATION APIS
+// USER AUTHENTICATION & GMAIL OTP APIS
 // ========================================================
-app.post('/api/auth/register', async (req, res) => {
+app.post('/api/auth/send-otp', async (req, res) => {
     try {
-        const { phone, password, invite_code } = req.body;
-        if (!phone || !password || phone.length < 10) {
-            return res.json({ success: false, message: 'Please provide valid phone number and password' });
+        const purpose = req.body.purpose === 'forgot' ? 'forgot' : 'register';
+        let targetEmail = String(req.body.email || '').trim().toLowerCase();
+        const phoneOrEmail = String(req.body.phone || req.body.email || '').trim();
+
+        if (purpose === 'register') {
+            if (!targetEmail || !targetEmail.includes('@') || !targetEmail.includes('.')) {
+                return res.json({ success: false, message: 'Please enter a valid Gmail address (e.g. name@gmail.com).' });
+            }
+            const existingEmail = await DB.get('SELECT id FROM users WHERE email = ?', [targetEmail]);
+            if (existingEmail) {
+                return res.json({ success: false, message: 'This Gmail is already registered! Please login instead.' });
+            }
+        } else {
+            // Forgot password -> find user by phone OR email, then send OTP to their verified Gmail
+            if (!phoneOrEmail) {
+                return res.json({ success: false, message: 'Please enter your registered mobile number or Gmail.' });
+            }
+            const user = await DB.get('SELECT * FROM users WHERE phone = ? OR email = ?', [phoneOrEmail, phoneOrEmail.toLowerCase()]);
+            if (!user) {
+                return res.json({ success: false, message: 'Account not found! Please check your mobile number or Gmail.' });
+            }
+            if (!user.email || !user.email.includes('@')) {
+                return res.json({ success: false, message: 'No Gmail linked to this account! Please contact admin.' });
+            }
+            targetEmail = user.email.toLowerCase();
         }
 
-        const existing = await DB.get('SELECT id FROM users WHERE phone = ?', [phone]);
+        const otpCode = String(Math.floor(100000 + Math.random() * 900000));
+        otpStore.set(targetEmail, {
+            code: otpCode,
+            purpose,
+            expiresAt: Date.now() + 10 * 60 * 1000
+        });
+
+        const mailResult = await sendGmailOTP(targetEmail, otpCode, purpose);
+        if (mailResult.sent) {
+            return res.json({
+                success: true,
+                masked_email: maskEmail(targetEmail),
+                message: `OTP sent to ${maskEmail(targetEmail)}! Please check your Gmail inbox.`
+            });
+        } else {
+            // Graceful fallback when Gmail App Password hasn't been added in Admin Panel yet
+            return res.json({
+                success: true,
+                masked_email: maskEmail(targetEmail),
+                demo_otp: otpCode,
+                smtp_warning: true,
+                message: `OTP generated for ${maskEmail(targetEmail)} (Admin: add Gmail App Password in Cloud/Email tab for live inbox delivery). OTP: ${otpCode}`
+            });
+        }
+    } catch (e) {
+        res.status(500).json({ success: false, message: e.message });
+    }
+});
+
+app.post('/api/auth/register', async (req, res) => {
+    try {
+        const { phone, email, otp, password, invite_code } = req.body;
+        const cleanPhone = String(phone || '').trim();
+        const cleanEmail = String(email || '').trim().toLowerCase();
+        const cleanOtp = String(otp || '').trim();
+
+        if (!cleanPhone || !password || cleanPhone.length < 10) {
+            return res.json({ success: false, message: 'Please provide valid 10-digit phone number and password.' });
+        }
+        if (!cleanEmail || !cleanEmail.includes('@')) {
+            return res.json({ success: false, message: 'Please enter your valid Gmail address.' });
+        }
+
+        // Verify Gmail OTP once at registration!
+        const stored = otpStore.get(cleanEmail);
+        if (!stored || stored.purpose !== 'register' || stored.code !== cleanOtp || Date.now() > stored.expiresAt) {
+            return res.json({ success: false, message: 'Invalid or expired Gmail OTP! Please click Send OTP and enter the 6-digit code.' });
+        }
+
+        const existing = await DB.get('SELECT id FROM users WHERE phone = ?', [cleanPhone]);
         if (existing) {
             return res.json({ success: false, message: 'Phone number already registered. Please login.' });
         }
+        const existingMail = await DB.get('SELECT id FROM users WHERE email = ?', [cleanEmail]);
+        if (existingMail) {
+            return res.json({ success: false, message: 'This Gmail is already registered. Please login.' });
+        }
+
+        otpStore.delete(cleanEmail); // Verified once! Never needed on login again!
 
         // Generate unique invitation code
         const myInviteCode = 'ASG' + Math.floor(100000 + Math.random() * 900000);
@@ -276,19 +400,20 @@ app.post('/api/auth/register', async (req, res) => {
             if (refUser) referrerCode = refUser.invite_code;
         }
 
-        const result = await DB.run(`INSERT INTO users (phone, password, balance, invite_code, referred_by) VALUES (?, ?, 100.0, ?, ?)`,
-            [phone, password, myInviteCode, referrerCode]);
+        const result = await DB.run(`INSERT INTO users (phone, password, balance, invite_code, referred_by, email, email_verified) VALUES (?, ?, 100.0, ?, ?, ?, ?)`,
+            [cleanPhone, password, myInviteCode, referrerCode, cleanEmail, 1]);
 
         const newUser = await DB.get('SELECT * FROM users WHERE id = ?', [result.id]);
         const token = generateToken(newUser.id, newUser.phone);
 
         res.json({
             success: true,
-            message: 'Registered successfully! ₹100 Welcome Bonus credited.',
+            message: 'Gmail verified & Registered successfully! ₹100 Welcome Bonus credited.',
             token,
             user: {
                 id: newUser.id,
                 phone: newUser.phone,
+                email: newUser.email,
                 balance: newUser.balance,
                 invite_code: newUser.invite_code,
                 vip_level: newUser.vip_level
@@ -302,9 +427,11 @@ app.post('/api/auth/register', async (req, res) => {
 app.post('/api/auth/login', async (req, res) => {
     try {
         const { phone, password } = req.body;
-        const user = await DB.get('SELECT * FROM users WHERE phone = ?', [phone]);
+        const loginId = String(phone || '').trim();
+        // Login with Phone OR Gmail — NO OTP asked once verified at registration!
+        const user = await DB.get('SELECT * FROM users WHERE phone = ? OR email = ?', [loginId, loginId.toLowerCase()]);
         if (!user || user.password !== password) {
-            return res.json({ success: false, message: 'Incorrect mobile number or password.' });
+            return res.json({ success: false, message: 'Incorrect mobile/Gmail or password.' });
         }
         if (user.is_banned) {
             return res.json({ success: false, message: 'Account is suspended by administrator.' });
@@ -318,6 +445,7 @@ app.post('/api/auth/login', async (req, res) => {
             user: {
                 id: user.id,
                 phone: user.phone,
+                email: user.email || '',
                 balance: user.balance,
                 invite_code: user.invite_code,
                 vip_level: user.vip_level
@@ -334,6 +462,7 @@ app.get('/api/auth/me', requireAuth, async (req, res) => {
         user: {
             id: req.user.id,
             phone: req.user.phone,
+            email: req.user.email || '',
             balance: req.user.balance,
             invite_code: req.user.invite_code,
             referred_by: req.user.referred_by,
@@ -344,16 +473,28 @@ app.get('/api/auth/me', requireAuth, async (req, res) => {
 
 app.post('/api/auth/forgot-password', async (req, res) => {
     try {
-        const { phone, new_password } = req.body;
-        if (!phone || !new_password || phone.length < 10) {
-            return res.json({ success: false, message: 'Please provide valid 10-digit mobile number and new password.' });
+        const { phone, otp, new_password } = req.body;
+        const loginId = String(phone || '').trim();
+        const cleanOtp = String(otp || '').trim();
+
+        if (!loginId || !new_password || new_password.length < 4) {
+            return res.json({ success: false, message: 'Please provide your mobile/Gmail, 6-digit Gmail OTP, and new password.' });
         }
-        const user = await DB.get('SELECT id FROM users WHERE phone = ?', [phone.trim()]);
+
+        const user = await DB.get('SELECT * FROM users WHERE phone = ? OR email = ?', [loginId, loginId.toLowerCase()]);
         if (!user) {
-            return res.json({ success: false, message: 'Mobile number not found! Please check or register.' });
+            return res.json({ success: false, message: 'Account not found! Please check or register.' });
         }
-        await DB.run('UPDATE users SET password = ? WHERE phone = ?', [new_password.trim(), phone.trim()]);
-        res.json({ success: true, message: 'Password reset successfully! You can now log in.' });
+
+        const userEmail = (user.email || '').toLowerCase();
+        const stored = otpStore.get(userEmail);
+        if (!stored || stored.purpose !== 'forgot' || stored.code !== cleanOtp || Date.now() > stored.expiresAt) {
+            return res.json({ success: false, message: 'Invalid or expired Gmail OTP! Please click Send OTP first.' });
+        }
+
+        otpStore.delete(userEmail);
+        await DB.run('UPDATE users SET password = ? WHERE id = ?', [new_password.trim(), user.id]);
+        res.json({ success: true, message: 'Password reset successfully! You can now log in directly without OTP.' });
     } catch (e) {
         res.status(500).json({ success: false, message: e.message });
     }
@@ -773,6 +914,28 @@ app.get('/api/admin/all-transactions', requireAdmin, async (req, res) => {
     try {
         const list = await DB.all(`SELECT t.*, u.phone FROM transactions t JOIN users u ON t.user_id = u.id ORDER BY t.created_at DESC LIMIT 100`);
         res.json({ success: true, transactions: list });
+    } catch (e) {
+        res.status(500).json({ success: false, message: e.message });
+    }
+});
+
+// Gmail OTP SMTP Settings APIs (Configurable inside Admin Panel!)
+app.get('/api/admin/gmail-settings', requireAdmin, async (req, res) => {
+    const s = DB.data.settings || {};
+    res.json({
+        success: true,
+        gmail_user: process.env.GMAIL_USER || s.gmail_user || '',
+        has_password: Boolean(process.env.GMAIL_PASS || s.gmail_app_password)
+    });
+});
+
+app.post('/api/admin/gmail-settings', requireAdmin, async (req, res) => {
+    try {
+        const gmail_user = String(req.body.gmail_user || '').trim();
+        const gmail_app_password = String(req.body.gmail_app_password || '').replace(/\s+/g, '');
+        if (gmail_user) await DB.run('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ['gmail_user', gmail_user]);
+        if (gmail_app_password) await DB.run('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ['gmail_app_password', gmail_app_password]);
+        res.json({ success: true, message: 'Gmail OTP SMTP credentials saved! Real OTP emails will now be delivered to Gmail.' });
     } catch (e) {
         res.status(500).json({ success: false, message: e.message });
     }

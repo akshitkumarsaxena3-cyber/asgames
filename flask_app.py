@@ -10,9 +10,51 @@ import time
 import json
 import sqlite3
 import random
+import smtplib
 import threading
+from email.mime.text import MIMEText
 from datetime import datetime
 from flask import Flask, request, jsonify, send_from_directory
+
+OTP_STORE = {}  # email -> { 'code', 'purpose', 'expires_at' }
+
+def mask_email(email):
+    if not email or '@' not in email:
+        return email
+    u, d = email.split('@', 1)
+    return f"{u[:2]}***@{d}"
+
+def send_gmail_otp(to_email, otp_code, purpose):
+    with get_db() as conn:
+        c = conn.cursor()
+        c.execute('SELECT key, value FROM settings WHERE key IN ("gmail_user", "gmail_app_password")')
+        s = {r['key']: r['value'] for r in c.fetchall()}
+    g_user = (os.environ.get('GMAIL_USER') or s.get('gmail_user') or '').strip()
+    g_pass = (os.environ.get('GMAIL_PASS') or s.get('gmail_app_password') or '').replace(' ', '')
+    if not g_user or not g_pass:
+        return False, 'not_configured'
+    try:
+        title = 'Reset Your ASGames Password' if purpose == 'forgot' else 'Verify Your ASGames Account'
+        html = f"""
+        <div style="font-family:Arial,sans-serif;max-width:460px;margin:0 auto;background:#121626;color:#fff;padding:24px;border-radius:14px;border:1px solid #f5c443;">
+            <h2 style="color:#f5c443;margin:0 0 10px;text-align:center;">👑 ASGames VIP</h2>
+            <p style="color:#cbd5e1;font-size:14px;text-align:center;">{title}</p>
+            <div style="background:#1c223c;border:2px dashed #f5c443;border-radius:10px;padding:18px;text-align:center;margin:20px 0;">
+                <div style="font-size:32px;font-weight:900;letter-spacing:8px;color:#fde047;">{otp_code}</div>
+            </div>
+            <p style="color:#94a3b8;font-size:12px;text-align:center;">Valid for 10 minutes. Do not share this code with anyone.</p>
+        </div>
+        """
+        msg = MIMEText(html, 'html')
+        msg['Subject'] = f"🔐 {otp_code} is your ASGames {'Password Reset' if purpose == 'forgot' else 'Verification'} OTP"
+        msg['From'] = f"ASGames VIP <{g_user}>"
+        msg['To'] = to_email
+        with smtplib.SMTP_SSL('smtp.gmail.com', 465, timeout=10) as server:
+            server.login(g_user, g_pass)
+            server.sendmail(g_user, [to_email], msg.as_string())
+        return True, 'sent'
+    except Exception as e:
+        return False, str(e)
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_FILE = os.path.join(BASE_DIR, 'asgames.db')
@@ -127,6 +169,13 @@ def init_db():
             # Always ensure admin password matches spp213201pty
             if k == 'admin_password':
                 cursor.execute('UPDATE settings SET value = ? WHERE key = ?', (v, k))
+
+        # Auto-add email & email_verified columns to users if missing
+        u_cols = [r[1] for r in cursor.execute('PRAGMA table_info(users)').fetchall()]
+        if 'email' not in u_cols:
+            cursor.execute("ALTER TABLE users ADD COLUMN email TEXT DEFAULT ''")
+        if 'email_verified' not in u_cols:
+            cursor.execute("ALTER TABLE users ADD COLUMN email_verified INTEGER DEFAULT 1")
 
         # Auto-repair any legacy deposit/withdraw rows where amount slipped into type column
         cursor.execute("UPDATE transactions SET amount = CAST(type AS REAL), type = 'deposit', details = COALESCE(NULLIF(details, ''), 'UPI Deposit') WHERE id LIKE 'DEP%' AND type NOT IN ('deposit', 'withdraw', 'win', 'commission')")
@@ -269,30 +318,93 @@ def verify_admin(req):
 
 
 # ========================================================
-# USER AUTHENTICATION APIS
+# USER AUTHENTICATION & GMAIL OTP APIS
 # ========================================================
+
+@app.route('/api/auth/send-otp', methods=['POST'])
+def api_send_otp():
+    data = request.get_json(silent=True) or {}
+    purpose = 'forgot' if data.get('purpose') == 'forgot' else 'register'
+    target_email = str(data.get('email', '')).strip().lower()
+    phone_or_email = str(data.get('phone') or data.get('email') or '').strip()
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+        if purpose == 'register':
+            if not target_email or '@' not in target_email or '.' not in target_email:
+                return jsonify({'success': False, 'message': 'Please enter a valid Gmail address (e.g. name@gmail.com).'}), 400
+            cursor.execute('SELECT id FROM users WHERE LOWER(email) = ?', (target_email,))
+            if cursor.fetchone():
+                return jsonify({'success': False, 'message': 'This Gmail is already registered! Please login instead.'}), 400
+        else:
+            if not phone_or_email:
+                return jsonify({'success': False, 'message': 'Please enter your registered mobile number or Gmail.'}), 400
+            cursor.execute('SELECT * FROM users WHERE phone = ? OR LOWER(email) = ?', (phone_or_email, phone_or_email.lower()))
+            user = cursor.fetchone()
+            if not user:
+                return jsonify({'success': False, 'message': 'Account not found! Please check your mobile number or Gmail.'}), 404
+            u_email = (user['email'] or '').strip().lower()
+            if not u_email or '@' not in u_email:
+                return jsonify({'success': False, 'message': 'No Gmail linked to this account! Please contact admin.'}), 400
+            target_email = u_email
+
+    otp_code = str(random.randint(100000, 999999))
+    OTP_STORE[target_email] = {
+        'code': otp_code,
+        'purpose': purpose,
+        'expires_at': time.time() + 600
+    }
+
+    sent, reason = send_gmail_otp(target_email, otp_code, purpose)
+    if sent:
+        return jsonify({
+            'success': True,
+            'masked_email': mask_email(target_email),
+            'message': f"OTP sent to {mask_email(target_email)}! Please check your Gmail inbox."
+        })
+    else:
+        return jsonify({
+            'success': True,
+            'masked_email': mask_email(target_email),
+            'demo_otp': otp_code,
+            'smtp_warning': True,
+            'message': f"OTP generated for {mask_email(target_email)} (Configure Gmail App Password in Admin for live email). OTP: {otp_code}"
+        })
 
 @app.route('/api/auth/register', methods=['POST'])
 def api_register():
     data = request.get_json(silent=True) or {}
     phone = str(data.get('phone', '')).strip()
+    email = str(data.get('email', '')).strip().lower()
+    otp = str(data.get('otp', '')).strip()
     password = str(data.get('password', '')).strip()
     invite_code = str(data.get('invite_code', '')).strip()
 
     if not phone or len(phone) < 10 or not password:
         return jsonify({'success': False, 'message': 'Valid 10-digit mobile number and password required.'}), 400
+    if not email or '@' not in email:
+        return jsonify({'success': False, 'message': 'Please enter your valid Gmail address.'}), 400
+
+    stored = OTP_STORE.get(email)
+    if not stored or stored['purpose'] != 'register' or stored['code'] != otp or time.time() > stored['expires_at']:
+        return jsonify({'success': False, 'message': 'Invalid or expired Gmail OTP! Please click Send OTP and enter the 6-digit code.'}), 400
 
     with get_db() as conn:
         cursor = conn.cursor()
         cursor.execute('SELECT id FROM users WHERE phone = ?', (phone,))
         if cursor.fetchone():
             return jsonify({'success': False, 'message': 'Mobile number already registered. Please login.'}), 400
+        cursor.execute('SELECT id FROM users WHERE LOWER(email) = ?', (email,))
+        if cursor.fetchone():
+            return jsonify({'success': False, 'message': 'Gmail already registered. Please login.'}), 400
+
+        OTP_STORE.pop(email, None)
 
         user_invite = f"ASG{random.randint(10000, 99999)}"
         created_at = datetime.now().isoformat()
         cursor.execute(
-            'INSERT INTO users (phone, password, balance, invite_code, referred_by, vip_level, is_banned, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-            (phone, password, 100.0, user_invite, invite_code, 1, 0, created_at)
+            'INSERT INTO users (phone, email, email_verified, password, balance, invite_code, referred_by, vip_level, is_banned, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            (phone, email, 1, password, 100.0, user_invite, invite_code, 1, 0, created_at)
         )
         user_id = cursor.lastrowid
         conn.commit()
@@ -300,23 +412,24 @@ def api_register():
     token = f"asg_user_{user_id}"
     return jsonify({
         'success': True,
-        'message': 'Registration successful! ₹100 Welcome Bonus credited.',
+        'message': 'Gmail verified & Registration successful! ₹100 Welcome Bonus credited.',
         'token': token,
-        'user': {'id': user_id, 'phone': phone, 'balance': 100.0, 'invite_code': user_invite}
+        'user': {'id': user_id, 'phone': phone, 'email': email, 'balance': 100.0, 'invite_code': user_invite}
     })
 
 @app.route('/api/auth/login', methods=['POST'])
 def api_login():
     data = request.get_json(silent=True) or {}
-    phone = str(data.get('phone', '')).strip()
+    login_id = str(data.get('phone', '')).strip()
     password = str(data.get('password', '')).strip()
 
     with get_db() as conn:
         cursor = conn.cursor()
-        cursor.execute('SELECT * FROM users WHERE phone = ?', (phone,))
+        # Login with Phone OR Gmail — NO OTP needed once verified at registration!
+        cursor.execute('SELECT * FROM users WHERE phone = ? OR LOWER(email) = ?', (login_id, login_id.lower()))
         user = cursor.fetchone()
         if not user or user['password'] != password:
-            return jsonify({'success': False, 'message': 'Invalid phone or password.'}), 400
+            return jsonify({'success': False, 'message': 'Invalid phone/Gmail or password.'}), 400
         if user['is_banned']:
             return jsonify({'success': False, 'message': 'Account is suspended. Please contact admin.'}), 403
 
@@ -328,6 +441,7 @@ def api_login():
             'user': {
                 'id': user['id'],
                 'phone': user['phone'],
+                'email': user['email'] or '',
                 'balance': user['balance'],
                 'invite_code': user['invite_code'],
                 'vip_level': user['vip_level']
@@ -344,23 +458,30 @@ def api_me():
 @app.route('/api/auth/forgot-password', methods=['POST'])
 def api_forgot_password():
     data = request.get_json(silent=True) or {}
-    phone = str(data.get('phone', '')).strip()
+    login_id = str(data.get('phone', '')).strip()
+    otp = str(data.get('otp', '')).strip()
     new_pass = str(data.get('new_password', '')).strip()
 
-    if not phone or len(phone) < 10 or not new_pass or len(new_pass) < 4:
-        return jsonify({'success': False, 'message': 'Valid 10-digit mobile number and new password required.'}), 400
+    if not login_id or not new_pass or len(new_pass) < 4:
+        return jsonify({'success': False, 'message': 'Registered mobile/Gmail, 6-digit OTP and new password required.'}), 400
 
     with get_db() as conn:
         cursor = conn.cursor()
-        cursor.execute('SELECT id FROM users WHERE phone = ?', (phone,))
+        cursor.execute('SELECT * FROM users WHERE phone = ? OR LOWER(email) = ?', (login_id, login_id.lower()))
         user = cursor.fetchone()
         if not user:
-            return jsonify({'success': False, 'message': 'Mobile number not found! Please check or register.'}), 404
+            return jsonify({'success': False, 'message': 'Account not found! Please check or register.'}), 404
 
-        cursor.execute('UPDATE users SET password = ? WHERE phone = ?', (new_pass, phone))
+        u_email = (user['email'] or '').strip().lower()
+        stored = OTP_STORE.get(u_email)
+        if not stored or stored['purpose'] != 'forgot' or stored['code'] != otp or time.time() > stored['expires_at']:
+            return jsonify({'success': False, 'message': 'Invalid or expired Gmail OTP! Please click Send OTP first.'}), 400
+
+        OTP_STORE.pop(u_email, None)
+        cursor.execute('UPDATE users SET password = ? WHERE id = ?', (new_pass, user['id']))
         conn.commit()
 
-    return jsonify({'success': True, 'message': 'Password reset successfully! You can now log in.'})
+    return jsonify({'success': True, 'message': 'Password reset successfully! You can now log in directly without OTP.'})
 
 
 # ========================================================
@@ -711,7 +832,7 @@ def api_admin_users():
 
     with get_db() as conn:
         cursor = conn.cursor()
-        cursor.execute('SELECT id, phone, password, balance, invite_code, referred_by, vip_level, is_banned, created_at FROM users ORDER BY id DESC LIMIT 100')
+        cursor.execute('SELECT id, phone, email, password, balance, invite_code, referred_by, vip_level, is_banned, created_at FROM users ORDER BY id DESC LIMIT 100')
         rows = [dict(r) for r in cursor.fetchall()]
 
     return jsonify({'success': True, 'users': rows})
@@ -927,6 +1048,33 @@ def api_admin_sync_now():
     return jsonify({
         'success': True,
         'message': 'This PythonAnywhere server is the Master Database. All data is saved permanently.'
+    })
+
+@app.route('/api/admin/gmail-settings', methods=['GET', 'POST'])
+def api_admin_gmail_settings():
+    ok, _ = verify_admin(request)
+    if not ok:
+        return jsonify({'success': False, 'message': 'Unauthorized'}), 403
+    if request.method == 'POST':
+        data = request.get_json(silent=True) or {}
+        g_user = str(data.get('gmail_user', '')).strip()
+        g_pass = str(data.get('gmail_app_password', '')).replace(' ', '')
+        with get_db() as conn:
+            c = conn.cursor()
+            if g_user:
+                c.execute('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ('gmail_user', g_user))
+            if g_pass:
+                c.execute('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ('gmail_app_password', g_pass))
+            conn.commit()
+        return jsonify({'success': True, 'message': 'Gmail OTP credentials saved!'})
+    with get_db() as conn:
+        c = conn.cursor()
+        c.execute('SELECT key, value FROM settings WHERE key IN ("gmail_user", "gmail_app_password")')
+        s = {r['key']: r['value'] for r in c.fetchall()}
+    return jsonify({
+        'success': True,
+        'gmail_user': os.environ.get('GMAIL_USER') or s.get('gmail_user', ''),
+        'has_password': bool(os.environ.get('GMAIL_PASS') or s.get('gmail_app_password'))
     })
 
 
