@@ -492,7 +492,23 @@ class StateManager {
         }, 35);
     }
 
+    showError1003Toast() {
+        const el = document.getElementById('game-error-1003-toast');
+        if (!el) return;
+        el.classList.remove('hidden');
+        if (this._err1003Timer) clearTimeout(this._err1003Timer);
+        this._err1003Timer = setTimeout(() => {
+            el.classList.add('hidden');
+        }, 2600);
+    }
+
     openGameView(gameName) {
+        // Require balance >= ₹1 to enter any cash game (Invite Wheel stays free-to-open)
+        if (gameName !== 'wheel' && Number(this.balance || 0) < 1) {
+            this.showError1003Toast();
+            return;
+        }
+
         const labels = {
             wingo: 'Loading Win Go Live Arena...',
             aviator: 'Connecting Aviator Flight Radar...',

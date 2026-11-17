@@ -6009,3 +6009,56 @@ body {
     border: 2.5px solid #fff4c4 !important;
     box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4) !important;
 }
+
+/* Exact BDG Error: 1003 Translucent Center Alert */
+.bdg-err1003-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: auto;
+    background: transparent;
+}
+
+.bdg-err1003-box {
+    background: rgba(18, 18, 22, 0.86);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    border-radius: 10px;
+    padding: 22px 26px 20px;
+    min-width: 246px;
+    max-width: 84%;
+    text-align: center;
+    color: #ffffff;
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.55);
+    animation: err1003Pop 0.18s ease-out;
+}
+
+@keyframes err1003Pop {
+    from { opacity: 0; transform: scale(0.92); }
+    to { opacity: 1; transform: scale(1); }
+}
+
+.bdg-err1003-bang {
+    font-size: 32px;
+    font-weight: 400;
+    line-height: 1;
+    color: #ffffff;
+    margin-bottom: 12px;
+}
+
+.bdg-err1003-code {
+    font-size: 13.5px;
+    font-weight: 500;
+    color: #ffffff;
+    margin-bottom: 4px;
+}
+
+.bdg-err1003-msg {
+    font-size: 13px;
+    font-weight: 400;
+    color: #f4f4f5;
+    line-height: 1.4;
+}
