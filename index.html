@@ -1264,56 +1264,159 @@
         </main>
 
         <!-- ============================================== -->
-        <!-- TAB 5: ACCOUNT VIEW                            -->
+        <!-- TAB 5: ACCOUNT VIEW (BDG-STYLE LUXURY PROFILE) -->
         <!-- ============================================== -->
-        <main id="tab-account" class="tab-view hidden" style="padding:16px;">
-            <div class="account-profile-card">
-                <div class="profile-avatar">🤴</div>
-                <div class="profile-info">
-                    <span class="profile-uid">UID: <span id="account-uid">849204</span></span>
-                    <span style="font-size:12px; color:#94a3b8;">+91 98*** **420</span>
-                    <span class="vip-badge-pill">VIP 3 PLATINUM</span>
+        <main id="tab-account" class="tab-view bdg-account-page hidden">
+            <!-- Curved Metallic Gold Profile Banner -->
+            <div class="bdg-acc-gold-header">
+                <div class="bdg-acc-user-row">
+                    <div class="bdg-acc-avatar">👑</div>
+                    <div class="bdg-acc-meta">
+                        <div class="bdg-acc-name-line">
+                            <span id="account-member-name" class="bdg-acc-name">MEMBERASG849</span>
+                            <span id="account-vip-pill" class="bdg-vip-shield">⭐ VIP1</span>
+                        </div>
+                        <div class="bdg-uid-chip" onclick="navigator.clipboard.writeText(document.getElementById('account-uid').textContent); window.stateManager.showToast('UID Copied!', 'success');">
+                            <span>UID</span>
+                            <span class="bdg-uid-sep">|</span>
+                            <span id="account-uid">849204</span>
+                            <span style="margin-left:4px;">📋</span>
+                        </div>
+                        <div id="account-last-login" class="bdg-last-login">Last login: 2026-11-17 11:30:00</div>
+                    </div>
                 </div>
             </div>
 
-            <!-- Quick Stats -->
-            <div class="stats-grid-row">
-                <div class="stat-box">
-                    <div id="stat-total-bets" class="stat-box-num">0</div>
-                    <div class="stat-box-lbl">Total Bets</div>
-                </div>
-                <div class="stat-box">
-                    <div id="stat-win-rate" class="stat-box-num">0%</div>
-                    <div class="stat-box-lbl">Win Rate</div>
-                </div>
-                <div class="stat-box">
-                    <div id="stat-total-won" class="stat-box-num">₹0</div>
-                    <div class="stat-box-lbl">Total Won</div>
-                </div>
-            </div>
+            <!-- Overlapping Matte Wallet Card -->
+            <div class="bdg-acc-content">
+                <div class="bdg-acc-wallet-card">
+                    <div class="bdg-acc-wallet-top">
+                        <div>
+                            <div class="bdg-acc-bal-lbl" data-i18n="total_balance">Total balance</div>
+                            <div class="bdg-acc-bal-row">
+                                <span class="user-balance-val bdg-acc-bal-val">₹0.00</span>
+                                <button class="bdg-acc-bal-ref" onclick="window.stateManager.fetchUserProfile(); window.stateManager.showToast('Balance refreshed!', 'info');" title="Refresh">🔄</button>
+                            </div>
+                        </div>
+                        <button class="bdg-enter-wallet-btn" onclick="window.stateManager.switchTab('wallet')">Enter wallet</button>
+                    </div>
 
-            <!-- Menu Rows -->
-            <div class="menu-list-card">
-                <div class="menu-item-row" onclick="window.location.href='/admin'" style="background:rgba(245,196,67,0.1); border-left:3px solid var(--primary-gold);">
-                    <span style="color:#fae59f; font-weight:700;">⚙️ Super Admin Control Center</span>
-                    <span style="color:#fae59f;">›</span>
+                    <!-- 4-Column Quick Action Icons -->
+                    <div class="bdg-acc-quick4">
+                        <div class="bdg-q4-item" onclick="window.stateManager.switchTab('wallet')">
+                            <div class="bdg-q4-icon" style="background:linear-gradient(135deg,#ef4444,#b91c1c);">💳</div>
+                            <span>ARWallet</span>
+                        </div>
+                        <div class="bdg-q4-item" onclick="window.stateManager.openRechargeModal()">
+                            <div class="bdg-q4-icon" style="background:linear-gradient(135deg,#f59e0b,#d97706);">💰</div>
+                            <span>Deposit</span>
+                        </div>
+                        <div class="bdg-q4-item" onclick="window.stateManager.openWithdrawModal()">
+                            <div class="bdg-q4-icon" style="background:linear-gradient(135deg,#3b82f6,#1d4ed8);">🏧</div>
+                            <span>Withdraw</span>
+                        </div>
+                        <div class="bdg-q4-item" onclick="window.stateManager.switchTab('activity')">
+                            <div class="bdg-q4-icon" style="background:linear-gradient(135deg,#10b981,#047857);">💎</div>
+                            <span>VIP</span>
+                        </div>
+                    </div>
                 </div>
-                <div class="menu-item-row" onclick="window.stateManager.openRechargeModal()">
-                    <span>💰 Deposit / Recharge</span>
-                    <span>›</span>
+
+                <!-- 2x2 History Cards Grid -->
+                <div class="bdg-acc-grid2">
+                    <div class="bdg-g2-card" onclick="window.stateManager.switchTab('wallet')">
+                        <div class="bdg-g2-ico" style="background:linear-gradient(135deg,#3b82f6,#2563eb);">📘</div>
+                        <div>
+                            <div class="bdg-g2-title">Game History</div>
+                            <div class="bdg-g2-sub">My game history</div>
+                        </div>
+                    </div>
+                    <div class="bdg-g2-card" onclick="window.stateManager.switchTab('wallet')">
+                        <div class="bdg-g2-ico" style="background:linear-gradient(135deg,#10b981,#059669);">📗</div>
+                        <div>
+                            <div class="bdg-g2-title">Transaction</div>
+                            <div class="bdg-g2-sub">My transaction history</div>
+                        </div>
+                    </div>
+                    <div class="bdg-g2-card" onclick="window.stateManager.switchTab('wallet')">
+                        <div class="bdg-g2-ico" style="background:linear-gradient(135deg,#ef4444,#dc2626);">📕</div>
+                        <div>
+                            <div class="bdg-g2-title">Deposit</div>
+                            <div class="bdg-g2-sub">My deposit history</div>
+                        </div>
+                    </div>
+                    <div class="bdg-g2-card" onclick="window.stateManager.switchTab('wallet')">
+                        <div class="bdg-g2-ico" style="background:linear-gradient(135deg,#f59e0b,#d97706);">📙</div>
+                        <div>
+                            <div class="bdg-g2-title">Withdraw</div>
+                            <div class="bdg-g2-sub">My withdraw history</div>
+                        </div>
+                    </div>
                 </div>
-                <div class="menu-item-row" onclick="window.stateManager.openWithdrawModal()">
-                    <span>💳 Withdraw Funds</span>
-                    <span>›</span>
+
+                <!-- Middle List Card (Notification, Gifts, Coupons, Stats, Language) -->
+                <div class="bdg-acc-list-card">
+                    <div class="bdg-acc-row" onclick="alert('🔔 Welcome to ASGames VIP! Instant UPI Deposits & 1-24h Withdrawals active.')">
+                        <div class="bdg-acc-row-l"><span class="bdg-gold-ico">✉️</span><span>Notification</span></div>
+                        <span class="bdg-arrow">›</span>
+                    </div>
+                    <div class="bdg-acc-row" onclick="openFirstDepositModal(true)">
+                        <div class="bdg-acc-row-l"><span class="bdg-gold-ico">🎁</span><span>Gifts</span></div>
+                        <span class="bdg-arrow">›</span>
+                    </div>
+                    <div class="bdg-acc-row" onclick="openFirstDepositModal(true)">
+                        <div class="bdg-acc-row-l"><span class="bdg-gold-ico">🎟️</span><span>My Top-Up Coupons</span></div>
+                        <span class="bdg-arrow">›</span>
+                    </div>
+                    <div class="bdg-acc-row" onclick="alert('📊 Game Statistics:\nTotal Balance: ₹' + window.stateManager.balance.toFixed(2) + '\nTotal Bets: ' + window.stateManager.userBets.length)">
+                        <div class="bdg-acc-row-l"><span class="bdg-gold-ico">📊</span><span>Game statistics</span></div>
+                        <span class="bdg-arrow">›</span>
+                    </div>
+                    <div class="bdg-acc-row" onclick="toggleLanguage()">
+                        <div class="bdg-acc-row-l"><span class="bdg-gold-ico">🌐</span><span>Language</span></div>
+                        <div style="display:flex; align-items:center; gap:6px;">
+                            <span id="account-lang-val" style="font-size:12px; color:#cbd5e1;">English</span>
+                            <span class="bdg-arrow">›</span>
+                        </div>
+                    </div>
                 </div>
-                <div class="menu-item-row" onclick="window.stateManager.switchTab('wallet')">
-                    <span>📑 Financial Records</span>
-                    <span>›</span>
+
+                <!-- Service Center 3x2 Grid -->
+                <div class="bdg-service-card">
+                    <div class="bdg-service-title">Service center</div>
+                    <div class="bdg-service-grid">
+                        <div class="bdg-svc-item" onclick="openAuthModal('forgot')">
+                            <span class="bdg-svc-ico">⚙️</span>
+                            <span>Settings</span>
+                        </div>
+                        <div class="bdg-svc-item" onclick="const f = prompt('Share your feedback with ASGames team:'); if(f) alert('Thank you! Feedback submitted.');">
+                            <span class="bdg-svc-ico">📋</span>
+                            <span>Feedback</span>
+                        </div>
+                        <div class="bdg-svc-item" onclick="alert('📢 Official Announcement: Win Go 30s, Aviator, Mines, K3, Ludo Cash & Invite Wheel are LIVE!')">
+                            <span class="bdg-svc-ico">📢</span>
+                            <span>Announcement</span>
+                        </div>
+                        <div class="bdg-svc-item" onclick="alert('🎧 24/7 Customer Service Active! For deposit/withdrawal queries, contact Admin support.')">
+                            <span class="bdg-svc-ico">🎧</span>
+                            <span>Customer Service</span>
+                        </div>
+                        <div class="bdg-svc-item" onclick="alert('📖 Beginner Guide:\n1. Register & Verify Gmail OTP.\n2. Deposit via UPI & submit 12-digit UTR.\n3. Play Win Go, Aviator, Mines, K3 or Ludo & win real cash!')">
+                            <span class="bdg-svc-ico">📖</span>
+                            <span>Beginner's Guide</span>
+                        </div>
+                        <div class="bdg-svc-item" onclick="window.location.href='/admin'">
+                            <span class="bdg-svc-ico">📦</span>
+                            <span>About us</span>
+                        </div>
+                    </div>
                 </div>
-                <div class="menu-item-row" onclick="window.sound.toggle(); alert('Audio Toggled');">
-                    <span>🔊 Sound Effects</span>
-                    <span>Toggle</span>
-                </div>
+
+                <!-- Outlined Gold Log out Pill Button -->
+                <button class="bdg-logout-pill" onclick="logoutUserAccount()">
+                    <span style="font-size:16px;">⏻</span>
+                    <span>Log out</span>
+                </button>
             </div>
         </main>
 
@@ -1329,14 +1432,13 @@
                 <span class="tabbar-icon">🎁</span>
                 <span data-i18n="nav_activity">Activity</span>
             </div>
-            <div class="tabbar-item" data-tab="promotion">
-                <span class="badge-dot">HOT</span>
-                <span class="tabbar-icon">💰</span>
-                <span data-i18n="nav_promo">Get ₹500</span>
+            <div class="tabbar-item tabbar-center-wheel" onclick="window.stateManager.openGameView('wheel')">
+                <div class="tabbar-wheel-orb">🎡</div>
+                <span class="tabbar-wheel-label" data-i18n="nav_promo">Get ₹500</span>
             </div>
-            <div class="tabbar-item" data-tab="wallet">
-                <span class="tabbar-icon">💳</span>
-                <span data-i18n="nav_wallet">Wallet</span>
+            <div class="tabbar-item" data-tab="promotion">
+                <span class="tabbar-icon">💰</span>
+                <span>Promotion</span>
             </div>
             <div class="tabbar-item" data-tab="account">
                 <span class="tabbar-icon">👤</span>

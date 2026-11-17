@@ -741,15 +741,28 @@ class StateManager {
 
     renderAccountTab() {
         const uidEl = document.getElementById('account-uid');
-        if (uidEl) uidEl.textContent = this.uid;
+        if (uidEl) uidEl.textContent = String(this.uid).padStart(6, '0');
 
-        const countEl = document.getElementById('stat-total-bets');
-        const rateEl = document.getElementById('stat-win-rate');
-        const wonEl = document.getElementById('stat-total-won');
+        const nameEl = document.getElementById('account-member-name');
+        if (nameEl) {
+            if (this.user && this.user.phone) {
+                nameEl.textContent = `MEMBER${this.user.invite_code || this.user.phone.slice(-6)}`;
+            } else {
+                nameEl.textContent = 'GUEST PLAYER';
+            }
+        }
 
-        if (countEl) countEl.textContent = this.userBets.length;
-        if (rateEl) rateEl.textContent = '52%';
-        if (wonEl) wonEl.textContent = `₹${this.balance.toFixed(0)}`;
+        const vipEl = document.getElementById('account-vip-pill');
+        if (vipEl) vipEl.textContent = `⭐ VIP${this.vipLevel || 1}`;
+
+        const lastEl = document.getElementById('account-last-login');
+        if (lastEl) {
+            const now = new Date();
+            lastEl.textContent = `Last login: ${now.toISOString().replace('T', ' ').slice(0, 19)}`;
+        }
+
+        const langVal = document.getElementById('account-lang-val');
+        if (langVal) langVal.textContent = (typeof currentLang !== 'undefined' && currentLang === 'hi') ? 'हिंदी' : 'English';
     }
 
     async renderTransactions() {
@@ -906,13 +919,15 @@ function applyLanguage(lang) {
         if (dict[key]) el.setAttribute('placeholder', dict[key]);
     });
 
-    // Update all language pills across header & auth screen
+    // Update all language pills across header, account & auth screen
     document.querySelectorAll('.lang-flag').forEach(el => {
         el.textContent = currentLang === 'hi' ? '🇮🇳' : '🇺🇸';
     });
     document.querySelectorAll('.lang-code').forEach(el => {
         el.textContent = currentLang === 'hi' ? 'हिंदी' : 'EN';
     });
+    const accLang = document.getElementById('account-lang-val');
+    if (accLang) accLang.textContent = currentLang === 'hi' ? 'हिंदी' : 'English';
 
     // Update Auth Subheader title according to active tab
     const title = document.getElementById('auth-modal-title');
@@ -920,6 +935,14 @@ function applyLanguage(lang) {
         if (currentAuthView === 'login') title.textContent = dict.login_title;
         else if (currentAuthView === 'forgot') title.textContent = dict.forgot_title;
         else title.textContent = dict.reg_title;
+    }
+}
+
+function logoutUserAccount() {
+    if (confirm(currentLang === 'hi' ? 'क्या आप लॉग आउट करना चाहते हैं?' : 'Are you sure you want to log out?')) {
+        localStorage.removeItem('asg_token');
+        localStorage.removeItem('asg_balance');
+        location.reload();
     }
 }
 

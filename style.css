@@ -3409,3 +3409,364 @@ body {
 .bdg-otp-btn:active:not(:disabled) {
     transform: scale(0.95);
 }
+
+
+/* ========================================================
+   BDG-STYLE LUXURY ACCOUNT TAB & ELEVATED CENTER TABBAR
+======================================================== */
+.bdg-account-page {
+    background: #1f1f21;
+    min-height: calc(100vh - 70px);
+    padding: 0 0 36px 0 !important;
+}
+
+.bdg-acc-gold-header {
+    background: linear-gradient(135deg, #f3d285 0%, #d49f41 55%, #b98223 100%);
+    padding: 20px 16px 68px;
+    border-radius: 0 0 28px 28px;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+}
+
+.bdg-acc-user-row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+
+.bdg-acc-avatar {
+    width: 62px;
+    height: 62px;
+    border-radius: 50%;
+    background: linear-gradient(145deg, #2b2344, #171226);
+    border: 2.5px solid #ffffff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 30px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+    flex-shrink: 0;
+}
+
+.bdg-acc-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.bdg-acc-name-line {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.bdg-acc-name {
+    color: #ffffff;
+    font-size: 16px;
+    font-weight: 800;
+    letter-spacing: 0.4px;
+    text-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+}
+
+.bdg-vip-shield {
+    background: linear-gradient(135deg, #cbd5e1 0%, #64748b 100%);
+    color: #ffffff;
+    font-size: 10px;
+    font-weight: 800;
+    padding: 2px 8px;
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.6);
+}
+
+.bdg-uid-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(180, 110, 12, 0.72);
+    color: #fffbeb;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 3px 10px;
+    border-radius: 14px;
+    width: fit-content;
+    cursor: pointer;
+}
+
+.bdg-uid-sep {
+    opacity: 0.6;
+}
+
+.bdg-last-login {
+    color: rgba(255, 255, 255, 0.9);
+    font-size: 11px;
+}
+
+.bdg-acc-content {
+    padding: 0 14px;
+    margin-top: -50px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.bdg-acc-wallet-card {
+    background: #3a3a3e;
+    border-radius: 14px;
+    padding: 16px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.bdg-acc-wallet-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-bottom: 14px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    margin-bottom: 14px;
+}
+
+.bdg-acc-bal-lbl {
+    color: #b4b4bc;
+    font-size: 12px;
+    margin-bottom: 4px;
+}
+
+.bdg-acc-bal-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.bdg-acc-bal-val {
+    color: #ffffff !important;
+    font-size: 20px !important;
+    font-weight: 800 !important;
+}
+
+.bdg-acc-bal-ref {
+    background: none;
+    border: none;
+    font-size: 14px;
+    cursor: pointer;
+    opacity: 0.85;
+}
+
+.bdg-enter-wallet-btn {
+    background: linear-gradient(180deg, #fae59f 0%, #c4933f 100%);
+    color: #4a2a04;
+    border: none;
+    border-radius: 22px;
+    padding: 8px 16px;
+    font-size: 12px;
+    font-weight: 800;
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(196, 147, 63, 0.35);
+}
+
+.bdg-acc-quick4 {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+    text-align: center;
+}
+
+.bdg-q4-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    font-size: 12px;
+    color: #e4e4e7;
+    font-weight: 500;
+}
+
+.bdg-q4-icon {
+    width: 38px;
+    height: 38px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+}
+
+/* 2x2 History Cards */
+.bdg-acc-grid2 {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+}
+
+.bdg-g2-card {
+    background: #2e2e32;
+    border-radius: 12px;
+    padding: 13px 12px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    transition: background 0.15s;
+}
+
+.bdg-g2-card:active {
+    background: #3a3a40;
+}
+
+.bdg-g2-ico {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 17px;
+    flex-shrink: 0;
+}
+
+.bdg-g2-title {
+    color: #ffffff;
+    font-size: 13px;
+    font-weight: 700;
+}
+
+.bdg-g2-sub {
+    color: #9ca3af;
+    font-size: 10px;
+    margin-top: 2px;
+}
+
+/* Middle List Card */
+.bdg-acc-list-card {
+    background: #2e2e32;
+    border-radius: 12px;
+    overflow: hidden;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.bdg-acc-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 16px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    cursor: pointer;
+}
+
+.bdg-acc-row:last-child {
+    border-bottom: none;
+}
+
+.bdg-acc-row-l {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    color: #f4f4f5;
+    font-size: 13px;
+    font-weight: 500;
+}
+
+.bdg-gold-ico {
+    font-size: 18px;
+    filter: sepia(1) saturate(4) hue-rotate(8deg);
+}
+
+.bdg-arrow {
+    color: #a1a1aa;
+    font-size: 18px;
+}
+
+/* Service Center 3x2 Card */
+.bdg-service-card {
+    background: #2e2e32;
+    border-radius: 12px;
+    padding: 16px;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.bdg-service-title {
+    color: #ffffff;
+    font-size: 14px;
+    font-weight: 700;
+    margin-bottom: 16px;
+}
+
+.bdg-service-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 18px 8px;
+    text-align: center;
+}
+
+.bdg-svc-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    color: #d4d4d8;
+    font-size: 11px;
+}
+
+.bdg-svc-ico {
+    font-size: 24px;
+    filter: sepia(1) saturate(4) hue-rotate(8deg);
+}
+
+/* Outlined Gold Log out Pill */
+.bdg-logout-pill {
+    width: 100%;
+    height: 44px;
+    margin-top: 6px;
+    border-radius: 30px;
+    background: transparent;
+    border: 1px solid #d9a84e;
+    color: #d9a84e;
+    font-size: 14px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+
+.bdg-logout-pill:hover {
+    background: rgba(217, 168, 78, 0.12);
+}
+
+/* Elevated Golden Center Wheel Button in Bottom Tab Bar */
+.tabbar-center-wheel {
+    position: relative;
+    overflow: visible !important;
+}
+
+.tabbar-wheel-orb {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 30% 30%, #fff7b2 0%, #f59e0b 65%, #b45309 100%);
+    border: 3px solid #fef08a;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    margin-top: -24px;
+    box-shadow: 0 4px 16px rgba(245, 158, 11, 0.65);
+    animation: spinSlowOrb 10s linear infinite;
+}
+
+@keyframes spinSlowOrb {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+.tabbar-wheel-label {
+    color: #f5c443 !important;
+    font-weight: 800 !important;
+    font-size: 11px !important;
+    margin-top: 2px;
+}
