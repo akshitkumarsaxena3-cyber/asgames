@@ -192,6 +192,37 @@
             </div>
         </div>
 
+        <!-- Extra First Deposit Bonus Modal (Appears Automatically After Login!) -->
+        <div id="first-deposit-modal" class="fdb-overlay hidden">
+            <div class="fdb-wrapper">
+                <div class="fdb-card">
+                    <div class="fdb-header">
+                        <div class="fdb-title" data-i18n="fdb_title">Extra first deposit bonus</div>
+                        <div class="fdb-sub" data-i18n="fdb_sub">Each account can only receive rewards once</div>
+                    </div>
+
+                    <div id="fdb-list-container" class="fdb-list">
+                        <!-- Dynamically rendered 9 exact tiers -->
+                    </div>
+
+                    <div class="fdb-footer">
+                        <label class="fdb-remind-label">
+                            <input type="checkbox" id="fdb-no-remind">
+                            <span data-i18n="fdb_no_remind">No more reminders today</span>
+                        </label>
+                        <button class="fdb-activity-btn" onclick="goFdbActivity()" data-i18n="nav_activity">Activity</button>
+                    </div>
+                </div>
+                <button class="fdb-close-circle" onclick="closeFirstDepositModal()" title="Close">&times;</button>
+            </div>
+        </div>
+
+        <!-- Floating Right-Side Quick Shortcuts (Like BDG Win!) -->
+        <div class="home-floating-rail">
+            <button class="float-rail-btn float-gift" onclick="openFirstDepositModal(true)" title="First Deposit Bonus">🎁</button>
+            <button class="float-rail-btn float-wheel" onclick="window.stateManager.openGameView('wheel')" title="Invite Wheel">🎡</button>
+        </div>
+
         <!-- Recharge / Deposit Modal -->
         <div id="recharge-modal" class="center-modal hidden">
             <div class="modal-dialog">

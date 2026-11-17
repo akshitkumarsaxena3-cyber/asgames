@@ -830,7 +830,10 @@ const I18N_DICT = {
         nav_activity: 'Activity',
         nav_promo: 'Get ₹500',
         nav_wallet: 'Wallet',
-        nav_account: 'Account'
+        nav_account: 'Account',
+        fdb_title: 'Extra first deposit bonus',
+        fdb_sub: 'Each account can only receive rewards once',
+        fdb_no_remind: 'No more reminders today'
     },
     hi: {
         reg_title: 'अपना फ़ोन रजिस्टर करें',
@@ -865,7 +868,10 @@ const I18N_DICT = {
         nav_activity: 'गतिविधि',
         nav_promo: '₹500 कमाएं',
         nav_wallet: 'वॉलेट',
-        nav_account: 'अकाउंट'
+        nav_account: 'अकाउंट',
+        fdb_title: 'एक्स्ट्रा फर्स्ट डिपॉजिट बोनस',
+        fdb_sub: 'प्रत्येक अकाउंट को यह इनाम केवल एक बार मिल सकता है',
+        fdb_no_remind: 'आज दोबारा न दिखाएं'
     }
 };
 
@@ -1015,7 +1021,7 @@ async function submitLogin() {
         const d = await res.json();
         if (d.success) {
             localStorage.setItem('asg_token', d.token);
-            alert('Logged in successfully!');
+            sessionStorage.setItem('asg_just_logged_in', '1');
             closeAuthModal();
             location.reload();
         } else {
@@ -1059,7 +1065,7 @@ async function submitRegister() {
         const d = await res.json();
         if (d.success) {
             localStorage.setItem('asg_token', d.token);
-            alert(currentLang === 'hi' ? 'रजिस्ट्रेशन सफल! ₹100 वेलकम बोनस मिल गया।' : 'Registration successful! ₹100 Welcome Bonus credited.');
+            sessionStorage.setItem('asg_just_logged_in', '1');
             closeAuthModal();
             location.reload();
         } else {
@@ -1070,9 +1076,99 @@ async function submitRegister() {
     }
 }
 
+// ========================================================
+// EXTRA FIRST DEPOSIT BONUS POPUP (AUTO AFTER LOGIN)
+// ========================================================
+const FIRST_DEPOSIT_TIERS = [
+    { deposit: 200000, bonus: 10000 },
+    { deposit: 100000, bonus: 5000 },
+    { deposit: 30000,  bonus: 2000 },
+    { deposit: 10000,  bonus: 600 },
+    { deposit: 3000,   bonus: 300 },
+    { deposit: 1000,   bonus: 150 },
+    { deposit: 500,    bonus: 100 },
+    { deposit: 300,    bonus: 60 },
+    { deposit: 100,    bonus: 20 }
+];
+
+function renderFirstDepositTiers() {
+    const container = document.getElementById('fdb-list-container');
+    if (!container) return;
+
+    const isHi = currentLang === 'hi';
+    container.innerHTML = FIRST_DEPOSIT_TIERS.map(t => `
+        <div class="fdb-tier-card">
+            <div class="fdb-tier-top">
+                <div class="fdb-tier-heading">
+                    ${isHi ? 'पहला डिपॉजिट' : 'First deposit'} <span class="fdb-tier-amt">${t.deposit}</span>
+                </div>
+                <div class="fdb-tier-bonus">+ ₹${t.bonus.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</div>
+            </div>
+            <div class="fdb-tier-desc">
+                ${isHi
+                    ? `पहली बार ₹${t.deposit} जमा करें और ₹${t.bonus} एक्स्ट्रा बोनस पाएं`
+                    : `Deposit ${t.deposit} for the first time and you will receive ${t.bonus} bonus`}
+            </div>
+            <div class="fdb-tier-bottom">
+                <div class="fdb-tier-prog">0/${t.deposit}</div>
+                <button class="fdb-deposit-btn" onclick="depositFromBonus(${t.deposit})">${isHi ? 'जमा करें' : 'Deposit'}</button>
+            </div>
+        </div>
+    `).join('');
+}
+
+function openFirstDepositModal(force = false) {
+    const today = new Date().toISOString().slice(0, 10);
+    const hiddenToday = localStorage.getItem('asg_fdb_hide_date') === today;
+    const justLoggedIn = sessionStorage.getItem('asg_just_logged_in') === '1';
+
+    if (!force && !justLoggedIn && hiddenToday) return;
+    if (justLoggedIn) sessionStorage.removeItem('asg_just_logged_in');
+
+    renderFirstDepositTiers();
+    const modal = document.getElementById('first-deposit-modal');
+    if (modal) modal.classList.remove('hidden');
+}
+
+function closeFirstDepositModal() {
+    const chk = document.getElementById('fdb-no-remind');
+    if (chk && chk.checked) {
+        const today = new Date().toISOString().slice(0, 10);
+        localStorage.setItem('asg_fdb_hide_date', today);
+    }
+    const modal = document.getElementById('first-deposit-modal');
+    if (modal) modal.classList.add('hidden');
+}
+
+function depositFromBonus(amount) {
+    closeFirstDepositModal();
+    if (window.stateManager) {
+        window.stateManager.openRechargeModal();
+        const inp = document.getElementById('recharge-amount-input');
+        if (inp) inp.value = amount;
+        document.querySelectorAll('.recharge-pill').forEach(p => {
+            p.classList.toggle('active', parseInt(p.dataset.amount) === amount);
+        });
+    }
+}
+
+function goFdbActivity() {
+    closeFirstDepositModal();
+    if (window.stateManager) {
+        window.stateManager.switchTab('activity');
+    }
+}
+
 // Global initialization
 window.addEventListener('DOMContentLoaded', () => {
     window.stateManager = new StateManager();
     applyLanguage(currentLang);
     window.stateManager.showSplashLoader('Loading ASGames VIP...', 850);
+
+    // Automatically show Extra First Deposit Bonus modal right after login!
+    if (localStorage.getItem('asg_token')) {
+        setTimeout(() => {
+            openFirstDepositModal(false);
+        }, 950);
+    }
 });
