@@ -461,7 +461,10 @@ class StateManager {
         if (tabName === 'activity') this.renderActivityTab();
         if (tabName === 'promotion') this.renderPromotionTab();
         if (tabName === 'account') this.renderAccountTab();
-        if (tabName === 'wallet') this.renderTransactions();
+        if (tabName === 'wallet') {
+            this.renderTransactions();
+            if (typeof updateWalletCenterRings === 'function') updateWalletCenterRings();
+        }
     }
 
     showSplashLoader(label = 'Loading Secure Casino Engine...', durationMs = 500) {
@@ -2086,6 +2089,52 @@ async function loadWithdrawPageHistory(showAll = false) {
             `;
         }).join('');
     } catch (e) {}
+}
+
+// ========================================================
+// BDG WALLET CENTER HELPERS (#/wallet)
+// ========================================================
+function updateWalletCenterRings() {
+    const sm = window.stateManager;
+    const bal = sm ? Number(sm.balance || 0) : 0;
+    const pct = bal > 0 ? 100 : 0;
+    const pctEl = document.getElementById('wal-main-pct');
+    const ringEl = document.getElementById('wal-main-ring');
+    if (pctEl) pctEl.textContent = `${pct}%`;
+    if (ringEl) {
+        ringEl.style.background = pct > 0
+            ? `conic-gradient(#d9ac4f 0deg 360deg, #4b4b52 360deg)`
+            : `#4b4b52`;
+    }
+}
+
+async function transferToMainWallet() {
+    const sm = window.stateManager;
+    if (!sm) return;
+    await sm.fetchUserProfile();
+    updateWalletCenterRings();
+    if (window.sound && window.sound.coin) window.sound.coin();
+    sm.showToast('✅ All 3rd-party game balances transferred to Main Wallet!', 'success');
+}
+
+function openDepositHistoryDirectly() {
+    if (window.stateManager) {
+        window.stateManager.openRechargeModal();
+        setTimeout(() => {
+            const el = document.getElementById('dep-history-card');
+            if (el) el.scrollIntoView({ behavior: 'smooth' });
+        }, 120);
+    }
+}
+
+function openWithdrawHistoryDirectly() {
+    if (window.stateManager) {
+        window.stateManager.openWithdrawModal();
+        setTimeout(() => {
+            const el = document.getElementById('wd-history-section');
+            if (el) el.scrollIntoView({ behavior: 'smooth' });
+        }, 120);
+    }
 }
 
 // Global initialization

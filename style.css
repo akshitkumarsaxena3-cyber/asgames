@@ -5507,3 +5507,183 @@ body {
     margin-top: 12px;
     cursor: pointer;
 }
+
+/* ======================================================== */
+/* EXACT BDG WALLET CENTER TAB (#/wallet)                   */
+/* ======================================================== */
+.bdg-wallet-page {
+    padding: 0 0 92px !important;
+    background: #1b1b1e;
+    min-height: 100vh;
+}
+
+.bdg-wal-top {
+    background: #333338;
+    padding-bottom: 24px;
+}
+
+.bdg-wal-topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 14px 4px;
+}
+
+.bdg-wal-title {
+    color: #ffffff;
+    font-size: 17px;
+    font-weight: 600;
+}
+
+.bdg-wal-hero {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    padding: 10px 16px 4px;
+}
+
+.bdg-wal-hero-ico {
+    margin-bottom: 6px;
+}
+
+.bdg-wal-hero-amt {
+    color: #ffffff;
+    font-size: 28px;
+    font-weight: 700;
+    letter-spacing: 0.4px;
+    line-height: 1.2;
+}
+
+.bdg-wal-hero-sub {
+    color: #cbd5e1;
+    font-size: 12px;
+    margin-top: 3px;
+}
+
+.bdg-wal-body {
+    padding: 14px 14px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.bdg-wal-card {
+    background: #2b2b30;
+    border-radius: 12px;
+    padding: 22px 16px 20px;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.bdg-wal-gauges {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+}
+
+.bdg-wal-gauge-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+}
+
+.bdg-wal-ring {
+    width: 96px;
+    height: 96px;
+    border-radius: 50%;
+    background: #4b4b52;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 10px;
+    transition: background 0.3s ease;
+}
+
+.bdg-wal-ring-inner {
+    width: 76px;
+    height: 76px;
+    border-radius: 50%;
+    background: #2b2b30;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #ffffff;
+    font-size: 16px;
+    font-weight: 700;
+}
+
+.bdg-wal-g-amt {
+    color: #ffffff;
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.bdg-wal-g-lbl {
+    color: #a1a1aa;
+    font-size: 12px;
+    margin-top: 2px;
+}
+
+.bdg-wal-actions4 {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+}
+
+.bdg-wal-act {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 8px;
+    cursor: pointer;
+}
+
+.bdg-wal-act span {
+    color: #a1a1aa;
+    font-size: 11.5px;
+    line-height: 1.25;
+}
+
+.bdg-wal-sq {
+    width: 52px;
+    height: 52px;
+    border-radius: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    box-shadow: 0 6px 14px rgba(0, 0, 0, 0.3);
+}
+
+.sq-gold { background: linear-gradient(145deg, #fde68a 0%, #d99d3b 100%); }
+.sq-blue { background: linear-gradient(145deg, #60a5fa 0%, #3b82f6 100%); }
+.sq-pink { background: linear-gradient(145deg, #fb7185 0%, #ef4444 100%); }
+.sq-mint { background: linear-gradient(145deg, #6ee7b7 0%, #10b981 100%); }
+
+.bdg-wal-providers {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+}
+
+.bdg-wal-prov {
+    background: #2b2b30;
+    border-radius: 10px;
+    padding: 16px 8px;
+    text-align: center;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.bdg-wal-p-amt {
+    color: #ffffff;
+    font-size: 14px;
+    font-weight: 700;
+    margin-bottom: 4px;
+}
+
+.bdg-wal-p-name {
+    color: #a1a1aa;
+    font-size: 11.5px;
+}

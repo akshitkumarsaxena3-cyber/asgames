@@ -1921,26 +1921,96 @@
         </main>
 
         <!-- ============================================== -->
-        <!-- TAB 4: WALLET VIEW                             -->
+        <!-- TAB 4: WALLET VIEW (EXACT BDG #/wallet STYLE)  -->
         <!-- ============================================== -->
-        <main id="tab-wallet" class="tab-view hidden" style="padding:16px;">
-            <h2 style="font-size:18px; color:#fae59f; margin-bottom:14px;">💳 Wallet Management</h2>
+        <main id="tab-wallet" class="tab-view bdg-wallet-page hidden">
+            <!-- Dark Top Header & Total Balance Banner -->
+            <div class="bdg-wal-top">
+                <div class="bdg-wal-topbar">
+                    <button type="button" class="bdg-back-btn" style="color:#fff;" onclick="window.stateManager.switchTab('account')">&#8249;</button>
+                    <span class="bdg-wal-title">Wallet</span>
+                    <span style="width:28px;"></span>
+                </div>
 
-            <div class="activity-card" style="background:linear-gradient(135deg, #242c50 0%, #151a32 100%);">
-                <div style="font-size:12px; color:#94a3b8;">Total Assets</div>
-                <div class="user-balance-val" style="font-size:26px; font-weight:900; color:#ffd875; margin:6px 0 16px;">₹1,000.00</div>
-                <div style="display:flex; gap:10px;">
-                    <button class="btn-deposit trigger-recharge" style="flex:1; padding:10px;">+ Quick Deposit</button>
-                    <button class="btn-withdraw trigger-withdraw" style="flex:1; padding:10px;">Withdrawal</button>
+                <div class="bdg-wal-hero">
+                    <div class="bdg-wal-hero-ico">
+                        <svg width="42" height="36" viewBox="0 0 42 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <rect x="4" y="6" width="24" height="12" rx="3" fill="#e5e7eb" transform="rotate(-12 4 6)"/>
+                            <rect x="2" y="10" width="36" height="24" rx="5" fill="#9ca3af"/>
+                            <rect x="2" y="10" width="36" height="24" rx="5" fill="url(#walGrad)" fill-opacity="0.35"/>
+                            <rect x="25" y="18" width="15" height="8" rx="4" fill="#d1d5db"/>
+                            <circle cx="29" cy="22" r="2" fill="#374151"/>
+                            <defs><linearGradient id="walGrad" x1="2" y1="10" x2="38" y2="34"><stop stop-color="#fff"/><stop offset="1" stop-color="#4b5563"/></linearGradient></defs>
+                        </svg>
+                    </div>
+                    <div class="bdg-wal-hero-amt user-balance-val">₹0.00</div>
+                    <div class="bdg-wal-hero-sub">Total balance</div>
                 </div>
             </div>
 
-            <!-- Transaction History -->
-            <div class="section-header">
-                <span class="section-title">📝 Recent Transactions</span>
-            </div>
-            <div id="transactions-list" class="bets-list-container">
-                <!-- Populated dynamically -->
+            <!-- Main Wallet Card -->
+            <div class="bdg-wal-body">
+                <div class="bdg-wal-card">
+                    <!-- 2 Circular Donut Gauges -->
+                    <div class="bdg-wal-gauges">
+                        <div class="bdg-wal-gauge-item">
+                            <div id="wal-main-ring" class="bdg-wal-ring">
+                                <div class="bdg-wal-ring-inner"><span id="wal-main-pct">0%</span></div>
+                            </div>
+                            <div class="bdg-wal-g-amt user-balance-val">₹0.00</div>
+                            <div class="bdg-wal-g-lbl">Main wallet</div>
+                        </div>
+
+                        <div class="bdg-wal-gauge-item">
+                            <div id="wal-3rd-ring" class="bdg-wal-ring">
+                                <div class="bdg-wal-ring-inner"><span>0%</span></div>
+                            </div>
+                            <div class="bdg-wal-g-amt">₹0.00</div>
+                            <div class="bdg-wal-g-lbl">3rd party wallet</div>
+                        </div>
+                    </div>
+
+                    <!-- Metallic Gold Transfer Pill -->
+                    <button type="button" class="bdg-btn-gold" style="margin:18px 0 22px;" onclick="transferToMainWallet()">Main wallet transfer</button>
+
+                    <!-- 4 Glossy Squircle Action Tiles -->
+                    <div class="bdg-wal-actions4">
+                        <div class="bdg-wal-act" onclick="window.stateManager.openRechargeModal()">
+                            <div class="bdg-wal-sq sq-gold">💰</div>
+                            <span>Deposit</span>
+                        </div>
+                        <div class="bdg-wal-act" onclick="window.stateManager.openWithdrawModal()">
+                            <div class="bdg-wal-sq sq-blue">💳</div>
+                            <span>Withdraw</span>
+                        </div>
+                        <div class="bdg-wal-act" onclick="openDepositHistoryDirectly()">
+                            <div class="bdg-wal-sq sq-pink">🧾</div>
+                            <span>Deposit<br>history</span>
+                        </div>
+                        <div class="bdg-wal-act" onclick="openWithdrawHistoryDirectly()">
+                            <div class="bdg-wal-sq sq-mint">💸</div>
+                            <span>Withdrawal<br>history</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Game Provider Sub-Wallets Grid -->
+                <div class="bdg-wal-providers">
+                    <div class="bdg-wal-prov"><div class="bdg-wal-p-amt">0.00</div><div class="bdg-wal-p-name">Lottery</div></div>
+                    <div class="bdg-wal-prov"><div class="bdg-wal-p-amt">0.00</div><div class="bdg-wal-p-name">ARGame</div></div>
+                    <div class="bdg-wal-prov"><div class="bdg-wal-p-amt">0.00</div><div class="bdg-wal-p-name">Aviator</div></div>
+                    <div class="bdg-wal-prov"><div class="bdg-wal-p-amt">0.00</div><div class="bdg-wal-p-name">Mines</div></div>
+                    <div class="bdg-wal-prov"><div class="bdg-wal-p-amt">0.00</div><div class="bdg-wal-p-name">K3 Dice</div></div>
+                    <div class="bdg-wal-prov"><div class="bdg-wal-p-amt">0.00</div><div class="bdg-wal-p-name">Ludo Cash</div></div>
+                </div>
+
+                <!-- Recent Transactions -->
+                <div class="dep-section-card" style="margin-top:2px;">
+                    <div class="dep-sec-hdr"><span class="bdg-gold-ico">📝</span> <span>Recent Transactions</span></div>
+                    <div id="transactions-list" class="bets-list-container">
+                        <!-- Populated dynamically -->
+                    </div>
+                </div>
             </div>
         </main>
 
@@ -2019,14 +2089,14 @@
                             <div class="bdg-g2-sub">My transaction history</div>
                         </div>
                     </div>
-                    <div class="bdg-g2-card" onclick="window.stateManager.switchTab('wallet')">
+                    <div class="bdg-g2-card" onclick="openDepositHistoryDirectly()">
                         <div class="bdg-g2-ico" style="background:linear-gradient(135deg,#ef4444,#dc2626);">📕</div>
                         <div>
                             <div class="bdg-g2-title">Deposit</div>
                             <div class="bdg-g2-sub">My deposit history</div>
                         </div>
                     </div>
-                    <div class="bdg-g2-card" onclick="window.stateManager.switchTab('wallet')">
+                    <div class="bdg-g2-card" onclick="openWithdrawHistoryDirectly()">
                         <div class="bdg-g2-ico" style="background:linear-gradient(135deg,#f59e0b,#d97706);">📙</div>
                         <div>
                             <div class="bdg-g2-title">Withdraw</div>
