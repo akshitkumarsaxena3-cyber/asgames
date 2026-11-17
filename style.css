@@ -2605,3 +2605,23 @@ body {
     50% { transform: rotate(180deg) scale(0.95); }
     100% { transform: rotate(360deg) scale(1.06); }
 }
+
+
+/* Live Silent Balance Auto-Refresh Flash Animation */
+.balance-flash-up {
+    animation: balFlashUp 0.9s ease;
+}
+
+.balance-flash-down {
+    animation: balFlashDown 0.7s ease;
+}
+
+@keyframes balFlashUp {
+    0% { color: #34d399 !important; text-shadow: 0 0 18px #10b981; transform: scale(1.08); }
+    100% { color: #fffbeb !important; text-shadow: 0 2px 8px rgba(245, 196, 67, 0.35); transform: scale(1); }
+}
+
+@keyframes balFlashDown {
+    0% { color: #fbbf24 !important; text-shadow: 0 0 14px #f59e0b; transform: scale(0.96); }
+    100% { color: #fffbeb !important; text-shadow: 0 2px 8px rgba(245, 196, 67, 0.35); transform: scale(1); }
+}

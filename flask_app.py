@@ -450,6 +450,29 @@ def api_my_transactions():
 
     return jsonify({'success': True, 'transactions': rows})
 
+@app.route('/api/wallet/sync-game-delta', methods=['POST'])
+def api_sync_game_delta():
+    user = get_current_user(request)
+    if not user:
+        return jsonify({'success': False, 'message': 'Unauthorized'}), 401
+    data = request.get_json(silent=True) or {}
+    try:
+        delta = float(data.get('delta', 0))
+    except:
+        delta = 0.0
+    if delta == 0:
+        return jsonify({'success': True, 'balance': user['balance']})
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute('UPDATE users SET balance = MAX(0, balance + ?) WHERE id = ?', (delta, user['id']))
+        cursor.execute('SELECT balance FROM users WHERE id = ?', (user['id'],))
+        row = cursor.fetchone()
+        conn.commit()
+        new_bal = float(row['balance']) if row else user['balance']
+
+    return jsonify({'success': True, 'balance': new_bal})
+
 @app.route('/api/referral/stats', methods=['GET'])
 def api_referral_stats():
     user = get_current_user(request)

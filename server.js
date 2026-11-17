@@ -542,6 +542,20 @@ app.get('/api/wallet/transactions', requireAuth, async (req, res) => {
     }
 });
 
+app.post('/api/wallet/sync-game-delta', requireAuth, async (req, res) => {
+    try {
+        const delta = parseFloat(req.body.delta);
+        if (isNaN(delta) || delta === 0) {
+            return res.json({ success: true, balance: req.user.balance });
+        }
+        await DB.run('UPDATE users SET balance = MAX(0, balance + ?) WHERE id = ?', [delta, req.user.id]);
+        const updated = await DB.get('SELECT balance FROM users WHERE id = ?', [req.user.id]);
+        res.json({ success: true, balance: updated ? updated.balance : req.user.balance });
+    } catch (e) {
+        res.status(500).json({ success: false, message: e.message });
+    }
+});
+
 // ========================================================
 // SUPER ADMIN CONTROL PANEL APIS
 // ========================================================
@@ -841,5 +855,5 @@ app.listen(PORT, '0.0.0.0', () => {
             await DB.syncPullFromPythonAnywhere();
             await DB.syncPushToPythonAnywhere();
         }
-    }, 30000);
+    }, 12000);
 });

@@ -29,6 +29,7 @@ class StateManager {
         // Check if user is logged in
         if (this.token) {
             await this.fetchUserProfile();
+            this.startLiveBalanceWatcher();
         } else {
             this.updateAuthButtonUI(false);
         }
@@ -105,22 +106,87 @@ class StateManager {
         }
     }
 
-    updateBalanceUI() {
+    startLiveBalanceWatcher() {
+        if (this._balWatcher) clearInterval(this._balWatcher);
+        this._syncLockUntil = 0;
+
+        this._balWatcher = setInterval(async () => {
+            if (!this.token || document.hidden) return;
+            if (Date.now() < (this._syncLockUntil || 0)) return;
+
+            try {
+                const res = await fetch('/api/auth/me', {
+                    headers: { 'Authorization': `Bearer ${this.token}` },
+                    cache: 'no-store'
+                });
+                const data = await res.json();
+                if (data.success && data.user && typeof data.user.balance === 'number') {
+                    const serverBal = Math.round(data.user.balance * 100) / 100;
+                    const localBal = Math.round(this.balance * 100) / 100;
+                    const diff = Math.round((serverBal - localBal) * 100) / 100;
+
+                    if (Math.abs(diff) >= 0.01) {
+                        this.balance = serverBal;
+                        localStorage.setItem('asg_balance', serverBal);
+                        // Refresh ONLY balance display with smooth glow flash (no page reload!)
+                        this.updateBalanceUI(diff > 0 ? 'up' : 'down');
+
+                        if (diff > 0) {
+                            this.showToast(`💰 Balance Updated: +₹${diff.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`, 'success');
+                            if (window.sound && window.sound.coin) window.sound.coin();
+                        }
+                    }
+                }
+            } catch (e) {}
+        }, 3000);
+    }
+
+    updateBalanceUI(flashDir = null) {
         const balEls = document.querySelectorAll('.user-balance-val');
+        const formatted = `₹${this.balance.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
         balEls.forEach(el => {
-            el.textContent = `₹${this.balance.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+            el.textContent = formatted;
+            if (flashDir) {
+                el.classList.remove('balance-flash-up', 'balance-flash-down');
+                void el.offsetWidth; // trigger reflow for replay
+                el.classList.add(flashDir === 'up' ? 'balance-flash-up' : 'balance-flash-down');
+            }
         });
+    }
+
+    async syncGameDelta(delta) {
+        if (!this.token || !delta) return;
+        this._syncLockUntil = Date.now() + 4000;
+        try {
+            const res = await fetch('/api/wallet/sync-game-delta', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${this.token}`
+                },
+                body: JSON.stringify({ delta })
+            });
+            const d = await res.json();
+            if (d.success && typeof d.balance === 'number') {
+                this.balance = d.balance;
+                localStorage.setItem('asg_balance', this.balance);
+                this.updateBalanceUI();
+            }
+        } catch (e) {}
     }
 
     addBalance(amount, desc) {
         this.balance += amount;
-        this.updateBalanceUI();
-        this.fetchUserProfile();
+        localStorage.setItem('asg_balance', this.balance);
+        this.updateBalanceUI('up');
+        this.syncGameDelta(amount);
     }
 
     deductBalance(amount, desc) {
         this.balance = Math.max(0, this.balance - amount);
-        this.updateBalanceUI();
+        localStorage.setItem('asg_balance', this.balance);
+        this.updateBalanceUI('down');
+        this.syncGameDelta(-amount);
     }
 
     saveUserBet(bet) {
