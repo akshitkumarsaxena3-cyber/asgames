@@ -1179,62 +1179,234 @@
                 <div class="section-header">
                     <span class="section-title">🎡 Daily Lucky Roulette</span>
                 </div>
-                <p style="font-size:11px; color:#94a3b8;">Spin the wheel to win up to ₹500 free bonus every day!</p>
-                <div class="wheel-container">
-                    <div class="wheel-pointer">▼</div>
-                    <div id="wheel-canvas" class="wheel-canvas"></div>
-                </div>
-                <button id="btn-spin-wheel" class="btn-full btn-gold">SPIN WHEEL FOR FREE</button>
+                <p style="font-size:11px; color:#94a3b8; margin-bottom:12px;">Spin the Invite Wheel to win up to ₹198 cash every spin!</p>
+                <button class="btn-full btn-gold" onclick="window.stateManager.openGameView('wheel')">🎡 OPEN INVITE WHEEL (FREE SPIN)</button>
             </div>
         </main>
 
         <!-- ============================================== -->
-        <!-- TAB 3: PROMOTION / GET ₹500 VIEW               -->
+        <!-- TAB 3: PROMOTION / AGENCY VIEW (BDG-STYLE)     -->
         <!-- ============================================== -->
-        <main id="tab-promotion" class="tab-view hidden" style="padding:16px;">
-            <h2 style="font-size:18px; color:#fae59f; margin-bottom:14px;">💰 Agent Promotion (Get ₹500)</h2>
+        <main id="tab-promotion" class="tab-view bdg-agency-page hidden">
 
-            <!-- Referral Card -->
-            <div class="activity-card">
-                <div style="font-size:14px; font-weight:700; color:#fae59f; margin-bottom:8px;">Invite Friends & Earn Commission</div>
-                <p style="font-size:12px; color:#94a3b8; margin-bottom:14px;">Earn lifetime betting rebate commissions from your invited members across 3 tiers!</p>
-
-                <div class="input-group">
-                    <label class="input-label">Your Invitation Code (UID: <span id="promo-uid">849204</span>)</label>
-                    <div id="promo-code" style="font-size:20px; font-weight:800; color:#ffd875; background:#0f1322; padding:10px; border-radius:8px; text-align:center; border:1px solid #2e3860;">ASG98421</div>
+            <!-- SUB-VIEW 1: AGENCY MAIN DASHBOARD -->
+            <div id="promo-view-main">
+                <div class="bdg-agency-topbar">
+                    <span style="width:28px;"></span>
+                    <span class="bdg-agency-title">Agency</span>
+                    <button class="bdg-agency-top-ico" onclick="openPromoSubView('subordinates')" title="Subordinate Data">📋</button>
                 </div>
 
-                <div class="input-group">
-                    <label class="input-label">Invitation Link</label>
-                    <input type="text" id="promo-link" class="form-input" readonly>
+                <!-- Curved Gold Commission Banner -->
+                <div class="bdg-agency-gold-head">
+                    <div id="promo-yesterday-comm" class="bdg-agency-big-num">0</div>
+                    <div class="bdg-agency-pill">Yesterday's total commission</div>
+                    <div class="bdg-agency-hint">Upgrade the level to increase commission income</div>
                 </div>
 
-                <button id="btn-copy-promo" class="btn-full btn-gold" style="margin-bottom:14px;">COPY INVITATION LINK</button>
+                <div class="bdg-agency-body">
+                    <!-- Overlapping Dual-Column Subordinates Stats Card -->
+                    <div class="bdg-sub-card">
+                        <div class="bdg-sub-card-hdr">
+                            <div>Direct subordinates</div>
+                            <div>Team subordinates</div>
+                        </div>
+                        <div class="bdg-sub-card-grid">
+                            <div class="bdg-sub-col">
+                                <div class="bdg-sub-stat"><strong id="ag-direct-reg" style="color:#fff;">0</strong><span>Number of register</span></div>
+                                <div class="bdg-sub-stat"><strong id="ag-direct-dep-num" style="color:#10b981;">0</strong><span>Deposit number</span></div>
+                                <div class="bdg-sub-stat"><strong id="ag-direct-dep-amt" style="color:#f59e0b;">0</strong><span>Deposit amount</span></div>
+                                <div class="bdg-sub-stat"><strong id="ag-direct-first" style="color:#fff;">0</strong><span>Number of people making first deposit</span></div>
+                            </div>
+                            <div class="bdg-sub-col bdg-sub-col-r">
+                                <div class="bdg-sub-stat"><strong id="ag-team-reg" style="color:#fff;">0</strong><span>Number of register</span></div>
+                                <div class="bdg-sub-stat"><strong id="ag-team-dep-num" style="color:#10b981;">0</strong><span>Deposit number</span></div>
+                                <div class="bdg-sub-stat"><strong id="ag-team-dep-amt" style="color:#f59e0b;">0</strong><span>Deposit amount</span></div>
+                                <div class="bdg-sub-stat"><strong id="ag-team-first" style="color:#fff;">0</strong><span>Number of people making first deposit</span></div>
+                            </div>
+                        </div>
+                    </div>
 
-                <div class="input-group">
-                    <label class="input-label">Commission Available</label>
-                    <div style="display:flex; justify-content:space-between; align-items:center; background:#181e35; padding:10px 14px; border-radius:10px;">
-                        <span style="font-size:18px; font-weight:800; color:#10b981;">₹345.50</span>
-                        <button id="btn-claim-commission" class="btn-deposit" style="padding:6px 14px;">CLAIM CASH</button>
+                    <!-- Big Metallic Gold INVITATION LINK Pill -->
+                    <button id="btn-copy-promo" class="bdg-btn-gold" style="margin:14px 0;" onclick="copyInvitationLink()">INVITATION LINK</button>
+                    <input type="hidden" id="promo-link" value="">
+
+                    <!-- Stacked Action Rows -->
+                    <div class="bdg-agency-rows">
+                        <div class="bdg-agency-row" onclick="copyInvitationCode()">
+                            <div class="bdg-acc-row-l"><span class="bdg-gold-ico">📥</span><span>Copy invitation code</span></div>
+                            <div style="display:flex; align-items:center; gap:8px;">
+                                <span id="promo-code" style="color:#a1a1aa; font-size:13px; font-weight:600;">ASG84920</span>
+                                <span style="color:#a1a1aa;">📋</span>
+                            </div>
+                        </div>
+
+                        <div class="bdg-agency-row" onclick="openPromoSubView('subordinates')">
+                            <div class="bdg-acc-row-l"><span class="bdg-gold-ico">📅</span><span>Subordinate data</span></div>
+                            <span class="bdg-arrow">›</span>
+                        </div>
+
+                        <div class="bdg-agency-row" id="btn-claim-commission" onclick="claimPromoCommission()">
+                            <div class="bdg-acc-row-l"><span class="bdg-gold-ico">💲</span><span>Commission detail</span></div>
+                            <span class="bdg-arrow">›</span>
+                        </div>
+
+                        <div class="bdg-agency-row" onclick="openPromoSubView('rules')">
+                            <div class="bdg-acc-row-l"><span class="bdg-gold-ico">📘</span><span>Invitation rules</span></div>
+                            <span class="bdg-arrow">›</span>
+                        </div>
+
+                        <div class="bdg-agency-row" onclick="alert('🎧 Agent Line Customer Service Active! Contact ASGames Admin for partner support & level upgrades.')">
+                            <div class="bdg-acc-row-l"><span class="bdg-gold-ico">🎧</span><span>Agent line customer service</span></div>
+                            <span class="bdg-arrow">›</span>
+                        </div>
+
+                        <div class="bdg-agency-row" onclick="openPromoSubView('rules')">
+                            <div class="bdg-acc-row-l"><span class="bdg-gold-ico">💰</span><span>Rebate ratio</span></div>
+                            <span class="bdg-arrow">›</span>
+                        </div>
+                    </div>
+
+                    <!-- Bottom Promotion Data Summary Card -->
+                    <div class="bdg-promo-data-card">
+                        <div class="bdg-promo-data-hdr"><span class="bdg-gold-ico">💼</span> <span>Promotion data</span></div>
+                        <div class="bdg-promo-data-grid">
+                            <div class="bdg-pd-item"><strong id="ag-this-week">0</strong><span>This Week</span></div>
+                            <div class="bdg-pd-item bdg-pd-border"><strong id="ag-total-comm">0</strong><span>Total commission</span></div>
+                            <div class="bdg-pd-item"><strong id="ag-direct-sub-count">0</strong><span>Direct Subordinate</span></div>
+                            <div class="bdg-pd-item bdg-pd-border"><strong id="ag-team-sub-count">0</strong><span>Total number of subordinates in the team</span></div>
+                        </div>
                     </div>
                 </div>
             </div>
 
-            <!-- Commission Ladder -->
-            <div class="activity-card">
-                <div class="section-title" style="margin-bottom:10px;">Tiered Rebate Commission</div>
-                <div style="font-size:12px; color:#e2e8f0; line-height:1.6;">
-                    <p>🥇 <strong>Tier 1 Subordinates:</strong> 0.6% on all turnover</p>
-                    <p>🥈 <strong>Tier 2 Subordinates:</strong> 0.18% on all turnover</p>
-                    <p>🥉 <strong>Tier 3 Subordinates:</strong> 0.05% on all turnover</p>
+            <!-- SUB-VIEW 2: SUBORDINATE DATA (TeamReport) -->
+            <div id="promo-view-subordinates" class="hidden">
+                <div class="bdg-agency-topbar">
+                    <button class="bdg-back-btn" onclick="openPromoSubView('main')">&#8249;</button>
+                    <span class="bdg-agency-title">Subordinate data</span>
+                    <span style="width:28px;"></span>
+                </div>
+
+                <div style="padding:14px;">
+                    <!-- Search Bar -->
+                    <div class="bdg-search-row">
+                        <input type="text" id="sub-search-uid" class="bdg-search-input" placeholder="Search subordinate UID" oninput="filterSubordinatesList()">
+                        <button class="bdg-search-btn" onclick="filterSubordinatesList()">🔍</button>
+                    </div>
+
+                    <!-- Filter Dropdowns -->
+                    <div class="bdg-filter-row">
+                        <select class="bdg-filter-select">
+                            <option value="all">All</option>
+                            <option value="1">Level 1</option>
+                            <option value="2">Level 2</option>
+                        </select>
+                        <input type="date" id="sub-filter-date" class="bdg-filter-select">
+                    </div>
+
+                    <!-- 3x2 Team Report Stats Card -->
+                    <div class="bdg-team-report-card">
+                        <div class="bdg-tr-item"><strong id="tr-dep-num">0</strong><span>Deposit number</span></div>
+                        <div class="bdg-tr-item bdg-pd-border"><strong id="tr-dep-amt">0</strong><span>Deposit amount</span></div>
+                        <div class="bdg-tr-item"><strong id="tr-bettors">0</strong><span>Number of bettors</span></div>
+                        <div class="bdg-tr-item bdg-pd-border"><strong id="tr-total-bet">0</strong><span>Total bet</span></div>
+                        <div class="bdg-tr-item"><strong id="tr-first-num">0</strong><span>Number of people making first deposit</span></div>
+                        <div class="bdg-tr-item bdg-pd-border"><strong id="tr-first-amt">0</strong><span>First deposit amount</span></div>
+                    </div>
+
+                    <!-- Subordinates List / Empty State -->
+                    <div id="subordinates-list" class="bdg-sub-list-box">
+                        <div class="bdg-no-data">
+                            <div style="font-size:48px; opacity:0.35; margin-bottom:8px;">📜</div>
+                            <div>No data</div>
+                        </div>
+                    </div>
                 </div>
             </div>
 
-            <!-- Downline Team Subordinates -->
-            <div class="activity-card">
-                <div class="section-title" style="margin-bottom:10px;">👥 My Invited Subordinates</div>
-                <div id="subordinates-list" style="font-size:12px; color:#94a3b8;">
-                    No subordinates yet. Share your invite link above!
+            <!-- SUB-VIEW 3: INVITATION RULES (01-08 + L0-L10 TABLE) -->
+            <div id="promo-view-rules" class="hidden">
+                <div class="bdg-agency-topbar">
+                    <button class="bdg-back-btn" onclick="openPromoSubView('main')">&#8249;</button>
+                    <span class="bdg-agency-title">Rules</span>
+                    <span style="width:28px;"></span>
+                </div>
+
+                <div class="bdg-rules-body">
+                    <div class="bdg-rules-hero">
+                        <div class="bdg-rules-hero-title">【Promotion partner】 program</div>
+                        <div class="bdg-rules-hero-sub">This activity is valid for a long time</div>
+                    </div>
+
+                    <div class="bdg-rule-card">
+                        <div class="bdg-rule-badge">01</div>
+                        <p>There are 6 subordinate levels in inviting friends, if A invites B, then B is a level 1 subordinate of A. If B invites C, then C is a level 1 subordinate of B and also a level 2 subordinate of A. If C invites D, then D is a level 1 subordinate of C, at the same time a level 2 subordinate of B and also a level 3 subordinate of A.</p>
+                    </div>
+
+                    <div class="bdg-rule-card">
+                        <div class="bdg-rule-badge">02</div>
+                        <p>When inviting friends to register, you must send the invitation link provided or enter the invitation code manually so that your friends become your level 1 subordinates.</p>
+                    </div>
+
+                    <div class="bdg-rule-card">
+                        <div class="bdg-rule-badge">03</div>
+                        <p>The invitee registers via the inviter's invitation code and completes the deposit, shortly after that the commission will be received immediately.</p>
+                    </div>
+
+                    <div class="bdg-rule-card">
+                        <div class="bdg-rule-badge">04</div>
+                        <p>The calculation of yesterday's commission starts every morning at 01:00. After the commission calculation is completed, the commission is rewarded to the wallet and can be viewed through the commission collection record.</p>
+                    </div>
+
+                    <div class="bdg-rule-card">
+                        <div class="bdg-rule-badge">05</div>
+                        <p>Commission rates vary depending on your agency level on that day.<br>
+                        Number of Teams: How many downline deposits you have to date.<br>
+                        Team Deposits: The total number of deposits made by your downline in one day.<br>
+                        Team Deposit: Your downline deposits within one day.</p>
+
+                        <!-- Exact L0 - L10 Rebate Level Table -->
+                        <table class="bdg-rebate-table">
+                            <thead>
+                                <tr>
+                                    <th>Rebate level</th>
+                                    <th>Team Number</th>
+                                    <th>Team Betting</th>
+                                    <th>Team Deposit</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr><td><span class="bdg-lvl-crown">👑 L0</span></td><td>0</td><td>0</td><td>0</td></tr>
+                                <tr><td><span class="bdg-lvl-crown">👑 L1</span></td><td>5</td><td>500K</td><td>100K</td></tr>
+                                <tr><td><span class="bdg-lvl-crown">👑 L2</span></td><td>10</td><td>1,000K</td><td>200K</td></tr>
+                                <tr><td><span class="bdg-lvl-crown">👑 L3</span></td><td>15</td><td>2.50M</td><td>500K</td></tr>
+                                <tr><td><span class="bdg-lvl-crown">👑 L4</span></td><td>20</td><td>3.50M</td><td>700K</td></tr>
+                                <tr><td><span class="bdg-lvl-crown">👑 L5</span></td><td>25</td><td>5M</td><td>1,000K</td></tr>
+                                <tr><td><span class="bdg-lvl-crown">👑 L6</span></td><td>30</td><td>10M</td><td>2M</td></tr>
+                                <tr><td><span class="bdg-lvl-crown">👑 L7</span></td><td>100</td><td>100M</td><td>20M</td></tr>
+                                <tr><td><span class="bdg-lvl-crown">👑 L8</span></td><td>500</td><td>500M</td><td>100M</td></tr>
+                                <tr><td><span class="bdg-lvl-crown">👑 L9</span></td><td>1000</td><td>1,000M</td><td>200M</td></tr>
+                                <tr><td><span class="bdg-lvl-crown">👑 L10</span></td><td>5000</td><td>1,500M</td><td>300M</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="bdg-rule-card">
+                        <div class="bdg-rule-badge">06</div>
+                        <p>The commission percentage depends on the membership level. The higher the membership level, the higher the bonus percentage. Different game types also have different payout percentages.<br>The commission rate is specifically explained as follows<br>
+                        <span style="color:#ef4444; font-weight:700;">View rebate ratio &gt;&gt;</span></p>
+                    </div>
+
+                    <div class="bdg-rule-card">
+                        <div class="bdg-rule-badge">07</div>
+                        <p>TOP20 commission rankings will be randomly awarded with a separate bonus.</p>
+                    </div>
+
+                    <div class="bdg-rule-card">
+                        <div class="bdg-rule-badge">08</div>
+                        <p>The final interpretation of this activity belongs to ASGames.</p>
+                    </div>
                 </div>
             </div>
         </main>

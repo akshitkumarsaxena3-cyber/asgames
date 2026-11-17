@@ -671,31 +671,19 @@ class StateManager {
     }
 
     async renderPromotionTab() {
-        const uidEl = document.getElementById('promo-uid');
         const codeEl = document.getElementById('promo-code');
         const linkEl = document.getElementById('promo-link');
-        const claimBtn = document.getElementById('btn-claim-commission');
-        const subList = document.getElementById('subordinates-list');
+        const dateInp = document.getElementById('sub-filter-date');
 
         const currentOrigin = window.location.origin;
-        const link = `${currentOrigin}/?r=${this.inviteCode}`;
+        const link = `${currentOrigin}/#/register?invitationCode=${this.inviteCode}`;
 
-        if (uidEl) uidEl.textContent = this.uid;
         if (codeEl) codeEl.textContent = this.inviteCode;
         if (linkEl) linkEl.value = link;
+        if (dateInp && !dateInp.value) dateInp.value = new Date().toISOString().slice(0, 10);
 
-        const copyBtn = document.getElementById('btn-copy-promo');
-        if (copyBtn) {
-            copyBtn.onclick = () => {
-                navigator.clipboard.writeText(link).then(() => {
-                    this.showToast('Invitation link copied to clipboard!', 'success');
-                }).catch(() => {
-                    this.showToast(`Code: ${this.inviteCode}`, 'success');
-                });
-            };
-        }
+        this._subordinatesCache = [];
 
-        // Fetch live referral stats from server
         if (this.token) {
             try {
                 const res = await fetch('/api/referral/stats', {
@@ -703,40 +691,42 @@ class StateManager {
                 });
                 const d = await res.json();
                 if (d.success) {
-                    if (claimBtn) {
-                        claimBtn.textContent = `CLAIM ₹${d.unclaimedCommission.toFixed(2)}`;
-                        claimBtn.disabled = d.unclaimedCommission <= 0;
-                        claimBtn.onclick = async () => {
-                            const cRes = await fetch('/api/referral/claim', {
-                                method: 'POST',
-                                headers: { 'Authorization': `Bearer ${this.token}` }
-                            });
-                            const cd = await cRes.json();
-                            if (cd.success) {
-                                this.showToast(cd.message, 'success');
-                                this.fetchUserProfile();
-                                this.renderPromotionTab();
-                            } else {
-                                this.showToast(cd.message, 'info');
-                            }
-                        };
-                    }
+                    const subs = d.subordinates || [];
+                    this._subordinatesCache = subs;
+                    const unclaimed = parseFloat(d.unclaimedCommission || d.unclaimed_commission || 0);
+                    const totalComm = parseFloat(d.totalCommission || d.total_commission || unclaimed);
 
-                    if (subList) {
-                        if (d.subordinates && d.subordinates.length > 0) {
-                            subList.innerHTML = d.subordinates.map(s => `
-                                <div style="display:flex; justify-content:space-between; padding:6px 0; border-bottom:1px solid rgba(255,255,255,0.05);">
-                                    <span>📱 ${s.phone}</span>
-                                    <span style="color:#94a3b8; font-size:10px;">${s.date}</span>
-                                </div>
-                            `).join('');
-                        } else {
-                            subList.innerHTML = `<p style="color:#94a3b8;">No subordinates registered yet. Share your invite link to build your team!</p>`;
-                        }
-                    }
+                    const setTxt = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+                    setTxt('promo-yesterday-comm', totalComm.toFixed(0));
+                    setTxt('ag-direct-reg', subs.length);
+                    setTxt('ag-team-reg', subs.length);
+                    setTxt('ag-this-week', totalComm.toFixed(0));
+                    setTxt('ag-total-comm', totalComm.toFixed(0));
+                    setTxt('ag-direct-sub-count', subs.length);
+                    setTxt('ag-team-sub-count', subs.length);
+
+                    this.renderSubordinatesList(subs);
                 }
             } catch (e) {}
         }
+    }
+
+    renderSubordinatesList(list) {
+        const subList = document.getElementById('subordinates-list');
+        if (!subList) return;
+        if (!list || list.length === 0) {
+            subList.innerHTML = `<div class="bdg-no-data"><div style="font-size:48px; opacity:0.35; margin-bottom:8px;">📜</div><div>No data</div></div>`;
+            return;
+        }
+        subList.innerHTML = list.map(s => `
+            <div style="display:flex; justify-content:space-between; align-items:center; padding:10px 12px; border-bottom:1px solid rgba(255,255,255,0.06);">
+                <div>
+                    <div style="color:#fff; font-weight:700; font-size:13px;">📱 ${s.phone || 'User'}</div>
+                    <div style="color:#94a3b8; font-size:11px;">UID: ${s.id || '---'}</div>
+                </div>
+                <div style="color:#f5c443; font-size:11px;">${(s.date || s.created_at || '').slice(0, 10)}</div>
+            </div>
+        `).join('');
     }
 
     renderAccountTab() {
@@ -1269,6 +1259,69 @@ function goFdbActivity() {
     if (window.stateManager) {
         window.stateManager.switchTab('activity');
     }
+}
+
+// ========================================================
+// AGENCY / PROMOTION SUB-VIEWS & ACTIONS
+// ========================================================
+function openPromoSubView(viewName) {
+    ['main', 'subordinates', 'rules'].forEach(v => {
+        const el = document.getElementById(`promo-view-${v}`);
+        if (el) el.classList.toggle('hidden', v !== viewName);
+    });
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function copyInvitationLink() {
+    const sm = window.stateManager;
+    const code = (sm && sm.inviteCode) || 'ASG84920';
+    const link = `${window.location.origin}/#/register?invitationCode=${code}`;
+    if (navigator.clipboard) {
+        navigator.clipboard.writeText(link).catch(() => {});
+    }
+    if (sm) sm.showToast('Invitation Link Copied! Share to earn 6-level commission.', 'success');
+}
+
+function copyInvitationCode() {
+    const sm = window.stateManager;
+    const code = (sm && sm.inviteCode) || 'ASG84920';
+    if (navigator.clipboard) {
+        navigator.clipboard.writeText(code).catch(() => {});
+    }
+    if (sm) sm.showToast(`Invitation Code Copied: ${code}`, 'success');
+}
+
+async function claimPromoCommission() {
+    const sm = window.stateManager;
+    if (!sm || !sm.token) {
+        openAuthModal('login');
+        return;
+    }
+    try {
+        const res = await fetch('/api/referral/claim', {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${sm.token}` }
+        });
+        const d = await res.json();
+        sm.showToast(d.message || 'Checked commission details.', d.success ? 'success' : 'info');
+        if (d.success) {
+            sm.fetchUserProfile();
+            sm.renderPromotionTab();
+        }
+    } catch (e) {}
+}
+
+function filterSubordinatesList() {
+    const sm = window.stateManager;
+    if (!sm) return;
+    const q = (document.getElementById('sub-search-uid')?.value || '').trim().toLowerCase();
+    const list = sm._subordinatesCache || [];
+    if (!q) {
+        sm.renderSubordinatesList(list);
+        return;
+    }
+    const filtered = list.filter(s => String(s.id || '').includes(q) || String(s.phone || '').toLowerCase().includes(q));
+    sm.renderSubordinatesList(filtered);
 }
 
 // Global initialization
