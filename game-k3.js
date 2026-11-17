@@ -82,7 +82,7 @@ class K3Game {
     }
 
     async rollDiceAndDraw() {
-        if (window.sound) window.sound.diceRoll();
+        if (window.sound) window.sound.diceRoll('k3');
 
         // Animate rolling
         const cup = document.getElementById('k3-cup');

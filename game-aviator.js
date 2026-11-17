@@ -57,7 +57,7 @@ class AviatorGame {
             countdown--;
             if (countdown > 0) {
                 this.drawIdleScreen(`Next round in ${countdown}s...`);
-                if (window.sound) window.sound.tick();
+                if (window.sound) window.sound.tick('aviator');
             } else {
                 clearInterval(timer);
                 this.launchFlight();
@@ -140,8 +140,8 @@ class AviatorGame {
         this.multiplier = this.crashPoint;
         if (this.animationId) cancelAnimationFrame(this.animationId);
 
-        // Sound
-        if (window.sound) window.sound.loss();
+        // Sound (ONLY when Aviator is open)
+        if (window.sound) window.sound.loss('aviator');
 
         // History
         this.history.unshift(this.crashPoint);

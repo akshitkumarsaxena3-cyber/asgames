@@ -113,11 +113,11 @@ class WinGoGame {
                 this.handleBettingLock();
             }
 
-            // Urgent beeps in last 5 seconds
+            // Urgent beeps in last 5 seconds (ONLY when Win Go is open)
             if (this.remainingSeconds <= 5 && this.remainingSeconds > 0) {
-                if (window.sound) window.sound.urgentTick();
+                if (window.sound) window.sound.urgentTick('wingo');
             } else if (this.remainingSeconds > 5) {
-                if (window.sound && this.remainingSeconds % 5 === 0) window.sound.tick();
+                if (window.sound && this.remainingSeconds % 5 === 0) window.sound.tick('wingo');
             }
 
             // Draw period end

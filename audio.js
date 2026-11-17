@@ -1,32 +1,24 @@
 // ASGames Web Audio Sound Synthesizer
 // Zero external asset dependencies - runs completely offline with Web Audio API
+// Audio plays ONLY when a specific game view is actively open!
+
+window.isGameScreenOpen = function (gameName) {
+    if (gameName) {
+        const el = document.getElementById(`game-view-${gameName}`);
+        return Boolean(el && !el.classList.contains('hidden'));
+    }
+    return Boolean(document.querySelector('.game-view:not(.hidden)'));
+};
 
 class SoundEffects {
     constructor() {
         this.ctx = null;
         this.enabled = true;
-        this.initOnFirstInteraction();
     }
 
-    initOnFirstInteraction() {
-        const unlock = () => {
-            if (!this.ctx) {
-                const AudioContext = window.AudioContext || window.webkitAudioContext;
-                if (AudioContext) {
-                    this.ctx = new AudioContext();
-                }
-            }
-            if (this.ctx && this.ctx.state === 'suspended') {
-                this.ctx.resume();
-            }
-            window.removeEventListener('click', unlock);
-            window.removeEventListener('touchstart', unlock);
-        };
-        window.addEventListener('click', unlock, { once: true });
-        window.addEventListener('touchstart', unlock, { once: true });
-    }
-
-    ensureContext() {
+    ensureContext(gameName) {
+        if (!this.enabled) return false;
+        if (!window.isGameScreenOpen(gameName)) return false;
         if (!this.ctx) {
             const AudioContext = window.AudioContext || window.webkitAudioContext;
             if (AudioContext) {
@@ -34,20 +26,28 @@ class SoundEffects {
             }
         }
         if (this.ctx && this.ctx.state === 'suspended') {
-            this.ctx.resume();
+            this.ctx.resume().catch(() => {});
+        }
+        return Boolean(this.ctx);
+    }
+
+    suspendIfNoGame() {
+        if (this.ctx && !window.isGameScreenOpen() && this.ctx.state === 'running') {
+            this.ctx.suspend().catch(() => {});
         }
     }
 
     toggle() {
         this.enabled = !this.enabled;
+        if (!this.enabled && this.ctx && this.ctx.state === 'running') {
+            this.ctx.suspend().catch(() => {});
+        }
         return this.enabled;
     }
 
-    // Short UI click
-    click() {
-        if (!this.enabled) return;
-        this.ensureContext();
-        if (!this.ctx) return;
+    // Short UI click (only inside open game)
+    click(gameName) {
+        if (!this.ensureContext(gameName)) return;
 
         const osc = this.ctx.createOscillator();
         const gain = this.ctx.createGain();
@@ -65,10 +65,8 @@ class SoundEffects {
     }
 
     // Countdown tick
-    tick() {
-        if (!this.enabled) return;
-        this.ensureContext();
-        if (!this.ctx) return;
+    tick(gameName) {
+        if (!this.ensureContext(gameName)) return;
 
         const osc = this.ctx.createOscillator();
         const gain = this.ctx.createGain();
@@ -84,10 +82,8 @@ class SoundEffects {
     }
 
     // Urgent countdown beep (last 5 seconds)
-    urgentTick() {
-        if (!this.enabled) return;
-        this.ensureContext();
-        if (!this.ctx) return;
+    urgentTick(gameName) {
+        if (!this.ensureContext(gameName)) return;
 
         const osc = this.ctx.createOscillator();
         const gain = this.ctx.createGain();
@@ -103,10 +99,8 @@ class SoundEffects {
     }
 
     // Bet placed / Chip bet sound
-    chip() {
-        if (!this.enabled) return;
-        this.ensureContext();
-        if (!this.ctx) return;
+    chip(gameName) {
+        if (!this.ensureContext(gameName)) return;
 
         const now = this.ctx.currentTime;
         [800, 1200].forEach((freq, i) => {
@@ -125,10 +119,8 @@ class SoundEffects {
     }
 
     // Win chime / reward sound
-    win() {
-        if (!this.enabled) return;
-        this.ensureContext();
-        if (!this.ctx) return;
+    win(gameName) {
+        if (!this.ensureContext(gameName)) return;
 
         const now = this.ctx.currentTime;
         const notes = [523.25, 659.25, 783.99, 1046.5]; // C5, E5, G5, C6
@@ -149,10 +141,8 @@ class SoundEffects {
     }
 
     // Big jackpot fanfare
-    jackpot() {
-        if (!this.enabled) return;
-        this.ensureContext();
-        if (!this.ctx) return;
+    jackpot(gameName) {
+        if (!this.ensureContext(gameName)) return;
 
         const now = this.ctx.currentTime;
         const chord = [523.25, 659.25, 783.99, 1046.5, 1318.5];
@@ -173,10 +163,8 @@ class SoundEffects {
     }
 
     // Loss sound (gentle descending tone)
-    loss() {
-        if (!this.enabled) return;
-        this.ensureContext();
-        if (!this.ctx) return;
+    loss(gameName) {
+        if (!this.ensureContext(gameName)) return;
 
         const now = this.ctx.currentTime;
         const notes = [440, 392, 349.23];
@@ -197,10 +185,8 @@ class SoundEffects {
     }
 
     // Gem reveal in Mines
-    gem() {
-        if (!this.enabled) return;
-        this.ensureContext();
-        if (!this.ctx) return;
+    gem(gameName) {
+        if (!this.ensureContext(gameName)) return;
 
         const now = this.ctx.currentTime;
         const osc = this.ctx.createOscillator();
@@ -219,10 +205,8 @@ class SoundEffects {
     }
 
     // Mine explosion
-    bomb() {
-        if (!this.enabled) return;
-        this.ensureContext();
-        if (!this.ctx) return;
+    bomb(gameName) {
+        if (!this.ensureContext(gameName)) return;
 
         const now = this.ctx.currentTime;
         // White noise explosion
@@ -250,10 +234,8 @@ class SoundEffects {
     }
 
     // Dice roll shake
-    diceRoll() {
-        if (!this.enabled) return;
-        this.ensureContext();
-        if (!this.ctx) return;
+    diceRoll(gameName) {
+        if (!this.ensureContext(gameName)) return;
 
         const now = this.ctx.currentTime;
         for (let i = 0; i < 4; i++) {

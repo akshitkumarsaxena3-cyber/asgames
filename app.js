@@ -458,6 +458,7 @@ class StateManager {
 
         document.querySelectorAll('.tab-view').forEach(view => view.classList.add('hidden'));
         document.querySelectorAll('.game-view').forEach(view => view.classList.add('hidden'));
+        if (window.sound && window.sound.suspendIfNoGame) window.sound.suspendIfNoGame();
 
         const targetView = document.getElementById(`tab-${tabName}`);
         if (targetView) targetView.classList.remove('hidden');
