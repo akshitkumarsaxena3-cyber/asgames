@@ -29,7 +29,7 @@ class InviteWheelGame {
         const savedSpins = localStorage.getItem('asg_wheel_spins');
         this.spinsLeft = savedSpins !== null ? parseInt(savedSpins) : 3; // 3 Free Spins for new players!
         this.history = JSON.parse(localStorage.getItem('asg_wheel_hist') || '[]');
-        this.cashOutTarget = 200; // Cash out into real wallet at ₹200
+        this.cashOutTarget = 500; // Cash out into real wallet at ₹500 (exact BDG target!)
 
         this.init();
     }
@@ -65,11 +65,22 @@ class InviteWheelGame {
     }
 
     startCountdownTimer() {
+        let expireTs = parseInt(localStorage.getItem('asg_wheel_expire_ts') || '0', 10);
+        const nowTs = Date.now();
+        if (!expireTs || expireTs <= nowTs) {
+            expireTs = nowTs + (72 * 3600 * 1000) - (33 * 60 * 1000); // ~71:27:00 72-hour window
+            localStorage.setItem('asg_wheel_expire_ts', String(expireTs));
+        }
         const updateTimer = () => {
-            const now = new Date();
-            const h = String(23 - now.getHours()).padStart(2, '0');
-            const m = String(59 - now.getMinutes()).padStart(2, '0');
-            const s = String(59 - now.getSeconds()).padStart(2, '0');
+            let diff = Math.max(0, Math.floor((expireTs - Date.now()) / 1000));
+            if (diff <= 0) {
+                expireTs = Date.now() + (72 * 3600 * 1000);
+                localStorage.setItem('asg_wheel_expire_ts', String(expireTs));
+                diff = 72 * 3600;
+            }
+            const h = String(Math.floor(diff / 3600)).padStart(2, '0');
+            const m = String(Math.floor((diff % 3600) / 60)).padStart(2, '0');
+            const s = String(diff % 60).padStart(2, '0');
             const el = document.getElementById('wheel-timer-str');
             if (el) el.textContent = `${h}:${m}:${s}`;
         };
@@ -90,7 +101,7 @@ class InviteWheelGame {
     spin() {
         if (this.isSpinning) return;
         if (this.spinsLeft <= 0) {
-            this.sm.showToast('No Free Spins left! Invite a friend below for +1 Free Spin 🎁', 'warning');
+            this.showInsufficientModal('spin');
             return;
         }
 
@@ -171,8 +182,7 @@ class InviteWheelGame {
 
     cashOut() {
         if (this.wheelAmount < this.cashOutTarget) {
-            const need = (this.cashOutTarget - this.wheelAmount).toFixed(2);
-            this.sm.showToast(`Collect ₹${need} more to Cash Out (Min ₹${this.cashOutTarget})!`, 'warning');
+            this.showInsufficientModal('cashout');
             return;
         }
 
@@ -182,6 +192,36 @@ class InviteWheelGame {
         this.sm.addBalance(payout, `Invite Wheel Cash Out (₹${payout.toFixed(2)})`);
         this.updateUI();
         this.sm.showWinModal(payout, 'Invite Wheel Cash Out Credited!');
+    }
+
+    showInsufficientModal(mode = 'cashout') {
+        const modal = document.getElementById('wheel-insufficient-modal');
+        const titleEl = document.getElementById('wheel-insuff-title');
+        const msgEl = document.getElementById('wheel-insuff-msg');
+        const need = Math.max(0, this.cashOutTarget - this.wheelAmount).toFixed(2);
+        if (titleEl) {
+            titleEl.textContent = mode === 'spin' ? 'No free spins left' : 'Insufficient amount';
+        }
+        if (msgEl) {
+            msgEl.textContent = mode === 'spin'
+                ? `You need ₹${need} more to cash out. Invite friends to get free spins!`
+                : `You need ₹${need} more to cash out`;
+        }
+        if (modal) modal.classList.remove('hidden');
+    }
+
+    closeInsufficientModal() {
+        const modal = document.getElementById('wheel-insufficient-modal');
+        if (modal) modal.classList.add('hidden');
+    }
+
+    openInviteFromWheel() {
+        this.closeInsufficientModal();
+        if (typeof openInvitePosterModal === 'function') {
+            openInvitePosterModal(true);
+        } else {
+            this.claimInviteSpin();
+        }
     }
 
     claimInviteSpin() {
@@ -218,7 +258,7 @@ class InviteWheelGame {
             '🎡 INVITE WHEEL RULES:\n\n' +
             '1. Every player gets 3 FREE SPINS daily.\n' +
             '2. Spin the wheel to win cash up to ₹198 per spin!\n' +
-            '3. Reach ₹200 and tap CASH OUT to transfer winnings straight to your main wallet.\n' +
+            '3. Reach ₹500 and tap CASH OUT to transfer winnings straight to your main wallet.\n' +
             '4. Share your Invite Link to get extra Free Spins!'
         );
     }

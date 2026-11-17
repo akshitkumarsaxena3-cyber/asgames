@@ -277,6 +277,150 @@
             </div>
         </div>
 
+        <!-- Invite Wheel Insufficient Amount Popup (Exact BDG Screenshot 2) -->
+        <div id="wheel-insufficient-modal" class="fdb-overlay hidden">
+            <div class="wheel-insuff-card">
+                <div class="wheel-insuff-icon">!</div>
+                <div id="wheel-insuff-title" class="wheel-insuff-title">Insufficient amount</div>
+                <div id="wheel-insuff-msg" class="wheel-insuff-msg">You need ₹500.00 more to cash out</div>
+                <button class="bdg-btn-gold" style="margin:22px 0 12px; font-size:13px; letter-spacing:0.4px;" onclick="window.wheelGame.openInviteFromWheel()">INVITE FRIENDS TO GET SPIN</button>
+                <button class="wheel-insuff-ok" onclick="window.wheelGame.closeInsufficientModal()">OK</button>
+            </div>
+        </div>
+
+        <!-- Invite Poster & QR Share Full Screen (Exact BDG #/promotion/PromotionShare Screenshot 3) -->
+        <div id="invite-poster-modal" class="bdg-auth-overlay hidden">
+            <div class="bdg-auth-shell inv-poster-shell">
+                <!-- Dark Header -->
+                <div class="bdg-sub-header" style="background:#26262a; border-bottom:1px solid rgba(255,255,255,0.06);">
+                    <button class="bdg-back-btn" style="color:#fff;" onclick="closeInvitePosterModal()">&#8249;</button>
+                    <span class="bdg-sub-title">Invite</span>
+                    <span style="width:28px;"></span>
+                </div>
+
+                <div class="inv-poster-subtitle">Please swipe left - right to choose your favorite poster</div>
+
+                <!-- Horizontal Swipeable Posters Carousel -->
+                <div id="inv-poster-carousel" class="inv-poster-carousel">
+                    <!-- Poster 1: Exact Blue/Cyan BDG Style -->
+                    <div class="inv-poster-card inv-poster-blue" data-poster-idx="0">
+                        <div class="inv-p-ribbons">
+                            <div class="inv-p-ribbon">Fair and justice</div>
+                            <div class="inv-p-ribbon">Open and<br>transparent</div>
+                        </div>
+                        <div class="inv-p-headline">Full Odds Bonus Rate</div>
+                        <div class="inv-p-features">
+                            <div class="inv-p-feat-box">
+                                <span class="inv-p-feat-ico">🏛️</span>
+                                <span>Financial security</span>
+                            </div>
+                            <div class="inv-p-feat-box">
+                                <span class="inv-p-feat-ico">🚚</span>
+                                <span>Quick withdrawal</span>
+                            </div>
+                        </div>
+                        <div class="inv-p-comm-title">Permanent commission up to</div>
+                        <div class="inv-p-comm-pct">85%</div>
+
+                        <!-- Glowing Gift Box + Floating Coins + Real Scannable QR -->
+                        <div class="inv-p-qr-stage">
+                            <span class="inv-p-coin c1">🪙</span>
+                            <span class="inv-p-coin c2">🎟️</span>
+                            <span class="inv-p-coin c3">🪙</span>
+                            <span class="inv-p-coin c4">🎟️</span>
+                            <div class="inv-p-giftbox">
+                                <div class="inv-p-gift-lid"></div>
+                                <div class="inv-p-qr-wrap">
+                                    <img class="inv-qr-img" crossorigin="anonymous" alt="Invite QR Code" src="">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Poster 2: Luxury Royal Gold VIP -->
+                    <div class="inv-poster-card inv-poster-gold" data-poster-idx="1">
+                        <div class="inv-p-ribbons">
+                            <div class="inv-p-ribbon">VIP Daily Bonus</div>
+                            <div class="inv-p-ribbon">Instant<br>Payout</div>
+                        </div>
+                        <div class="inv-p-headline">Invite Bonus Up To ₹3,65,555</div>
+                        <div class="inv-p-features">
+                            <div class="inv-p-feat-box">
+                                <span class="inv-p-feat-ico">🛡️</span>
+                                <span>100% Verified</span>
+                            </div>
+                            <div class="inv-p-feat-box">
+                                <span class="inv-p-feat-ico">⚡</span>
+                                <span>Fast UPI Pay</span>
+                            </div>
+                        </div>
+                        <div class="inv-p-comm-title">Permanent commission up to</div>
+                        <div class="inv-p-comm-pct">85%</div>
+
+                        <div class="inv-p-qr-stage">
+                            <span class="inv-p-coin c1">👑</span>
+                            <span class="inv-p-coin c2">💎</span>
+                            <span class="inv-p-coin c3">🪙</span>
+                            <span class="inv-p-coin c4">🎁</span>
+                            <div class="inv-p-giftbox">
+                                <div class="inv-p-gift-lid"></div>
+                                <div class="inv-p-qr-wrap">
+                                    <img class="inv-qr-img" crossorigin="anonymous" alt="Invite QR Code" src="">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Poster 3: Lucky Wheel Ruby Red -->
+                    <div class="inv-poster-card inv-poster-red" data-poster-idx="2">
+                        <div class="inv-p-ribbons">
+                            <div class="inv-p-ribbon">Free Spin Daily</div>
+                            <div class="inv-p-ribbon">Win Cash<br>₹500</div>
+                        </div>
+                        <div class="inv-p-headline">ASGames Official Partner</div>
+                        <div class="inv-p-features">
+                            <div class="inv-p-feat-box">
+                                <span class="inv-p-feat-ico">🎡</span>
+                                <span>Lucky Wheel</span>
+                            </div>
+                            <div class="inv-p-feat-box">
+                                <span class="inv-p-feat-ico">💰</span>
+                                <span>Zero Fee Cash</span>
+                            </div>
+                        </div>
+                        <div class="inv-p-comm-title">Permanent commission up to</div>
+                        <div class="inv-p-comm-pct">85%</div>
+
+                        <div class="inv-p-qr-stage">
+                            <span class="inv-p-coin c1">🪙</span>
+                            <span class="inv-p-coin c2">🔥</span>
+                            <span class="inv-p-coin c3">🪙</span>
+                            <span class="inv-p-coin c4">🎁</span>
+                            <div class="inv-p-giftbox">
+                                <div class="inv-p-gift-lid"></div>
+                                <div class="inv-p-qr-wrap">
+                                    <img class="inv-qr-img" crossorigin="anonymous" alt="Invite QR Code" src="">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Bottom Info + Action Pills (Exact Screenshot 3) -->
+                <div class="inv-poster-footer">
+                    <div class="inv-poster-stats-row">
+                        <span>Invite friends</span>
+                        <span>Income <strong style="color:#ef4444; font-weight:800;">10 billion</strong> Commission</span>
+                    </div>
+
+                    <button class="bdg-btn-gold" style="margin:14px 0 10px; font-size:14px;" onclick="downloadInvitePosterQR()">DOWNLOAD QR CODE</button>
+                    <button class="inv-copy-link-pill" onclick="copyInvitePosterLink()">Copy invitation link</button>
+
+                    <div class="inv-share-other" onclick="shareInvitePosterNative()">Share to other apps to invite friend</div>
+                </div>
+            </div>
+        </div>
+
         <!-- Floating Right-Side Quick Shortcuts (Like BDG Win!) -->
         <div class="home-floating-rail">
             <button class="float-rail-btn float-gift" onclick="openFirstDepositModal(true)" title="First Deposit Bonus">🎁</button>
@@ -1159,13 +1303,9 @@
 
                 <!-- Amount & Cash Out Header -->
                 <div class="wheel-amount-header">
-                    <div class="wheel-subtitle">My Amount (<span id="wheel-timer-str">23:59:59</span>)</div>
+                    <div class="wheel-subtitle">My Amount(<span id="wheel-timer-str">71:26:26</span>)</div>
                     <div id="wheel-my-amount" class="wheel-big-amount">₹0.00</div>
                     <button class="wheel-cashout-btn" onclick="window.wheelGame.cashOut()">CASH OUT</button>
-                    <div class="wheel-prog-wrap">
-                        <div class="wheel-prog-bar"><div id="wheel-cashout-fill" class="wheel-prog-fill"></div></div>
-                        <div id="wheel-cashout-text" class="wheel-prog-label">Only ₹200.00 more to Cash Out ₹200!</div>
-                    </div>
                 </div>
 
                 <!-- Floating Gold Coins Decoration -->
@@ -1188,7 +1328,7 @@
 
                 <!-- Invite For Extra Spins Bar -->
                 <div class="wheel-footer-cta">
-                    <button class="wheel-invite-btn" onclick="window.wheelGame.claimInviteSpin()">
+                    <button class="wheel-invite-btn" onclick="window.wheelGame.openInviteFromWheel()">
                         🎁 Invite Friends — Get +1 FREE SPIN
                     </button>
                 </div>
@@ -1281,8 +1421,8 @@
                         </div>
                     </div>
 
-                    <!-- Big Metallic Gold INVITATION LINK Pill -->
-                    <button id="btn-copy-promo" class="bdg-btn-gold" style="margin:14px 0;" onclick="copyInvitationLink()">INVITATION LINK</button>
+                    <!-- Big Metallic Gold INVITATION LINK Pill (Opens Swipeable Invite Poster & QR Share!) -->
+                    <button id="btn-copy-promo" class="bdg-btn-gold" style="margin:14px 0;" onclick="openInvitePosterModal(false)">INVITATION LINK</button>
                     <input type="hidden" id="promo-link" value="">
 
                     <!-- Stacked Action Rows -->

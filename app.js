@@ -1490,6 +1490,225 @@ async function redeemGiftCode() {
     }
 }
 
+// ========================================================
+// INVITE POSTER & QR SHARE SCREEN (BDG #/promotion/PromotionShare)
+// ========================================================
+let _inviteOpenedFromWheel = false;
+
+function getInviteShareCode() {
+    const sm = window.stateManager;
+    return (sm && sm.inviteCode) ? sm.inviteCode : 'ASG84920';
+}
+
+function getInviteShareLink() {
+    const code = getInviteShareCode();
+    return `${window.location.origin}/?invite=${encodeURIComponent(code)}`;
+}
+
+function openInvitePosterModal(fromWheel = false) {
+    _inviteOpenedFromWheel = Boolean(fromWheel);
+    const modal = document.getElementById('invite-poster-modal');
+    if (!modal) return;
+
+    const link = getInviteShareLink();
+    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=240x240&margin=6&data=${encodeURIComponent(link)}`;
+    modal.querySelectorAll('.inv-qr-img').forEach(img => {
+        img.src = qrUrl;
+    });
+
+    modal.classList.remove('hidden');
+}
+
+function closeInvitePosterModal() {
+    const modal = document.getElementById('invite-poster-modal');
+    if (modal) modal.classList.add('hidden');
+}
+
+function _maybeGrantWheelInviteSpin() {
+    if (_inviteOpenedFromWheel && window.wheelGame && typeof window.wheelGame.claimInviteSpin === 'function') {
+        const lastClaim = parseInt(localStorage.getItem('asg_wheel_share_ts') || '0', 10);
+        if (Date.now() - lastClaim > 30000) {
+            window.wheelGame.spinsLeft += 1;
+            localStorage.setItem('asg_wheel_spins', String(window.wheelGame.spinsLeft));
+            localStorage.setItem('asg_wheel_share_ts', String(Date.now()));
+            window.wheelGame.updateUI();
+            if (window.sound && window.sound.coin) window.sound.coin();
+            return true;
+        }
+    }
+    return false;
+}
+
+function copyInvitePosterLink() {
+    const sm = window.stateManager;
+    const link = getInviteShareLink();
+    const done = () => {
+        const gotSpin = _maybeGrantWheelInviteSpin();
+        if (sm) {
+            sm.showToast(
+                gotSpin ? '🎁 Invitation link copied! +1 FREE SPIN added!' : '📋 Invitation link copied! Share with friends to earn 85% commission.',
+                'success'
+            );
+        }
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(link).then(done).catch(() => {
+            prompt('Copy your invitation link:', link);
+            done();
+        });
+    } else {
+        prompt('Copy your invitation link:', link);
+        done();
+    }
+}
+
+function downloadInvitePosterQR() {
+    const sm = window.stateManager;
+    const carousel = document.getElementById('inv-poster-carousel');
+    let activeIdx = 0;
+    if (carousel) {
+        const cards = Array.from(carousel.querySelectorAll('.inv-poster-card'));
+        const centerX = carousel.scrollLeft + carousel.clientWidth / 2;
+        let bestDist = Infinity;
+        cards.forEach((c, i) => {
+            const dist = Math.abs((c.offsetLeft + c.offsetWidth / 2) - centerX);
+            if (dist < bestDist) {
+                bestDist = dist;
+                activeIdx = i;
+            }
+        });
+    }
+
+    const themes = [
+        { bg1: '#2366d8', bg2: '#3bb5f2', r1: 'Fair and justice', r2: 'Open and transparent', head: 'Full Odds Bonus Rate', f1: 'Financial security', f2: 'Quick withdrawal' },
+        { bg1: '#5b3a08', bg2: '#b88220', r1: 'VIP Daily Bonus', r2: 'Instant Payout', head: 'Invite Bonus Up To ₹3,65,555', f1: '100% Verified', f2: 'Fast UPI Pay' },
+        { bg1: '#991b1b', bg2: '#ef4444', r1: 'Free Spin Daily', r2: 'Win Cash ₹500', head: 'ASGames Official Partner', f1: 'Lucky Wheel', f2: 'Zero Fee Cash' }
+    ];
+    const th = themes[activeIdx] || themes[0];
+    const code = getInviteShareCode();
+    const link = getInviteShareLink();
+
+    const canvas = document.createElement('canvas');
+    canvas.width = 600;
+    canvas.height = 920;
+    const ctx = canvas.getContext('2d');
+
+    // Poster gradient background
+    const grad = ctx.createLinearGradient(0, 0, 0, 920);
+    grad.addColorStop(0, th.bg1);
+    grad.addColorStop(1, th.bg2);
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, 600, 920);
+
+    // Top two gold ribbon pills
+    ctx.fillStyle = '#fde68a';
+    ctx.fillRect(42, 34, 244, 72);
+    ctx.fillStyle = '#fcd34d';
+    ctx.fillRect(314, 34, 244, 72);
+    ctx.fillStyle = '#b45309';
+    ctx.font = 'bold 24px Poppins, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(th.r1, 164, 78);
+    ctx.fillText(th.r2, 436, 78);
+
+    // Headline
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 34px Poppins, sans-serif';
+    ctx.fillText(th.head, 300, 166);
+
+    // Two feature boxes
+    ctx.strokeStyle = 'rgba(255,255,255,0.75)';
+    ctx.lineWidth = 2;
+    ctx.fillStyle = 'rgba(255,255,255,0.12)';
+    ctx.fillRect(48, 200, 232, 118);
+    ctx.strokeRect(48, 200, 232, 118);
+    ctx.fillRect(320, 200, 232, 118);
+    ctx.strokeRect(320, 200, 232, 118);
+    ctx.fillStyle = '#ffffff';
+    ctx.font = '600 22px Poppins, sans-serif';
+    ctx.fillText(th.f1, 164, 286);
+    ctx.fillText(th.f2, 436, 286);
+
+    // Commission highlight
+    ctx.font = 'bold 32px Poppins, sans-serif';
+    ctx.fillText('Permanent commission up to', 300, 386);
+    ctx.fillStyle = '#fde047';
+    ctx.font = '900 54px Poppins, sans-serif';
+    ctx.fillText('85%', 300, 448);
+
+    // Golden Gift Box backdrop behind QR
+    const boxGrad = ctx.createLinearGradient(150, 490, 450, 820);
+    boxGrad.addColorStop(0, '#fed7aa');
+    boxGrad.addColorStop(1, '#f97316');
+    ctx.fillStyle = boxGrad;
+    ctx.fillRect(150, 520, 300, 290);
+
+    const finalizeDownload = () => {
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 24px Poppins, sans-serif';
+        ctx.fillText(`Invite Code: ${code}`, 300, 868);
+        ctx.font = '500 18px Poppins, sans-serif';
+        ctx.fillStyle = 'rgba(255,255,255,0.9)';
+        ctx.fillText(link, 300, 900);
+
+        const a = document.createElement('a');
+        a.download = `ASGames-Invite-${code}.png`;
+        a.href = canvas.toDataURL('image/png');
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+
+        const gotSpin = _maybeGrantWheelInviteSpin();
+        if (sm) {
+            sm.showToast(
+                gotSpin ? '⬇️ QR Poster Downloaded! +1 FREE SPIN Added!' : '⬇️ QR Poster downloaded successfully!',
+                'success'
+            );
+        }
+    };
+
+    const qrImg = document.querySelectorAll('#invite-poster-modal .inv-qr-img')[activeIdx];
+    if (qrImg && qrImg.complete && qrImg.naturalWidth > 0) {
+        try {
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(172, 488, 256, 256);
+            ctx.drawImage(qrImg, 182, 498, 236, 236);
+            finalizeDownload();
+            return;
+        } catch (e) {}
+    }
+
+    // Fallback fresh CORS-enabled QR fetch
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(172, 488, 256, 256);
+        ctx.drawImage(img, 182, 498, 236, 236);
+        finalizeDownload();
+    };
+    img.onerror = () => finalizeDownload();
+    img.src = `https://api.qrserver.com/v1/create-qr-code/?size=240x240&margin=6&data=${encodeURIComponent(link)}`;
+}
+
+function shareInvitePosterNative() {
+    const link = getInviteShareLink();
+    const code = getInviteShareCode();
+    const text = `🎁 Join ASGames & win ₹500 on Invite Wheel + up to 85% commission! Use Invite Code: ${code}`;
+    if (navigator.share) {
+        navigator.share({ title: 'ASGames VIP Invite', text, url: link })
+            .then(() => {
+                const gotSpin = _maybeGrantWheelInviteSpin();
+                if (gotSpin && window.stateManager) {
+                    window.stateManager.showToast('🎁 Shared! +1 FREE SPIN Added!', 'success');
+                }
+            })
+            .catch(() => {});
+    } else {
+        copyInvitePosterLink();
+    }
+}
+
 // Global initialization
 window.addEventListener('DOMContentLoaded', () => {
     window.stateManager = new StateManager();
