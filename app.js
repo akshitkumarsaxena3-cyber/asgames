@@ -1262,13 +1262,108 @@ function goFdbActivity() {
 }
 
 // ========================================================
-// AGENCY / PROMOTION SUB-VIEWS & ACTIONS
+// AGENCY / PROMOTION SUB-VIEWS & INVITATION BONUS (10 TIERS)
 // ========================================================
+const INVITATION_BONUS_TIERS = [
+    { level: 1,  invitees: 1,    recharge: 300, reward: 55 },
+    { level: 2,  invitees: 3,    recharge: 300, reward: 155 },
+    { level: 3,  invitees: 10,   recharge: 300, reward: 555 },
+    { level: 4,  invitees: 30,   recharge: 300, reward: 1555 },
+    { level: 5,  invitees: 60,   recharge: 300, reward: 2955 },
+    { level: 6,  invitees: 100,  recharge: 300, reward: 5655 },
+    { level: 7,  invitees: 200,  recharge: 300, reward: 11555 },
+    { level: 8,  invitees: 500,  recharge: 300, reward: 28555 },
+    { level: 9,  invitees: 1000, recharge: 300, reward: 58555 },
+    { level: 10, invitees: 5000, recharge: 300, reward: 365555 }
+];
+
+function renderInvitationBonusCards() {
+    const container = document.getElementById('inv-bonus-cards-list');
+    if (!container) return;
+    const sm = window.stateManager;
+    const curInvitees = (sm && sm._subordinatesCache) ? sm._subordinatesCache.length : 0;
+    const claimedLevels = JSON.parse(localStorage.getItem('asg_invb_claimed') || '[]');
+
+    container.innerHTML = INVITATION_BONUS_TIERS.map(t => {
+        const isClaimed = claimedLevels.includes(t.level);
+        const canClaim = !isClaimed && curInvitees >= t.invitees;
+        const shownInv = Math.min(curInvitees, t.invitees);
+        const btnClass = isClaimed ? 'invb-btn-done' : (canClaim ? 'invb-btn-claim' : 'invb-btn-unfin');
+        const btnLabel = isClaimed ? 'Claimed ✓' : (canClaim ? `Claim ₹${t.reward.toLocaleString('en-IN')}` : 'Unfinished');
+        return `
+            <div class="invb-ticket-card">
+                <div class="invb-ticket-top">
+                    <div class="invb-green-ribbon">
+                        <span>Bonus</span>
+                        <span class="invb-lvl-dot">${t.level}</span>
+                        <span class="invb-x-circle">${isClaimed ? '✓' : '✕'}</span>
+                    </div>
+                    <div class="invb-reward-amt">₹${t.reward.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</div>
+                </div>
+
+                <div class="invb-info-rows">
+                    <div class="invb-info-row">
+                        <span>Number of invitees</span>
+                        <strong style="color:#fff;">${t.invitees}</strong>
+                    </div>
+                    <div class="invb-info-row">
+                        <span>Recharge per people</span>
+                        <strong style="color:#ef4444;">₹${t.recharge.toFixed(2)}</strong>
+                    </div>
+                </div>
+
+                <div class="invb-perf-line"></div>
+
+                <div class="invb-prog-grid">
+                    <div class="invb-prog-col">
+                        <div class="invb-prog-num" style="color:#f59e0b;">${shownInv} / ${t.invitees}</div>
+                        <div class="invb-prog-lbl">Number of invitees</div>
+                    </div>
+                    <div class="invb-prog-col invb-prog-border">
+                        <div class="invb-prog-num" style="color:#ef4444;">${shownInv} / ${t.invitees}</div>
+                        <div class="invb-prog-lbl">Deposit number</div>
+                    </div>
+                </div>
+
+                <button class="invb-action-btn ${btnClass}" onclick="claimInvitationBonus(${t.level}, ${t.reward}, ${t.invitees})">${btnLabel}</button>
+            </div>
+        `;
+    }).join('');
+}
+
+function claimInvitationBonus(level, reward, needed) {
+    const sm = window.stateManager;
+    if (!sm) return;
+    const curInvitees = (sm._subordinatesCache) ? sm._subordinatesCache.length : 0;
+    const claimed = JSON.parse(localStorage.getItem('asg_invb_claimed') || '[]');
+    if (claimed.includes(level)) {
+        sm.showToast('You have already claimed this bonus tier!', 'info');
+        return;
+    }
+    if (curInvitees < needed) {
+        sm.showToast(`Invite ${needed - curInvitees} more friend(s) (with ₹300 recharge) to unlock ₹${reward}!`, 'warning');
+        return;
+    }
+    claimed.push(level);
+    localStorage.setItem('asg_invb_claimed', JSON.stringify(claimed));
+    sm.addBalance(reward, `Invitation Bonus Tier ${level}`);
+    sm.showWinModal(reward, `Invitation Bonus #${level} Unlocked!`);
+    renderInvitationBonusCards();
+}
+
+function openInvitationBonusPage() {
+    if (window.stateManager) {
+        window.stateManager.switchTab('promotion');
+    }
+    openPromoSubView('invbonus');
+}
+
 function openPromoSubView(viewName) {
-    ['main', 'subordinates', 'rules'].forEach(v => {
+    ['main', 'subordinates', 'rules', 'invbonus'].forEach(v => {
         const el = document.getElementById(`promo-view-${v}`);
         if (el) el.classList.toggle('hidden', v !== viewName);
     });
+    if (viewName === 'invbonus') renderInvitationBonusCards();
     window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
