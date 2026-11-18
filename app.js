@@ -466,6 +466,17 @@ class StateManager {
                 const amt = parseFloat(amtInput ? amtInput.value : 0);
                 const account = accInput ? accInput.value.trim() : '';
 
+                // 1. Time Restriction (10:00 AM to 08:00 PM IST)
+                const now = new Date();
+                const ist = new Date(now.getTime() + (5.5 * 60 * 60 * 1000));
+                const istH = ist.getUTCHours();
+                const istM = ist.getUTCMinutes();
+                const isTimeOpen = (istH >= 10 && (istH < 20 || (istH === 20 && istM === 0)));
+                if (!isTimeOpen) {
+                    this.showToast('Withdrawal service is open only from 10:00 AM to 08:00 PM (IST)! Please submit during active hours.', 'warning');
+                    return;
+                }
+
                 if (!amt || amt < 110) {
                     this.showToast('Minimum withdrawal is ₹110', 'warning');
                     return;
@@ -474,6 +485,17 @@ class StateManager {
                     this.showToast('Insufficient wallet balance!', 'error');
                     return;
                 }
+
+                // 2. Turnover / Wagering Requirement Check
+                if (window._currentTurnoverInfo && typeof window._currentTurnoverInfo.withdrawableBalance === 'number') {
+                    if (amt > window._currentTurnoverInfo.withdrawableBalance) {
+                        const remBet = Number(window._currentTurnoverInfo.remainingTurnover || 0).toFixed(2);
+                        const maxWd = Number(window._currentTurnoverInfo.withdrawableBalance || 0).toFixed(2);
+                        this.showToast(`Deposit amount must be played first! Need to bet ₹${remBet} more. Withdrawable balance: ₹${maxWd}`, 'warning');
+                        return;
+                    }
+                }
+
                 if (!account) {
                     this.showToast('Please enter your UPI ID or Bank Account', 'warning');
                     return;
@@ -695,6 +717,7 @@ class StateManager {
         const modal = document.getElementById('withdraw-modal');
         if (modal) modal.classList.remove('hidden');
         if (typeof selectWithdrawMethod === 'function') selectWithdrawMethod(window._selectedWithdrawMethod || 'BANK');
+        if (typeof fetchUserTurnoverStatus === 'function') fetchUserTurnoverStatus();
         if (typeof updateWithdrawSummary === 'function') updateWithdrawSummary();
         if (typeof loadWithdrawPageHistory === 'function') loadWithdrawPageHistory();
         if (window.sound) window.sound.click();
@@ -2236,6 +2259,23 @@ function saveWithdrawBeneficiary() {
     if (sm) sm.showToast('Beneficiary saved successfully!', 'success');
 }
 
+window._currentTurnoverInfo = null;
+
+async function fetchUserTurnoverStatus() {
+    const sm = window.stateManager;
+    if (!sm || !sm.token) return;
+    try {
+        const res = await fetch('/api/wallet/turnover-status', {
+            headers: { 'Authorization': `Bearer ${sm.token}` }
+        });
+        const d = await res.json();
+        if (d.success) {
+            window._currentTurnoverInfo = d;
+            updateWithdrawSummary();
+        }
+    } catch (e) {}
+}
+
 function updateWithdrawSummary() {
     const sm = window.stateManager;
     const bal = sm ? Number(sm.balance || 0) : 0;
@@ -2244,21 +2284,56 @@ function updateWithdrawSummary() {
 
     const wBalEl = document.getElementById('wd-withdrawable-val');
     const recvEl = document.getElementById('wd-received-val');
+    const needBetEl = document.getElementById('wd-need-bet-val');
+    const timeEl = document.getElementById('wd-time-val');
     const btn = document.getElementById('btn-submit-withdraw');
 
-    if (wBalEl) wBalEl.textContent = `₹${bal.toFixed(2)}`;
+    let withdrawable = bal;
+    let remainingBet = 0;
+    if (window._currentTurnoverInfo) {
+        if (typeof window._currentTurnoverInfo.withdrawableBalance === 'number') {
+            withdrawable = window._currentTurnoverInfo.withdrawableBalance;
+        }
+        if (typeof window._currentTurnoverInfo.remainingTurnover === 'number') {
+            remainingBet = window._currentTurnoverInfo.remainingTurnover;
+        }
+    }
+
+    if (wBalEl) wBalEl.textContent = `₹${withdrawable.toFixed(2)}`;
     if (recvEl) recvEl.textContent = `₹${amt.toFixed(2)}`;
+    if (needBetEl) needBetEl.textContent = `₹${remainingBet.toFixed(2)}`;
+
+    // Check IST time: 10:00 AM to 08:00 PM IST
+    const now = new Date();
+    const ist = new Date(now.getTime() + (5.5 * 60 * 60 * 1000));
+    const h = ist.getUTCHours();
+    const m = ist.getUTCMinutes();
+    const isOpen = (h >= 10 && (h < 20 || (h === 20 && m === 0)));
+
+    if (timeEl) {
+        timeEl.innerHTML = isOpen ?
+            '<span style="color:#10b981; font-weight:700;">10:00 - 20:00 (Open Now)</span>' :
+            '<span style="color:#ef4444; font-weight:700;">10:00 - 20:00 (Closed Now • Opens 10:00 AM IST)</span>';
+    }
+
     if (btn) {
-        if (amt >= 110 && acc) btn.classList.add('ready');
+        if (amt >= 110 && amt <= withdrawable && acc && isOpen) btn.classList.add('ready');
         else btn.classList.remove('ready');
     }
 }
 
 function fillAllWithdrawBalance() {
     const sm = window.stateManager;
-    const bal = sm ? Math.floor(Number(sm.balance || 0)) : 0;
+    let withdrawable = sm ? Math.floor(Number(sm.balance || 0)) : 0;
+    if (window._currentTurnoverInfo && typeof window._currentTurnoverInfo.withdrawableBalance === 'number') {
+        withdrawable = Math.floor(window._currentTurnoverInfo.withdrawableBalance);
+    }
     const inp = document.getElementById('withdraw-amount-input');
-    if (inp) inp.value = bal > 0 ? String(bal) : '';
+    if (inp) inp.value = withdrawable > 0 ? String(withdrawable) : '';
+    if (withdrawable <= 0 && sm) {
+        const remaining = window._currentTurnoverInfo ? window._currentTurnoverInfo.remainingTurnover : 0;
+        sm.showToast(`Deposit amount must be played in games first! Need to bet ₹${remaining.toFixed(2)} more.`, 'warning');
+    }
     updateWithdrawSummary();
 }
 

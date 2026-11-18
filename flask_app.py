@@ -13,7 +13,7 @@ import random
 import smtplib
 import threading
 from email.mime.text import MIMEText
-from datetime import datetime
+from datetime import datetime, timedelta
 from flask import Flask, request, jsonify, send_from_directory
 
 OTP_STORE = {}  # email -> { 'code', 'purpose', 'expires_at' }
@@ -739,11 +739,76 @@ def api_recharge():
 
     return jsonify({'success': True, 'message': 'Deposit submitted! Balance will update after admin approval.', 'tx_id': tx_id})
 
+def is_withdrawal_time_open():
+    # Indian Standard Time is UTC + 5.5 hours
+    utc_now = datetime.utcnow()
+    ist_time = utc_now + timedelta(hours=5, minutes=30)
+    hour = ist_time.hour
+    minute = ist_time.minute
+    if hour < 10:
+        return False
+    if hour > 20:
+        return False
+    if hour == 20 and minute > 0:
+        return False
+    return True
+
+def get_user_turnover_info(user_id):
+    with get_db() as conn:
+        c = conn.cursor()
+        c.execute('SELECT balance FROM users WHERE id = ?', (user_id,))
+        u = c.fetchone()
+        user_bal = float(u['balance']) if u else 0.0
+
+        # Total approved deposits
+        c.execute('SELECT COALESCE(SUM(amount), 0) as total_dep FROM transactions WHERE user_id = ? AND type = "deposit" AND (status = "approved" OR status = "completed")', (user_id,))
+        dep_row = c.fetchone()
+        total_deposits = float(dep_row['total_dep']) if dep_row else 0.0
+
+        # Total bets from game_history
+        c.execute('SELECT COALESCE(SUM(bet_amount), 0) as total_bet FROM game_history WHERE user_id = ?', (user_id,))
+        gh_row = c.fetchone()
+        gh_bets = float(gh_row['total_bet']) if gh_row else 0.0
+
+        # Total bets from bets table (Win Go)
+        c.execute('SELECT COALESCE(SUM(amount), 0) as total_bet FROM bets WHERE user_id = ?', (user_id,))
+        wg_row = c.fetchone()
+        wg_bets = float(wg_row['total_bet']) if wg_row else 0.0
+
+        total_bets = max(gh_bets, wg_bets)
+        required_turnover = total_deposits
+        remaining_turnover = max(0.0, round(required_turnover - total_bets, 2))
+        withdrawable_balance = max(0.0, round(user_bal - remaining_turnover, 2))
+
+        return {
+            'total_deposits': total_deposits,
+            'required_turnover': required_turnover,
+            'completed_turnover': total_bets,
+            'remaining_turnover': remaining_turnover,
+            'withdrawable_balance': withdrawable_balance,
+            'balance': user_bal,
+            'is_time_open': is_withdrawal_time_open()
+        }
+
+@app.route('/api/wallet/turnover-status', methods=['GET'])
+def api_turnover_status():
+    user = get_current_user(request)
+    if not user:
+        return jsonify({'success': False, 'message': 'Unauthorized'}), 401
+    info = get_user_turnover_info(user['id'])
+    return jsonify({'success': True, **info})
+
 @app.route('/api/wallet/withdraw', methods=['POST'])
 def api_withdraw():
     user = get_current_user(request)
     if not user:
         return jsonify({'success': False, 'message': 'Unauthorized'}), 401
+
+    if not is_withdrawal_time_open():
+        return jsonify({
+            'success': False,
+            'message': 'Withdrawal service is open only from 10:00 AM to 08:00 PM (IST). Please submit during active hours.'
+        }), 400
 
     data = request.get_json(silent=True) or {}
     amount = float(data.get('amount', 0))
@@ -751,6 +816,15 @@ def api_withdraw():
 
     if amount < 110:
         return jsonify({'success': False, 'message': 'Minimum withdrawal is ₹110'}), 400
+
+    turnover_info = get_user_turnover_info(user['id'])
+    if turnover_info['remaining_turnover'] > 0 and amount > turnover_info['withdrawable_balance']:
+        return jsonify({
+            'success': False,
+            'remaining_turnover': turnover_info['remaining_turnover'],
+            'withdrawable_balance': turnover_info['withdrawable_balance'],
+            'message': f"Deposit amount must be played in games before withdrawal! Need to bet ₹{turnover_info['remaining_turnover']:.2f} more. Max withdrawable: ₹{turnover_info['withdrawable_balance']:.2f}."
+        }), 400
 
     with get_db() as conn:
         cursor = conn.cursor()
@@ -774,7 +848,7 @@ def api_withdraw():
         new_bal = round(float(new_row['balance']), 2) if new_row else 0.0
         conn.commit()
 
-    return jsonify({'success': True, 'balance': new_bal, 'message': 'Withdrawal submitted! Admin will approve & payout.', 'tx_id': tx_id})
+    return jsonify({'success': True, 'balance': new_bal, 'message': 'Withdrawal submitted! Admin will approve & payout within working hours (10:00 AM - 08:00 PM).', 'tx_id': tx_id})
 
 @app.route('/api/wallet/transactions', methods=['GET'])
 def api_my_transactions():

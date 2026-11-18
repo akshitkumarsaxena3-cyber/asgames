@@ -747,8 +747,84 @@ app.post('/api/wallet/deposit', requireAuth, async (req, res) => {
     }
 });
 
+function isWithdrawalTimeOpen() {
+    // Indian Standard Time is UTC + 5.5 hours (330 minutes)
+    const now = new Date();
+    const istTime = new Date(now.getTime() + (5.5 * 60 * 60 * 1000));
+    const hours = istTime.getUTCHours();
+    const minutes = istTime.getUTCMinutes();
+    // 10:00 AM (10) to 08:00 PM (20)
+    if (hours < 10) return false;
+    if (hours > 20) return false;
+    if (hours === 20 && minutes > 0) return false;
+    return true;
+}
+
+async function getUserTurnoverInfo(userId) {
+    const uid = Number(userId);
+    const altUid = uid < 100000 ? uid + 100000 : uid - 100000;
+    const matchUser = (x) => Number(x.user_id) === uid || Number(x.user_id) === altUid;
+
+    // 1. Total Approved Deposits
+    let totalDeposits = 0;
+    if (Array.isArray(DB.data.transactions)) {
+        totalDeposits = DB.data.transactions
+            .filter(t => (Number(t.user_id) === uid || Number(t.user_id) === altUid) &&
+                         t.type === 'deposit' &&
+                         (t.status === 'approved' || t.status === 'completed'))
+            .reduce((sum, t) => sum + (parseFloat(t.amount || 0) || 0), 0);
+    }
+
+    // 2. Total Bets / Turnover played across all games
+    let totalBets = 0;
+    if (Array.isArray(DB.data.game_history)) {
+        totalBets += DB.data.game_history
+            .filter(matchUser)
+            .reduce((sum, h) => sum + (parseFloat(h.bet_amount || 0) || 0), 0);
+    }
+    if (Array.isArray(DB.data.bets)) {
+        const wgBets = DB.data.bets
+            .filter(matchUser)
+            .reduce((sum, b) => sum + (parseFloat(b.amount || 0) || 0), 0);
+        totalBets = Math.max(totalBets, wgBets);
+    }
+    if (Array.isArray(DB.data.king_bets)) {
+        const kgBets = DB.data.king_bets
+            .filter(matchUser)
+            .reduce((sum, b) => sum + (parseFloat(b.amount || 0) || 0), 0);
+        totalBets += kgBets;
+    }
+
+    const user = (DB.data.users || []).find(u => Number(u.id) === uid || Number(u.id) === altUid);
+    const userBal = user ? parseFloat(user.balance || 0) : 0;
+
+    // Required turnover = total deposits (1x)
+    const requiredTurnover = totalDeposits;
+    const completedTurnover = totalBets;
+    const remainingTurnover = Math.max(0, Math.round((requiredTurnover - completedTurnover) * 100) / 100);
+    const withdrawableBalance = Math.max(0, Math.round((userBal - remainingTurnover) * 100) / 100);
+
+    return {
+        totalDeposits,
+        requiredTurnover,
+        completedTurnover,
+        remainingTurnover,
+        withdrawableBalance,
+        balance: userBal,
+        isTimeOpen: isWithdrawalTimeOpen()
+    };
+}
+
 app.post('/api/wallet/withdraw', requireAuth, async (req, res) => {
     try {
+        // 1. Time Restriction (10:00 AM to 08:00 PM IST)
+        if (!isWithdrawalTimeOpen()) {
+            return res.json({
+                success: false,
+                message: 'Withdrawal service is open only from 10:00 AM to 08:00 PM (IST). Please submit during active hours.'
+            });
+        }
+
         const { amount, bank_info } = req.body;
         const withdrawAmt = parseFloat(amount);
         if (!withdrawAmt || withdrawAmt < 110) {
@@ -756,6 +832,17 @@ app.post('/api/wallet/withdraw', requireAuth, async (req, res) => {
         }
         if (req.user.balance < withdrawAmt) {
             return res.json({ success: false, message: 'Insufficient balance' });
+        }
+
+        // 2. Turnover / Wagering Requirement (1x game play on deposits)
+        const turnoverInfo = await getUserTurnoverInfo(req.user.id);
+        if (turnoverInfo.remainingTurnover > 0 && withdrawAmt > turnoverInfo.withdrawableBalance) {
+            return res.json({
+                success: false,
+                remaining_turnover: turnoverInfo.remainingTurnover,
+                withdrawable_balance: turnoverInfo.withdrawableBalance,
+                message: `Deposit amount must be played in games before withdrawal! Need to bet ₹${turnoverInfo.remainingTurnover.toFixed(2)} more. Withdrawable balance is ₹${turnoverInfo.withdrawableBalance.toFixed(2)}.`
+            });
         }
 
         // Deduct & Hold balance immediately
@@ -771,7 +858,21 @@ app.post('/api/wallet/withdraw', requireAuth, async (req, res) => {
         // Immediately sync deduction to PythonAnywhere so pull cannot revert it
         DB.syncPushToPythonAnywhere().catch(() => {});
 
-        res.json({ success: true, balance: finalBal, tx_id: txId, message: 'Withdrawal requested! Processing within 1-24 hours.' });
+        res.json({
+            success: true,
+            balance: finalBal,
+            tx_id: txId,
+            message: 'Withdrawal requested! Processing within working hours (10:00 AM - 08:00 PM).'
+        });
+    } catch (e) {
+        res.status(500).json({ success: false, message: e.message });
+    }
+});
+
+app.get('/api/wallet/turnover-status', requireAuth, async (req, res) => {
+    try {
+        const info = await getUserTurnoverInfo(req.user.id);
+        res.json({ success: true, ...info });
     } catch (e) {
         res.status(500).json({ success: false, message: e.message });
     }
