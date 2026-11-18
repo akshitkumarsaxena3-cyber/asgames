@@ -220,8 +220,26 @@ class K3Game {
                     bet.payout = payout;
                     totalWin += payout;
                     this.sm.addBalance(payout, `K3 Win Period #${record.period}`);
+                    if (this.sm.recordGameHistory) {
+                        this.sm.recordGameHistory({
+                            game: 'K3 Lottery',
+                            detail: `#${record.period} • Pick: ${bet.value} (Sum ${record.sum})`,
+                            bet_amount: bet.amount,
+                            win_amount: payout,
+                            status: 'Won'
+                        });
+                    }
                 } else {
                     bet.status = 'Lost';
+                    if (this.sm.recordGameHistory) {
+                        this.sm.recordGameHistory({
+                            game: 'K3 Lottery',
+                            detail: `#${record.period} • Pick: ${bet.value} (Sum ${record.sum})`,
+                            bet_amount: bet.amount,
+                            win_amount: 0,
+                            status: 'Lost'
+                        });
+                    }
                 }
             }
         });

@@ -151,6 +151,15 @@ class AviatorGame {
         // If user bet was active and not cashed out, bet is lost
         if (this.isBetPlaced && !this.isCashedOut) {
             this.isBetPlaced = false;
+            if (this.sm.recordGameHistory) {
+                this.sm.recordGameHistory({
+                    game: 'Aviator',
+                    detail: `Flew away @ ${this.crashPoint.toFixed(2)}x`,
+                    bet_amount: this.betAmount,
+                    win_amount: 0,
+                    status: 'Lost'
+                });
+            }
             this.sm.showToast(`FLEW AWAY at ${this.crashPoint.toFixed(2)}x! Bet lost.`, 'error');
         }
 
@@ -380,6 +389,15 @@ class AviatorGame {
 
         const wonAmount = Math.floor(this.betAmount * this.multiplier * 100) / 100;
         this.sm.addBalance(wonAmount, `Aviator Cashout @ ${this.multiplier.toFixed(2)}x`);
+        if (this.sm.recordGameHistory) {
+            this.sm.recordGameHistory({
+                game: 'Aviator',
+                detail: `Cashout @ ${this.multiplier.toFixed(2)}x`,
+                bet_amount: this.betAmount,
+                win_amount: wonAmount,
+                status: 'Won'
+            });
+        }
 
         if (window.sound) window.sound.win();
         this.sm.showWinModal(wonAmount, `Aviator Cashout @ ${this.multiplier.toFixed(2)}x!`);

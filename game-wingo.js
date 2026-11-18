@@ -429,6 +429,16 @@ class WinGoGame {
 
         this.userBets.unshift(betRecord);
         this.sm.saveUserBet(betRecord);
+        if (this.sm.recordGameHistory) {
+            this.sm.recordGameHistory({
+                id: betRecord.id,
+                game: 'Win Go',
+                detail: `${this.currentMode} • #${this.currentPeriod} • ${String(betRecord.selectValue).toUpperCase()}`,
+                bet_amount: totalBet,
+                win_amount: 0,
+                status: 'Pending'
+            });
+        }
 
         this._placingBet = false;
         if (window.sound) window.sound.chip('wingo');
@@ -500,9 +510,29 @@ class WinGoGame {
                     wonAny = true;
                     // If serverSynced, backend drawPeriod already credited DB — skip double syncGameDelta!
                     this.sm.addBalance(netWin, `Win Go Win Period #${drawResult.period}`, Boolean(bet.serverSynced));
+                    if (this.sm.recordGameHistory) {
+                        this.sm.recordGameHistory({
+                            id: bet.id,
+                            game: 'Win Go',
+                            detail: `${bet.mode} • #${drawResult.period} • Pick: ${String(bet.selectValue).toUpperCase()} (Result: ${drawResult.number})`,
+                            bet_amount: bet.totalBet,
+                            win_amount: netWin,
+                            status: 'Won'
+                        });
+                    }
                 } else {
                     bet.status = 'Lost';
                     bet.winAmount = 0;
+                    if (this.sm.recordGameHistory) {
+                        this.sm.recordGameHistory({
+                            id: bet.id,
+                            game: 'Win Go',
+                            detail: `${bet.mode} • #${drawResult.period} • Pick: ${String(bet.selectValue).toUpperCase()} (Result: ${drawResult.number})`,
+                            bet_amount: bet.totalBet,
+                            win_amount: 0,
+                            status: 'Lost'
+                        });
+                    }
                 }
             }
         });

@@ -213,6 +213,53 @@ class StateManager {
         this.renderAccountTab();
     }
 
+    _getLocalGameHistoryKey() {
+        return `asg_game_history_${this.uid || 'guest'}`;
+    }
+
+    getLocalGameHistory() {
+        try {
+            return JSON.parse(localStorage.getItem(this._getLocalGameHistoryKey()) || '[]');
+        } catch (e) {
+            return [];
+        }
+    }
+
+    recordGameHistory(entry) {
+        if (!entry) return;
+        const item = {
+            id: String(entry.id || ('GH' + Date.now() + Math.floor(Math.random() * 999))),
+            game: entry.game || 'Game',
+            detail: entry.detail || '',
+            bet_amount: parseFloat(entry.bet_amount || 0) || 0,
+            win_amount: parseFloat(entry.win_amount || 0) || 0,
+            status: entry.status || 'Pending',
+            created_at: entry.created_at || new Date().toISOString()
+        };
+
+        const list = this.getLocalGameHistory();
+        const idx = list.findIndex(x => x.id === item.id);
+        if (idx >= 0) {
+            list[idx] = Object.assign({}, list[idx], item);
+        } else {
+            list.unshift(item);
+        }
+        if (list.length > 100) list.length = 100;
+        localStorage.setItem(this._getLocalGameHistoryKey(), JSON.stringify(list));
+
+        if (this.token) {
+            fetch('/api/game/log-history', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${this.token}`
+                },
+                body: JSON.stringify(item)
+            }).catch(() => {});
+        }
+        return item.id;
+    }
+
     showToast(message, type = 'info') {
         const toastContainer = document.getElementById('toast-container');
         if (!toastContainer) return;
@@ -2357,6 +2404,118 @@ async function sendSupportChatMessage() {
             renderSupportChatMessages(d.messages);
         }
     } catch (e) {}
+}
+
+// ========================================================
+// UNIFIED GAME HISTORY MODAL (ALL 5 GAMES + STATS)
+// ========================================================
+let _ghCache = [];
+let _ghActiveFilter = 'all';
+
+function openGameHistoryModal() {
+    const modal = document.getElementById('game-history-modal');
+    if (modal) modal.classList.remove('hidden');
+    loadUnifiedGameHistory();
+}
+
+function closeGameHistoryModal() {
+    const modal = document.getElementById('game-history-modal');
+    if (modal) modal.classList.add('hidden');
+}
+
+function filterGameHistory(gameName, btnEl) {
+    _ghActiveFilter = gameName || 'all';
+    document.querySelectorAll('.gh-filter-pill').forEach(p => p.classList.remove('active'));
+    if (btnEl) btnEl.classList.add('active');
+    renderUnifiedGameHistory();
+}
+
+async function loadUnifiedGameHistory() {
+    const sm = window.stateManager;
+    const localList = sm ? sm.getLocalGameHistory() : [];
+    const byId = new Map();
+    localList.forEach(h => byId.set(h.id, h));
+
+    if (sm && sm.token) {
+        try {
+            const res = await fetch('/api/game/my-history', {
+                headers: { 'Authorization': `Bearer ${sm.token}` }
+            });
+            const d = await res.json();
+            if (d.success && Array.isArray(d.history)) {
+                d.history.forEach(h => {
+                    if (!byId.has(h.id) || byId.get(h.id).status === 'Pending') {
+                        byId.set(h.id, h);
+                    }
+                });
+            }
+        } catch (e) {}
+    }
+
+    _ghCache = Array.from(byId.values()).sort((a, b) =>
+        String(b.created_at || '').localeCompare(String(a.created_at || ''))
+    );
+    renderUnifiedGameHistory();
+}
+
+function renderUnifiedGameHistory() {
+    const listEl = document.getElementById('gh-list-container');
+    const countEl = document.getElementById('gh-stat-count');
+    const betEl = document.getElementById('gh-stat-bet');
+    const winEl = document.getElementById('gh-stat-win');
+
+    const filtered = _ghActiveFilter === 'all'
+        ? _ghCache
+        : _ghCache.filter(h => h.game === _ghActiveFilter);
+
+    const totalBet = filtered.reduce((acc, h) => acc + (parseFloat(h.bet_amount) || 0), 0);
+    const totalWin = filtered.reduce((acc, h) => acc + (parseFloat(h.win_amount) || 0), 0);
+
+    if (countEl) countEl.textContent = filtered.length;
+    if (betEl) betEl.textContent = `₹${totalBet.toFixed(0)}`;
+    if (winEl) winEl.textContent = `₹${totalWin.toFixed(2)}`;
+
+    if (!listEl) return;
+    if (filtered.length === 0) {
+        listEl.innerHTML = `<div class="bdg-no-data" style="padding:40px 10px;"><div style="font-size:44px; opacity:0.35; margin-bottom:6px;">🎮</div><div>No game history yet. Play any game to see live records!</div></div>`;
+        return;
+    }
+
+    const icons = {
+        'Win Go': '🎯',
+        'Aviator': '✈️',
+        'Mines': '💎',
+        'K3 Lottery': '🎲',
+        'Ludo Cash': '👑'
+    };
+
+    listEl.innerHTML = filtered.slice(0, 60).map(h => {
+        const st = String(h.status || 'Pending');
+        const isWin = st.toLowerCase() === 'won';
+        const isLoss = st.toLowerCase() === 'lost';
+        const badgeCls = isWin ? 'gh-badge-win' : (isLoss ? 'gh-badge-loss' : 'gh-badge-pend');
+        const amountTxt = isWin
+            ? `+₹${parseFloat(h.win_amount || 0).toFixed(2)}`
+            : (isLoss ? `-₹${parseFloat(h.bet_amount || 0).toFixed(2)}` : 'Pending');
+        const dt = (h.created_at || '').replace('T', ' ').slice(0, 19);
+        const ico = icons[h.game] || '🎮';
+
+        return `
+            <div class="gh-item-card">
+                <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px;">
+                    <div>
+                        <div style="color:#fae59f; font-weight:800; font-size:13.5px;">${ico} ${h.game}</div>
+                        <div style="color:#e4e4e7; font-size:12px; margin-top:2px;">${h.detail || 'Round Played'}</div>
+                        <div style="color:#71717a; font-size:10.5px; margin-top:4px;">${dt} • Bet: ₹${parseFloat(h.bet_amount || 0).toFixed(2)}</div>
+                    </div>
+                    <div style="text-align:right; flex-shrink:0;">
+                        <div class="${badgeCls}">${st.toUpperCase()}</div>
+                        <div style="font-size:14px; font-weight:800; margin-top:4px; color:${isWin ? '#10b981' : (isLoss ? '#ef4444' : '#f59e0b')};">${amountTxt}</div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }).join('');
 }
 
 // Global initialization

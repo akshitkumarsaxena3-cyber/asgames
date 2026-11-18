@@ -237,6 +237,53 @@
             </div>
         </div>
 
+        <!-- Full-Screen BDG-Style Game History & Statistics Modal -->
+        <div id="game-history-modal" class="bdg-auth-overlay hidden">
+            <div class="bdg-auth-shell dep-page-shell">
+                <div class="dep-topbar">
+                    <button type="button" class="bdg-back-btn" style="color:#fff;" onclick="closeGameHistoryModal()">&#8249;</button>
+                    <span class="dep-topbar-title">Game History</span>
+                    <button type="button" class="dep-topbar-hist" onclick="loadUnifiedGameHistory()">↻ Refresh</button>
+                </div>
+
+                <div class="dep-scroll-body" style="padding-bottom:32px;">
+                    <!-- 3-Card Summary Stats -->
+                    <div class="gh-stats-grid">
+                        <div class="gh-stat-card">
+                            <span class="gh-stat-lbl">Games Played</span>
+                            <strong id="gh-stat-count" class="gh-stat-val">0</strong>
+                        </div>
+                        <div class="gh-stat-card">
+                            <span class="gh-stat-lbl">Total Bet</span>
+                            <strong id="gh-stat-bet" class="gh-stat-val" style="color:#f59e0b;">₹0</strong>
+                        </div>
+                        <div class="gh-stat-card">
+                            <span class="gh-stat-lbl">Total Won</span>
+                            <strong id="gh-stat-win" class="gh-stat-val" style="color:#10b981;">₹0</strong>
+                        </div>
+                    </div>
+
+                    <!-- Game Filter Pills -->
+                    <div class="gh-filter-row">
+                        <button type="button" class="gh-filter-pill active" data-gh="all" onclick="filterGameHistory('all', this)">All Games</button>
+                        <button type="button" class="gh-filter-pill" data-gh="Win Go" onclick="filterGameHistory('Win Go', this)">🎯 Win Go</button>
+                        <button type="button" class="gh-filter-pill" data-gh="Aviator" onclick="filterGameHistory('Aviator', this)">✈️ Aviator</button>
+                        <button type="button" class="gh-filter-pill" data-gh="Mines" onclick="filterGameHistory('Mines', this)">💎 Mines</button>
+                        <button type="button" class="gh-filter-pill" data-gh="K3 Lottery" onclick="filterGameHistory('K3 Lottery', this)">🎲 K3</button>
+                        <button type="button" class="gh-filter-pill" data-gh="Ludo Cash" onclick="filterGameHistory('Ludo Cash', this)">👑 Ludo</button>
+                    </div>
+
+                    <!-- Live History List -->
+                    <div id="gh-list-container" style="display:flex; flex-direction:column; gap:10px;">
+                        <div class="bdg-no-data" style="padding:40px 10px;">
+                            <div style="font-size:44px; opacity:0.35; margin-bottom:6px;">🎮</div>
+                            <div>No game history yet. Play a game to see records here!</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- Redeem Gift Code Full Screen (BDG-Style) -->
         <div id="redeem-gift-modal" class="bdg-auth-overlay hidden">
             <div class="bdg-auth-shell" style="background:#1c1c1e;">
@@ -2088,7 +2135,7 @@
 
                 <!-- 2x2 History Cards Grid -->
                 <div class="bdg-acc-grid2">
-                    <div class="bdg-g2-card" onclick="window.stateManager.switchTab('wallet')">
+                    <div class="bdg-g2-card" onclick="openGameHistoryModal()">
                         <div class="bdg-g2-ico" style="background:linear-gradient(135deg,#3b82f6,#2563eb);">📘</div>
                         <div>
                             <div class="bdg-g2-title">Game History</div>
@@ -2132,7 +2179,7 @@
                         <div class="bdg-acc-row-l"><span class="bdg-gold-ico">🎟️</span><span>My Top-Up Coupons</span></div>
                         <span class="bdg-arrow">›</span>
                     </div>
-                    <div class="bdg-acc-row" onclick="alert('📊 Game Statistics:\nTotal Balance: ₹' + window.stateManager.balance.toFixed(2) + '\nTotal Bets: ' + window.stateManager.userBets.length)">
+                    <div class="bdg-acc-row" onclick="openGameHistoryModal()">
                         <div class="bdg-acc-row-l"><span class="bdg-gold-ico">📊</span><span>Game statistics</span></div>
                         <span class="bdg-arrow">›</span>
                     </div>

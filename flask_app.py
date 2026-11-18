@@ -242,6 +242,18 @@ def init_db():
                 created_at TEXT DEFAULT CURRENT_TIMESTAMP
             )
         ''')
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS game_history (
+                id TEXT PRIMARY KEY,
+                user_id INTEGER NOT NULL,
+                game TEXT NOT NULL,
+                detail TEXT DEFAULT '',
+                bet_amount REAL DEFAULT 0,
+                win_amount REAL DEFAULT 0,
+                status TEXT DEFAULT 'Pending',
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
         conn.commit()
 
 init_db()
@@ -1828,6 +1840,63 @@ def api_admin_chats_reply():
         c.execute('SELECT * FROM support_messages WHERE thread_id = ? ORDER BY created_at ASC LIMIT 80', (thread_id,))
         rows = [dict(r) for r in c.fetchall()]
     return jsonify({'success': True, 'message': 'Reply sent to player!', 'messages': rows})
+
+
+# ========================================================
+# UNIFIED PLAYER GAME HISTORY (ALL 5 GAMES)
+# ========================================================
+
+@app.route('/api/game/log-history', methods=['POST'])
+def api_game_log_history():
+    user = get_current_user(request)
+    if not user:
+        return jsonify({'success': False, 'message': 'Unauthorized'}), 401
+    data = request.get_json(silent=True) or {}
+    rec_id = str(data.get('id') or f"GH{int(time.time()*1000)}{random.randint(10,99)}")
+    game = str(data.get('game', 'Game'))[:40]
+    detail = str(data.get('detail', ''))[:140]
+    bet_amount = float(data.get('bet_amount', 0) or 0)
+    win_amount = float(data.get('win_amount', 0) or 0)
+    status = str(data.get('status', 'Pending'))
+    created_at = str(data.get('created_at') or datetime.now().isoformat())
+    with get_db() as conn:
+        c = conn.cursor()
+        c.execute('SELECT id FROM game_history WHERE id = ? AND user_id = ?', (rec_id, user['id']))
+        if c.fetchone():
+            c.execute('UPDATE game_history SET status = ?, win_amount = ?, detail = COALESCE(NULLIF(?, ""), detail) WHERE id = ? AND user_id = ?',
+                      (status, win_amount, detail, rec_id, user['id']))
+        else:
+            c.execute('INSERT INTO game_history (id, user_id, game, detail, bet_amount, win_amount, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+                      (rec_id, user['id'], game, detail, bet_amount, win_amount, status, created_at))
+        conn.commit()
+    return jsonify({'success': True})
+
+@app.route('/api/game/my-history', methods=['GET'])
+def api_game_my_history():
+    user = get_current_user(request)
+    if not user:
+        return jsonify({'success': False, 'message': 'Unauthorized'}), 401
+    with get_db() as conn:
+        c = conn.cursor()
+        c.execute('SELECT * FROM game_history WHERE user_id = ? ORDER BY created_at DESC LIMIT 80', (user['id'],))
+        unified = [dict(r) for r in c.fetchall()]
+        seen = {h['id'] for h in unified}
+        c.execute('SELECT * FROM bets WHERE user_id = ? ORDER BY created_at DESC LIMIT 40', (user['id'],))
+        for b in c.fetchall():
+            if b['id'] not in seen:
+                st = 'Won' if b['status'] == 'won' else ('Lost' if b['status'] == 'lost' else 'Pending')
+                unified.append({
+                    'id': b['id'],
+                    'user_id': user['id'],
+                    'game': 'Win Go',
+                    'detail': f"Period #{b['period']} • {str(b['select_val']).upper()}",
+                    'bet_amount': float(b['amount'] or 0),
+                    'win_amount': float(b['win_amount'] or 0),
+                    'status': st,
+                    'created_at': b['created_at'] or ''
+                })
+    unified.sort(key=lambda x: str(x.get('created_at', '')), reverse=True)
+    return jsonify({'success': True, 'history': unified[:80]})
 
 
 # ========================================================

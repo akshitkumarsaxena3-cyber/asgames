@@ -543,10 +543,28 @@ class LudoGame {
         const prize = Math.floor(this.entryFee * this.getPrizeMultiplier());
         if (winnerKey === 'red') {
             this.sm.addBalance(prize, `Ludo ${this.playerCount}P Cash Win (${this.scores.red} pts)`);
+            if (this.sm.recordGameHistory) {
+                this.sm.recordGameHistory({
+                    game: 'Ludo Cash',
+                    detail: `${this.playerCount}P Cash Match • Score ${this.scores.red} pts`,
+                    bet_amount: this.entryFee,
+                    win_amount: prize,
+                    status: 'Won'
+                });
+            }
             if (window.sound) window.sound.win('ludo');
             this.setStatus(`🏆 YOU WON ₹${prize}! Score: ${this.scores.red} pts`);
             this.sm.showWinModal(prize, `Ludo ${this.playerCount}P Cash Victory!`);
         } else {
+            if (this.sm.recordGameHistory) {
+                this.sm.recordGameHistory({
+                    game: 'Ludo Cash',
+                    detail: `${this.playerCount}P Cash Match • Your Score ${this.scores.red} pts`,
+                    bet_amount: this.entryFee,
+                    win_amount: 0,
+                    status: 'Lost'
+                });
+            }
             if (window.sound) window.sound.loss('ludo');
             this.setStatus(`Match Over — ${winnerLabel} Won (${this.scores[winnerKey]} pts). Your Score: ${this.scores.red}`);
             this.sm.showToast(`${winnerLabel} won with ${this.scores[winnerKey]} pts.`, 'warning');
@@ -1109,6 +1127,16 @@ class LudoGame {
             this.updateUI();
             if (prevStatus !== 'finished') {
                 const iWon = Number(room.winner_uid) === Number(this.sm?.uid);
+                if (this.sm.recordGameHistory) {
+                    this.sm.recordGameHistory({
+                        id: `LDO_${room.code}_${this.sm.uid || 0}`,
+                        game: 'Ludo Cash',
+                        detail: `Online Room #${room.code} (${room.players.length}P)`,
+                        bet_amount: Number(room.entry_fee || 0),
+                        win_amount: iWon ? Number(room.prize || 0) : 0,
+                        status: iWon ? 'Won' : 'Lost'
+                    });
+                }
                 if (iWon) {
                     if (window.sound) window.sound.win('ludo');
                     this.sm.fetchUserProfile();

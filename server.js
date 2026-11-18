@@ -1615,6 +1615,74 @@ app.post('/api/admin/chats/reply', requireAdmin, async (req, res) => {
     }
 });
 
+// ========================================================
+// UNIFIED PLAYER GAME HISTORY (ALL GAMES: WINGO, AVIATOR, MINES, K3, LUDO)
+// ========================================================
+app.post('/api/game/log-history', requireAuth, async (req, res) => {
+    try {
+        if (!Array.isArray(DB.data.game_history)) DB.data.game_history = [];
+        const id = String(req.body.id || ('GH' + Date.now() + Math.floor(Math.random() * 999)));
+        const game = String(req.body.game || 'Game').slice(0, 40);
+        const detail = String(req.body.detail || '').slice(0, 140);
+        const bet_amount = parseFloat(req.body.bet_amount || 0) || 0;
+        const win_amount = parseFloat(req.body.win_amount || 0) || 0;
+        const status = String(req.body.status || 'Pending');
+        const created_at = req.body.created_at || new Date().toISOString();
+
+        const existing = DB.data.game_history.find(h => h.id === id && h.user_id === req.user.id);
+        if (existing) {
+            existing.status = status;
+            existing.win_amount = win_amount;
+            if (detail) existing.detail = detail;
+        } else {
+            DB.data.game_history.push({
+                id,
+                user_id: req.user.id,
+                game,
+                detail,
+                bet_amount,
+                win_amount,
+                status,
+                created_at
+            });
+            if (DB.data.game_history.length > 800) DB.data.game_history = DB.data.game_history.slice(-800);
+        }
+        DB.save();
+        res.json({ success: true });
+    } catch (e) {
+        res.status(500).json({ success: false, message: e.message });
+    }
+});
+
+app.get('/api/game/my-history', requireAuth, async (req, res) => {
+    try {
+        if (!Array.isArray(DB.data.game_history)) DB.data.game_history = [];
+        const uid = req.user.id;
+        const unified = DB.data.game_history.filter(h => h.user_id === uid);
+        const seen = new Set(unified.map(h => h.id));
+
+        // Also include any server-side Win Go bets not already in game_history
+        const wingoBets = (DB.data.bets || []).filter(b => b.user_id === uid && !seen.has(b.id)).map(b => ({
+            id: b.id,
+            user_id: uid,
+            game: 'Win Go',
+            detail: `Period #${b.period_id} • ${String(b.select_value || '').toUpperCase()}`,
+            bet_amount: parseFloat(b.amount || 0),
+            win_amount: parseFloat(b.payout || 0),
+            status: b.status === 'won' ? 'Won' : (b.status === 'lost' ? 'Lost' : 'Pending'),
+            created_at: b.created_at || new Date().toISOString()
+        }));
+
+        const combined = [...unified, ...wingoBets]
+            .sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || '')))
+            .slice(0, 80);
+
+        res.json({ success: true, history: combined });
+    } catch (e) {
+        res.status(500).json({ success: false, message: e.message });
+    }
+});
+
 // PythonAnywhere Central Sync Management APIs
 app.get('/api/admin/sync-status', requireAdmin, async (req, res) => {
     try {

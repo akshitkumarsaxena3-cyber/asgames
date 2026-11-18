@@ -136,6 +136,15 @@ class MinesGame {
 
         const winAmount = Math.floor(this.betAmount * this.currentMultiplier * 100) / 100;
         this.sm.addBalance(winAmount, `Mines Cashout @ ${this.currentMultiplier}x`);
+        if (this.sm.recordGameHistory) {
+            this.sm.recordGameHistory({
+                game: 'Mines',
+                detail: `Cashout @ ${this.currentMultiplier}x (${this.revealedCount} Gems, ${this.mineCount} Mines)`,
+                bet_amount: this.betAmount,
+                win_amount: winAmount,
+                status: 'Won'
+            });
+        }
 
         if (window.sound) window.sound.win();
         this.sm.showWinModal(winAmount, `Mines Cashout @ ${this.currentMultiplier}x (${this.revealedCount} Gems)!`);
@@ -162,6 +171,15 @@ class MinesGame {
         }
 
         if (!isWin) {
+            if (this.sm.recordGameHistory) {
+                this.sm.recordGameHistory({
+                    game: 'Mines',
+                    detail: `Hit Bomb after ${this.revealedCount} Gems (${this.mineCount} Mines)`,
+                    bet_amount: this.betAmount,
+                    win_amount: 0,
+                    status: 'Lost'
+                });
+            }
             this.sm.showToast(`Boom! You hit a bomb. Round lost.`, 'error');
         }
 
