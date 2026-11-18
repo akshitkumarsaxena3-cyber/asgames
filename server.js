@@ -1084,6 +1084,379 @@ app.post('/api/admin/create-gift', requireAdmin, async (req, res) => {
     }
 });
 
+// ========================================================
+// FRIENDS BY UID & ONLINE 2P/4P LUDO MULTIPLAYER ROOMS
+// ========================================================
+const LUDO_SAFE_TRACK = new Set([0, 8, 13, 21, 26, 34, 39, 47]);
+const LUDO_START_IDX = { red: 39, green: 0, yellow: 13, blue: 26 };
+
+function maskPhoneShort(p) {
+    const s = String(p || '');
+    return s.length >= 6 ? s.slice(0, 3) + '****' + s.slice(-3) : s;
+}
+
+function ludoGetValidTokens(tokens, roll) {
+    return (tokens || []).filter(t => {
+        if (t.progress >= 56) return false;
+        if (t.progress === -1) return roll === 6;
+        return t.progress + roll <= 56;
+    });
+}
+
+function ludoApplyMove(room, color, tokenId, roll) {
+    const tokens = room.tokens[color] || [];
+    const token = tokens.find(t => t.id === tokenId);
+    if (!token) return false;
+
+    let extraTurn = (roll === 6);
+    if (token.progress === -1 && roll === 6) {
+        token.progress = 0;
+        room.scores[color] = (room.scores[color] || 0) + 6;
+    } else {
+        token.progress += roll;
+        room.scores[color] = (room.scores[color] || 0) + roll;
+    }
+
+    const mover = room.players.find(p => p.color === color);
+    const moverName = mover ? `UID ${mover.uid}` : color.toUpperCase();
+
+    if (token.progress === 56) {
+        room.scores[color] += 56;
+        extraTurn = true;
+        room.last_event = `🎉 ${moverName} (${color.toUpperCase()}) reached HOME! +56 pts`;
+    } else if (token.progress >= 0 && token.progress <= 50) {
+        const trackIdx = (LUDO_START_IDX[color] + token.progress) % 52;
+        if (!LUDO_SAFE_TRACK.has(trackIdx)) {
+            let captured = false;
+            for (const opp of room.players) {
+                if (opp.color === color) continue;
+                for (const ot of (room.tokens[opp.color] || [])) {
+                    if (ot.progress >= 0 && ot.progress <= 50) {
+                        const oTrack = (LUDO_START_IDX[opp.color] + ot.progress) % 52;
+                        if (oTrack === trackIdx) {
+                            ot.progress = -1;
+                            extraTurn = true;
+                            captured = true;
+                            room.scores[color] += 25;
+                            room.last_event = `⚔️ ${moverName} captured ${opp.color.toUpperCase()}! +25 pts`;
+                        }
+                    }
+                }
+            }
+            if (!captured) room.last_event = `${moverName} moved ${roll} steps.`;
+        } else {
+            room.last_event = `${moverName} landed on safe star ★`;
+        }
+    } else {
+        room.last_event = `${moverName} moved into Home Stretch!`;
+    }
+
+    const allHome = tokens.every(t => t.progress >= 56);
+    if (allHome) {
+        ludoFinishOnlineRoom(room, color);
+        return true;
+    }
+
+    if (!extraTurn) {
+        const nextIdx = (room.turn_idx + 1) % room.players.length;
+        if (nextIdx === 0) room.turns_left = Math.max(0, (room.turns_left || 1) - 1);
+        room.turn_idx = nextIdx;
+    }
+
+    if (room.turns_left <= 0) {
+        const ranked = [...room.players].sort((a, b) => (room.scores[b.color] || 0) - (room.scores[a.color] || 0));
+        ludoFinishOnlineRoom(room, ranked[0].color);
+        return true;
+    }
+
+    room.phase = 'roll';
+    room.updated_at = Date.now();
+    return true;
+}
+
+function ludoFinishOnlineRoom(room, winnerColor) {
+    room.status = 'finished';
+    room.phase = 'finished';
+    room.winner_color = winnerColor;
+    const winner = room.players.find(p => p.color === winnerColor);
+    room.winner_uid = winner ? winner.uid : null;
+    const pot = Math.floor((room.entry_fee || 0) * room.players.length * 0.92);
+    room.prize = pot;
+    room.last_event = `🏆 UID ${room.winner_uid} (${winnerColor.toUpperCase()}) WON${pot > 0 ? ` ₹${pot}` : ''}!`;
+    if (winner && pot > 0 && !room.paid_out) {
+        room.paid_out = true;
+        const u = DB.data.users.find(x => x.id === winner.uid);
+        if (u) {
+            u.balance = Math.round((u.balance + pot) * 100) / 100;
+            DB.data.transactions.push({
+                id: 'LDO' + Date.now(),
+                user_id: winner.uid,
+                type: 'win',
+                amount: pot,
+                status: 'approved',
+                details: `Ludo Online Room #${room.code} Win`,
+                created_at: new Date().toISOString()
+            });
+        }
+    }
+    room.updated_at = Date.now();
+}
+
+app.get('/api/friends/list', requireAuth, async (req, res) => {
+    if (!Array.isArray(DB.data.friends)) DB.data.friends = [];
+    if (!Array.isArray(DB.data.ludo_rooms)) DB.data.ludo_rooms = [];
+    const uid = req.user.id;
+
+    const friends = [];
+    const requests = [];
+    for (const f of DB.data.friends) {
+        if (f.status === 'accepted' && (f.from_uid === uid || f.to_uid === uid)) {
+            const otherId = f.from_uid === uid ? f.to_uid : f.from_uid;
+            const u = DB.data.users.find(x => x.id === otherId);
+            if (u) friends.push({ uid: u.id, phone: maskPhoneShort(u.phone), status: 'accepted' });
+        } else if (f.status === 'pending' && f.to_uid === uid) {
+            const u = DB.data.users.find(x => x.id === f.from_uid);
+            if (u) requests.push({ uid: u.id, phone: maskPhoneShort(u.phone) });
+        }
+    }
+
+    const cutoff = Date.now() - 30 * 60 * 1000;
+    const invites = DB.data.ludo_rooms
+        .filter(r => r.status === 'waiting' && (r.created_at || 0) > cutoff && Array.isArray(r.invited_uids) && r.invited_uids.includes(uid) && !r.players.some(p => p.uid === uid))
+        .map(r => ({
+            room_code: r.code,
+            host_uid: r.host_uid,
+            host_phone: r.players[0] ? r.players[0].phone : '',
+            max_players: r.max_players,
+            joined_count: r.players.length,
+            entry_fee: r.entry_fee
+        }));
+
+    res.json({ success: true, my_uid: uid, friends, requests, invites });
+});
+
+app.post('/api/friends/add', requireAuth, async (req, res) => {
+    if (!Array.isArray(DB.data.friends)) DB.data.friends = [];
+    const uid = req.user.id;
+    const targetUid = parseInt(req.body.friend_uid, 10);
+    if (!targetUid || targetUid === uid) {
+        return res.json({ success: false, message: 'Please enter a valid friend User ID (UID) other than your own.' });
+    }
+    const targetUser = DB.data.users.find(u => u.id === targetUid);
+    if (!targetUser) {
+        return res.json({ success: false, message: `User ID ${targetUid} not found! Ask your friend for their UID from Account tab.` });
+    }
+
+    const existing = DB.data.friends.find(f =>
+        (f.from_uid === uid && f.to_uid === targetUid) || (f.from_uid === targetUid && f.to_uid === uid)
+    );
+    if (existing) {
+        if (existing.status === 'accepted') {
+            return res.json({ success: false, message: `UID ${targetUid} is already in your Friends list!` });
+        }
+        if (existing.from_uid === targetUid) {
+            existing.status = 'accepted';
+            DB.save();
+            return res.json({ success: true, message: `🎉 You and UID ${targetUid} are now Friends! You can invite them to Ludo.` });
+        }
+        return res.json({ success: false, message: `Friend request already sent to UID ${targetUid}. Waiting for them to accept.` });
+    }
+
+    DB.data.friends.push({ from_uid: uid, to_uid: targetUid, status: 'pending', created_at: new Date().toISOString() });
+    DB.save();
+    res.json({ success: true, message: `Friend request sent to UID ${targetUid}! Ask them to accept in Ludo → Online Friends.` });
+});
+
+app.post('/api/friends/respond', requireAuth, async (req, res) => {
+    if (!Array.isArray(DB.data.friends)) DB.data.friends = [];
+    const uid = req.user.id;
+    const fromUid = parseInt(req.body.friend_uid, 10);
+    const action = req.body.action === 'accept' ? 'accept' : 'reject';
+    const idx = DB.data.friends.findIndex(f => f.from_uid === fromUid && f.to_uid === uid && f.status === 'pending');
+    if (idx === -1) return res.json({ success: false, message: 'Friend request not found.' });
+
+    if (action === 'accept') {
+        DB.data.friends[idx].status = 'accepted';
+        DB.save();
+        return res.json({ success: true, message: `🎉 Accepted! UID ${fromUid} is now your Friend.` });
+    } else {
+        DB.data.friends.splice(idx, 1);
+        DB.save();
+        return res.json({ success: true, message: 'Friend request declined.' });
+    }
+});
+
+app.post('/api/ludo/room/create', requireAuth, async (req, res) => {
+    if (!Array.isArray(DB.data.ludo_rooms)) DB.data.ludo_rooms = [];
+    const maxPlayers = parseInt(req.body.max_players, 10) === 2 ? 2 : 4;
+    const entryFee = Math.max(0, parseFloat(req.body.entry_fee || 0));
+
+    if (entryFee > 0 && req.user.balance < entryFee) {
+        return res.json({ success: false, message: `Insufficient balance! Need ₹${entryFee} to create this room.` });
+    }
+    if (entryFee > 0) {
+        await DB.run('UPDATE users SET balance = balance - ? WHERE id = ?', [entryFee, req.user.id]);
+    }
+
+    const code = 'LD' + Math.floor(1000 + Math.random() * 9000);
+    const room = {
+        code,
+        host_uid: req.user.id,
+        max_players: maxPlayers,
+        entry_fee: entryFee,
+        status: 'waiting',
+        phase: 'waiting',
+        players: [{ uid: req.user.id, phone: maskPhoneShort(req.user.phone), color: 'red' }],
+        invited_uids: [],
+        tokens: {},
+        scores: {},
+        turn_idx: 0,
+        turns_left: maxPlayers === 4 ? 18 : 24,
+        dice: 6,
+        winner_color: null,
+        winner_uid: null,
+        prize: 0,
+        paid_out: false,
+        last_event: `Room ${code} created! Invite friends by UID or share code.`,
+        created_at: Date.now(),
+        updated_at: Date.now()
+    };
+
+    DB.data.ludo_rooms.push(room);
+    if (DB.data.ludo_rooms.length > 60) DB.data.ludo_rooms.shift();
+    DB.save();
+
+    const updated = await DB.get('SELECT balance FROM users WHERE id = ?', [req.user.id]);
+    res.json({ success: true, room, balance: updated ? updated.balance : req.user.balance });
+});
+
+app.post('/api/ludo/room/invite', requireAuth, async (req, res) => {
+    const code = String(req.body.room_code || '').trim().toUpperCase();
+    const friendUid = parseInt(req.body.friend_uid, 10);
+    const room = (DB.data.ludo_rooms || []).find(r => r.code === code && r.status === 'waiting');
+    if (!room) return res.json({ success: false, message: 'Room not found or already started.' });
+    if (!Array.isArray(room.invited_uids)) room.invited_uids = [];
+    if (!room.invited_uids.includes(friendUid)) room.invited_uids.push(friendUid);
+    DB.save();
+    res.json({ success: true, message: `📩 Ludo invite sent to UID ${friendUid}!` });
+});
+
+app.post('/api/ludo/room/join', requireAuth, async (req, res) => {
+    const code = String(req.body.room_code || '').trim().toUpperCase();
+    const room = (DB.data.ludo_rooms || []).find(r => r.code === code);
+    if (!room) return res.json({ success: false, message: `Room ${code} not found!` });
+
+    if (room.players.some(p => p.uid === req.user.id)) {
+        return res.json({ success: true, room, balance: req.user.balance });
+    }
+    if (room.status !== 'waiting') {
+        return res.json({ success: false, message: 'This Ludo match has already started!' });
+    }
+    if (room.players.length >= room.max_players) {
+        return res.json({ success: false, message: 'Room is already full!' });
+    }
+    if (room.entry_fee > 0 && req.user.balance < room.entry_fee) {
+        return res.json({ success: false, message: `Need ₹${room.entry_fee} balance to join this room!` });
+    }
+    if (room.entry_fee > 0) {
+        await DB.run('UPDATE users SET balance = balance - ? WHERE id = ?', [room.entry_fee, req.user.id]);
+    }
+
+    const palette = room.max_players === 2 ? ['red', 'yellow'] : ['red', 'green', 'yellow', 'blue'];
+    const color = palette[room.players.length] || 'blue';
+    room.players.push({ uid: req.user.id, phone: maskPhoneShort(req.user.phone), color });
+    room.last_event = `UID ${req.user.id} joined as ${color.toUpperCase()}!`;
+    room.updated_at = Date.now();
+    DB.save();
+
+    const updated = await DB.get('SELECT balance FROM users WHERE id = ?', [req.user.id]);
+    res.json({ success: true, room, balance: updated ? updated.balance : req.user.balance });
+});
+
+app.post('/api/ludo/room/start', requireAuth, async (req, res) => {
+    const code = String(req.body.room_code || '').trim().toUpperCase();
+    const room = (DB.data.ludo_rooms || []).find(r => r.code === code);
+    if (!room) return res.json({ success: false, message: 'Room not found.' });
+    if (room.host_uid !== req.user.id) return res.json({ success: false, message: 'Only the Room Host can start the match.' });
+    if (room.players.length < 2) return res.json({ success: false, message: 'Wait for at least 1 friend to join before starting!' });
+
+    room.status = 'playing';
+    room.phase = 'roll';
+    room.turn_idx = 0;
+    room.tokens = {};
+    room.scores = {};
+    for (const p of room.players) {
+        room.tokens[p.color] = [
+            { id: 0, progress: 0 },
+            { id: 1, progress: 0 },
+            { id: 2, progress: -1 },
+            { id: 3, progress: -1 }
+        ];
+        room.scores[p.color] = 0;
+    }
+    room.last_event = `🎲 Match Started! UID ${room.players[0].uid} (RED) rolls first!`;
+    room.updated_at = Date.now();
+    DB.save();
+    res.json({ success: true, room });
+});
+
+app.get('/api/ludo/room/:code', requireAuth, async (req, res) => {
+    const code = String(req.params.code || '').trim().toUpperCase();
+    const room = (DB.data.ludo_rooms || []).find(r => r.code === code);
+    if (!room) return res.json({ success: false, message: 'Room not found.' });
+    res.json({ success: true, room, my_uid: req.user.id });
+});
+
+app.post('/api/ludo/room/roll', requireAuth, async (req, res) => {
+    const code = String(req.body.room_code || '').trim().toUpperCase();
+    const room = (DB.data.ludo_rooms || []).find(r => r.code === code && r.status === 'playing');
+    if (!room) return res.json({ success: false, message: 'Active room not found.' });
+    const cur = room.players[room.turn_idx];
+    if (!cur || cur.uid !== req.user.id) return res.json({ success: false, message: 'Not your turn!' });
+    if (room.phase !== 'roll') return res.json({ success: false, message: 'Tap a glowing pawn to move first!' });
+
+    const roll = Math.floor(Math.random() * 6) + 1;
+    room.dice = roll;
+    const valid = ludoGetValidTokens(room.tokens[cur.color], roll);
+
+    if (valid.length === 0) {
+        room.last_event = `UID ${cur.uid} rolled ${roll} — No valid moves!`;
+        const nextIdx = (room.turn_idx + 1) % room.players.length;
+        if (nextIdx === 0) room.turns_left = Math.max(0, (room.turns_left || 1) - 1);
+        room.turn_idx = nextIdx;
+        if (room.turns_left <= 0) {
+            const ranked = [...room.players].sort((a, b) => (room.scores[b.color] || 0) - (room.scores[a.color] || 0));
+            ludoFinishOnlineRoom(room, ranked[0].color);
+        }
+    } else if (valid.length === 1) {
+        ludoApplyMove(room, cur.color, valid[0].id, roll);
+    } else {
+        room.phase = 'move';
+        room.last_event = `UID ${cur.uid} rolled ${roll}! Tap a glowing ${cur.color.toUpperCase()} pawn.`;
+    }
+    room.updated_at = Date.now();
+    DB.save();
+    res.json({ success: true, room });
+});
+
+app.post('/api/ludo/room/move', requireAuth, async (req, res) => {
+    const code = String(req.body.room_code || '').trim().toUpperCase();
+    const tokenId = parseInt(req.body.token_id, 10);
+    const room = (DB.data.ludo_rooms || []).find(r => r.code === code && r.status === 'playing');
+    if (!room) return res.json({ success: false, message: 'Active room not found.' });
+    const cur = room.players[room.turn_idx];
+    if (!cur || cur.uid !== req.user.id) return res.json({ success: false, message: 'Not your turn!' });
+    if (room.phase !== 'move') return res.json({ success: false, message: 'Roll the dice first!' });
+
+    const valid = ludoGetValidTokens(room.tokens[cur.color], room.dice);
+    if (!valid.some(t => t.id === tokenId)) {
+        return res.json({ success: false, message: 'Invalid pawn selected!' });
+    }
+    ludoApplyMove(room, cur.color, tokenId, room.dice);
+    DB.save();
+    res.json({ success: true, room });
+});
+
 // PythonAnywhere Central Sync Management APIs
 app.get('/api/admin/sync-status', requireAdmin, async (req, res) => {
     try {

@@ -95,6 +95,14 @@ class LudoGame {
         this.tokens = {};
         this.scores = {};
 
+        // Online Multiplayer Friends Room state
+        this.onlineRoom = null;
+        this.onlineRoomCode = null;
+        this.onlinePollTimer = null;
+        this.friendsPollTimer = null;
+        this.myFriends = [];
+        this.onlinePlayerMap = {}; // color -> { uid, phone }
+
         this.resetTokens();
         this.init();
     }
@@ -123,12 +131,26 @@ class LudoGame {
 
     setPlayMode(mode) {
         if (this.isPlaying) return;
-        this.playMode = mode === 'friends' ? 'friends' : 'cash';
+        this.playMode = (mode === 'friends' || mode === 'online') ? mode : 'cash';
         document.querySelectorAll('.ludo-mode-pill').forEach(el => {
             el.classList.toggle('active', el.dataset.lmode === this.playMode);
         });
         const feeSection = document.getElementById('ludo-fee-section');
-        if (feeSection) feeSection.classList.toggle('hidden', this.playMode === 'friends');
+        const onlinePanel = document.getElementById('ludo-online-panel');
+        const startBtn = document.getElementById('btn-ludo-start');
+
+        if (feeSection) feeSection.classList.toggle('hidden', this.playMode !== 'cash');
+        if (onlinePanel) onlinePanel.classList.toggle('hidden', this.playMode !== 'online');
+        if (startBtn) startBtn.classList.toggle('hidden', this.playMode === 'online');
+
+        if (this.playMode === 'online') {
+            this.loadFriendsAndInvites();
+            this.startFriendsPolling();
+            this.setStatus('🌐 Add friends by User ID (UID) & Create/Join an Online Ludo Room!');
+        } else {
+            this.stopFriendsPolling();
+        }
+
         this.updatePrizeDisplay();
         this.updateUI();
         if (window.sound) window.sound.click('ludo');
@@ -161,6 +183,11 @@ class LudoGame {
 
     getPlayerLabel(key) {
         const cfg = this.playerConfigs[key];
+        if (this.playMode === 'online' && this.onlinePlayerMap[key]) {
+            const p = this.onlinePlayerMap[key];
+            const isMe = this.sm && Number(this.sm.uid) === Number(p.uid);
+            return `${cfg.emoji} ${isMe ? 'YOU' : `UID ${p.uid}`}`;
+        }
         if (this.playMode === 'friends') {
             const idx = this.activePlayers.indexOf(key) + 1;
             return `${cfg.emoji} P${idx} (${cfg.name})`;
@@ -171,6 +198,9 @@ class LudoGame {
     }
 
     isHumanTurn(key) {
+        if (this.playMode === 'online' && this.onlinePlayerMap[key]) {
+            return Boolean(this.sm && Number(this.sm.uid) === Number(this.onlinePlayerMap[key].uid));
+        }
         if (this.playMode === 'friends') return true;
         return key === 'red';
     }
@@ -283,6 +313,10 @@ class LudoGame {
     }
 
     rollDice(isBotCall = false) {
+        if (this.playMode === 'online' && this.onlineRoomCode && this.isPlaying) {
+            this.rollOnlineDice();
+            return;
+        }
         if (!this.isPlaying || this.isRolling || this.waitingForTokenPick) return;
         const curKey = this.getCurrentPlayerKey();
         const human = this.isHumanTurn(curKey);
@@ -405,7 +439,11 @@ class LudoGame {
 
         if (picked) {
             this.waitingForTokenPick = false;
-            this.executeMove(picked, curKey, this.diceValue);
+            if (this.playMode === 'online' && this.onlineRoomCode) {
+                this.moveOnlineToken(picked.id);
+            } else {
+                this.executeMove(picked, curKey, this.diceValue);
+            }
         }
     }
 
@@ -699,6 +737,427 @@ class LudoGame {
             ctx.fillStyle = 'rgba(255,255,255,0.65)';
             ctx.fill();
         });
+    }
+
+    // ========================================================
+    // FRIENDS BY USER ID (UID) & ONLINE MULTIPLAYER LUDO ROOMS
+    // ========================================================
+    _authHeaders() {
+        return {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${this.sm.token || ''}`
+        };
+    }
+
+    copyMyUid() {
+        const uid = String(this.sm?.uid || '');
+        if (!uid) return;
+        if (navigator.clipboard) navigator.clipboard.writeText(uid).catch(() => {});
+        this.sm.showToast(`📋 Your UID (${uid}) copied! Share it with friends to add you.`, 'success');
+    }
+
+    copyRoomCode() {
+        if (!this.onlineRoomCode) return;
+        if (navigator.clipboard) navigator.clipboard.writeText(this.onlineRoomCode).catch(() => {});
+        this.sm.showToast(`📋 Room Code ${this.onlineRoomCode} copied! Share with friends.`, 'success');
+    }
+
+    startFriendsPolling() {
+        this.stopFriendsPolling();
+        this.friendsPollTimer = setInterval(() => {
+            if (this.playMode === 'online' && !this.isPlaying && this.sm?.token) {
+                this.loadFriendsAndInvites();
+            }
+        }, 4000);
+    }
+
+    stopFriendsPolling() {
+        if (this.friendsPollTimer) {
+            clearInterval(this.friendsPollTimer);
+            this.friendsPollTimer = null;
+        }
+    }
+
+    async loadFriendsAndInvites() {
+        if (!this.sm || !this.sm.token) {
+            const uidEl = document.getElementById('ludo-my-uid');
+            if (uidEl) uidEl.textContent = 'Login First';
+            return;
+        }
+        try {
+            const res = await fetch('/api/friends/list', { headers: this._authHeaders() });
+            const d = await res.json();
+            if (!d.success) return;
+
+            const uidEl = document.getElementById('ludo-my-uid');
+            if (uidEl) uidEl.textContent = d.my_uid || this.sm.uid || '--';
+            this.myFriends = d.friends || [];
+
+            // Render Incoming Room Invites
+            const invBox = document.getElementById('ludo-invites-box');
+            if (invBox) {
+                const invites = d.invites || [];
+                if (invites.length > 0 && !this.onlineRoomCode) {
+                    invBox.classList.remove('hidden');
+                    invBox.innerHTML = invites.map(inv => `
+                        <div class="ludo-invite-banner">
+                            <div style="font-size:11.5px; color:#fff;">
+                                <strong style="color:#fae59f;">🎲 UID ${inv.host_uid} invited you!</strong><br>
+                                <span style="color:#d4d4d8;">Room ${inv.room_code} • ${inv.joined_count}/${inv.max_players}P • ${inv.entry_fee > 0 ? '₹' + inv.entry_fee : 'Free'}</span>
+                            </div>
+                            <button type="button" class="ludo-mini-gold-btn" onclick="window.ludoGame.joinOnlineRoom('${inv.room_code}')">✅ Join</button>
+                        </div>
+                    `).join('');
+                } else {
+                    invBox.classList.add('hidden');
+                    invBox.innerHTML = '';
+                }
+            }
+
+            // Render Incoming Friend Requests
+            const reqBox = document.getElementById('ludo-requests-box');
+            if (reqBox) {
+                const reqs = d.requests || [];
+                if (reqs.length > 0) {
+                    reqBox.classList.remove('hidden');
+                    reqBox.innerHTML = reqs.map(r => `
+                        <div class="ludo-invite-banner" style="border-color:#10b981; background:rgba(16,185,129,0.14);">
+                            <div style="font-size:11.5px; color:#fff;">
+                                <strong>👋 Friend Request: UID ${r.uid}</strong> (${r.phone})
+                            </div>
+                            <div style="display:flex; gap:6px;">
+                                <button type="button" class="ludo-mini-gold-btn" onclick="window.ludoGame.respondFriendRequest(${r.uid}, 'accept')">Accept</button>
+                                <button type="button" class="ludo-mini-red-btn" onclick="window.ludoGame.respondFriendRequest(${r.uid}, 'reject')">✗</button>
+                            </div>
+                        </div>
+                    `).join('');
+                } else {
+                    reqBox.classList.add('hidden');
+                    reqBox.innerHTML = '';
+                }
+            }
+
+            // Render Friends List
+            const listEl = document.getElementById('ludo-friends-list');
+            if (listEl) {
+                if (this.myFriends.length === 0) {
+                    listEl.innerHTML = `<div style="color:#94a3b8; font-size:11.5px;">No friends yet. Enter a friend's UID above &amp; click "+ Add Friend"!</div>`;
+                } else {
+                    listEl.innerHTML = this.myFriends.map(f => `
+                        <div class="ludo-friend-row">
+                            <div>
+                                <strong style="color:#fff; font-size:12.5px;">UID ${f.uid}</strong>
+                                <span style="color:#94a3b8; font-size:11px; margin-left:6px;">${f.phone}</span>
+                            </div>
+                            ${this.onlineRoomCode && this.onlineRoom && this.onlineRoom.status === 'waiting'
+                                ? `<button type="button" class="ludo-mini-gold-btn" onclick="window.ludoGame.inviteFriendToRoom(${f.uid})">📩 Invite</button>`
+                                : `<span style="color:#10b981; font-size:11px; font-weight:700;">● Friend</span>`
+                            }
+                        </div>
+                    `).join('');
+                }
+            }
+        } catch (e) {}
+    }
+
+    async addFriendByUid() {
+        if (!this.sm?.token) {
+            this.sm.showToast('Please login first to add friends!', 'warning');
+            if (typeof openAuthModal === 'function') openAuthModal('login');
+            return;
+        }
+        const inp = document.getElementById('ludo-add-friend-uid');
+        const uidVal = parseInt(inp?.value || '0', 10);
+        if (!uidVal) {
+            this.sm.showToast('Enter a valid Friend UID number!', 'warning');
+            return;
+        }
+        try {
+            const res = await fetch('/api/friends/add', {
+                method: 'POST',
+                headers: this._authHeaders(),
+                body: JSON.stringify({ friend_uid: uidVal })
+            });
+            const d = await res.json();
+            this.sm.showToast(d.message || 'Done', d.success ? 'success' : 'warning');
+            if (d.success && inp) inp.value = '';
+            this.loadFriendsAndInvites();
+        } catch (e) {
+            this.sm.showToast('Network error adding friend.', 'error');
+        }
+    }
+
+    async respondFriendRequest(friendUid, action) {
+        try {
+            const res = await fetch('/api/friends/respond', {
+                method: 'POST',
+                headers: this._authHeaders(),
+                body: JSON.stringify({ friend_uid: friendUid, action })
+            });
+            const d = await res.json();
+            this.sm.showToast(d.message, d.success ? 'success' : 'error');
+            this.loadFriendsAndInvites();
+        } catch (e) {}
+    }
+
+    async createOnlineRoom() {
+        if (!this.sm?.token) {
+            this.sm.showToast('Please login first!', 'warning');
+            return;
+        }
+        const fee = parseFloat(document.getElementById('ludo-online-fee')?.value || '0');
+        try {
+            const res = await fetch('/api/ludo/room/create', {
+                method: 'POST',
+                headers: this._authHeaders(),
+                body: JSON.stringify({ max_players: this.playerCount, entry_fee: fee })
+            });
+            const d = await res.json();
+            if (!d.success) {
+                this.sm.showToast(d.message, 'error');
+                return;
+            }
+            if (typeof d.balance === 'number') this.sm.setLocalBalance(d.balance, fee > 0 ? 'down' : null);
+            this.enterOnlineRoomState(d.room);
+            this.sm.showToast(`🏠 Room ${d.room.code} created! Tap "📩 Invite" next to your friends!`, 'success');
+            this.loadFriendsAndInvites();
+        } catch (e) {
+            this.sm.showToast('Error creating online room.', 'error');
+        }
+    }
+
+    async inviteFriendToRoom(friendUid) {
+        if (!this.onlineRoomCode) return;
+        try {
+            const res = await fetch('/api/ludo/room/invite', {
+                method: 'POST',
+                headers: this._authHeaders(),
+                body: JSON.stringify({ room_code: this.onlineRoomCode, friend_uid: friendUid })
+            });
+            const d = await res.json();
+            this.sm.showToast(d.message, d.success ? 'success' : 'error');
+        } catch (e) {}
+    }
+
+    async joinOnlineRoom(codeArg) {
+        if (!this.sm?.token) {
+            this.sm.showToast('Please login first!', 'warning');
+            return;
+        }
+        const inp = document.getElementById('ludo-join-code-input');
+        const code = String(codeArg || inp?.value || '').trim().toUpperCase();
+        if (!code) {
+            this.sm.showToast('Please enter a Room Code (e.g. LD4829)!', 'warning');
+            return;
+        }
+        try {
+            const res = await fetch('/api/ludo/room/join', {
+                method: 'POST',
+                headers: this._authHeaders(),
+                body: JSON.stringify({ room_code: code })
+            });
+            const d = await res.json();
+            if (!d.success) {
+                this.sm.showToast(d.message, 'error');
+                return;
+            }
+            if (typeof d.balance === 'number') this.sm.setLocalBalance(d.balance, 'down');
+            if (inp) inp.value = '';
+            this.enterOnlineRoomState(d.room);
+            this.sm.showToast(`✅ Joined Room ${d.room.code}! Waiting for host to start...`, 'success');
+        } catch (e) {
+            this.sm.showToast('Error joining room.', 'error');
+        }
+    }
+
+    async startOnlineRoom() {
+        if (!this.onlineRoomCode) return;
+        try {
+            const res = await fetch('/api/ludo/room/start', {
+                method: 'POST',
+                headers: this._authHeaders(),
+                body: JSON.stringify({ room_code: this.onlineRoomCode })
+            });
+            const d = await res.json();
+            if (!d.success) {
+                this.sm.showToast(d.message, 'warning');
+                return;
+            }
+            this.applyOnlineRoomState(d.room);
+            if (window.sound) window.sound.chip('ludo');
+        } catch (e) {}
+    }
+
+    leaveOnlineRoom() {
+        if (this.onlinePollTimer) {
+            clearInterval(this.onlinePollTimer);
+            this.onlinePollTimer = null;
+        }
+        this.onlineRoom = null;
+        this.onlineRoomCode = null;
+        this.onlinePlayerMap = {};
+        this.isPlaying = false;
+        this.waitingForTokenPick = false;
+        const waitEl = document.getElementById('ludo-online-waiting');
+        const cjEl = document.getElementById('ludo-online-create-join');
+        if (waitEl) waitEl.classList.add('hidden');
+        if (cjEl) cjEl.classList.remove('hidden');
+        this.updateUI();
+        this.loadFriendsAndInvites();
+    }
+
+    enterOnlineRoomState(room) {
+        this.onlineRoomCode = room.code;
+        this.applyOnlineRoomState(room);
+        if (this.onlinePollTimer) clearInterval(this.onlinePollTimer);
+        this.onlinePollTimer = setInterval(() => this.pollOnlineRoom(), 1200);
+    }
+
+    async pollOnlineRoom() {
+        if (!this.onlineRoomCode || !this.sm?.token) return;
+        try {
+            const res = await fetch(`/api/ludo/room/${encodeURIComponent(this.onlineRoomCode)}`, {
+                headers: this._authHeaders()
+            });
+            const d = await res.json();
+            if (d.success && d.room) {
+                this.applyOnlineRoomState(d.room);
+            }
+        } catch (e) {}
+    }
+
+    applyOnlineRoomState(room) {
+        const prevStatus = this.onlineRoom ? this.onlineRoom.status : null;
+        this.onlineRoom = room;
+        this.playerCount = room.max_players === 2 ? 2 : 4;
+        this.activePlayers = room.players.map(p => p.color);
+        this.onlinePlayerMap = {};
+        room.players.forEach(p => { this.onlinePlayerMap[p.color] = p; });
+
+        const waitEl = document.getElementById('ludo-online-waiting');
+        const cjEl = document.getElementById('ludo-online-create-join');
+        const codeLbl = document.getElementById('ludo-room-code-lbl');
+        const seatsEl = document.getElementById('ludo-room-seats-list');
+        const startOnlineBtn = document.getElementById('btn-ludo-online-start');
+
+        if (room.status === 'waiting') {
+            this.isPlaying = false;
+            if (waitEl) waitEl.classList.remove('hidden');
+            if (cjEl) cjEl.classList.add('hidden');
+            if (codeLbl) codeLbl.textContent = room.code;
+            if (seatsEl) {
+                seatsEl.innerHTML = room.players.map((p, idx) => {
+                    const cfg = this.playerConfigs[p.color];
+                    const isHost = p.uid === room.host_uid;
+                    return `<div style="display:flex; justify-content:space-between; background:#252632; padding:6px 10px; border-radius:8px; font-size:12px;">
+                        <span>${cfg.emoji} <strong>UID ${p.uid}</strong> (${cfg.name})${isHost ? ' 👑 Host' : ''}</span>
+                        <span style="color:#10b981;">Ready</span>
+                    </div>`;
+                }).join('') + `<div style="font-size:11px; color:#94a3b8; text-align:center;">Players Joined: ${room.players.length} / ${room.max_players}</div>`;
+            }
+            if (startOnlineBtn) {
+                const isHost = Number(this.sm?.uid) === Number(room.host_uid);
+                startOnlineBtn.classList.toggle('hidden', !isHost);
+                startOnlineBtn.disabled = room.players.length < 2;
+                startOnlineBtn.textContent = room.players.length < 2
+                    ? '⏳ Waiting for friends to join...'
+                    : `🚀 START MATCH (${room.players.length} PLAYERS)`;
+            }
+            this.setStatus(room.last_event || `Room ${room.code} waiting...`);
+            this.drawBoard();
+            this.updateUI();
+            return;
+        }
+
+        // Sync live tokens, scores, dice & turn from server
+        this.tokens = {};
+        room.players.forEach(p => {
+            const cfg = this.playerConfigs[p.color];
+            const srvTokens = (room.tokens && room.tokens[p.color]) || [];
+            this.tokens[p.color] = srvTokens.map((st, idx) => ({
+                id: st.id,
+                progress: st.progress,
+                homeBase: cfg.yardSpots[idx]
+            }));
+        });
+        this.scores = Object.assign({}, room.scores || {});
+        this.turnIdx = room.turn_idx || 0;
+        this.turnsLeft = room.turns_left || 0;
+        this.diceValue = room.dice || 6;
+
+        const diceEl = document.getElementById('ludo-dice-face');
+        if (diceEl) diceEl.textContent = this.diceSymbol(this.diceValue);
+
+        const curKey = this.getCurrentPlayerKey();
+        const isMyTurn = this.isHumanTurn(curKey);
+
+        if (room.status === 'playing') {
+            this.isPlaying = true;
+            this.waitingForTokenPick = (room.phase === 'move' && isMyTurn);
+            this.setStatus(room.last_event || (isMyTurn ? 'Your turn! Tap ROLL DICE 🎲' : `Waiting for ${this.getPlayerLabel(curKey)}...`));
+            this.drawBoard();
+            this.updateUI();
+        } else if (room.status === 'finished') {
+            this.isPlaying = false;
+            this.waitingForTokenPick = false;
+            if (this.onlinePollTimer) {
+                clearInterval(this.onlinePollTimer);
+                this.onlinePollTimer = null;
+            }
+            this.setStatus(room.last_event || 'Match Finished!');
+            this.drawBoard();
+            this.updateUI();
+            if (prevStatus !== 'finished') {
+                const iWon = Number(room.winner_uid) === Number(this.sm?.uid);
+                if (iWon) {
+                    if (window.sound) window.sound.win('ludo');
+                    this.sm.fetchUserProfile();
+                    if (room.prize > 0) this.sm.showWinModal(room.prize, `Ludo Online Room #${room.code} Victory!`);
+                    else this.sm.showToast(`🏆 YOU WON Online Ludo Room #${room.code}!`, 'success');
+                } else {
+                    if (window.sound) window.sound.loss('ludo');
+                    this.sm.showToast(room.last_event || 'Online Ludo Match Finished!', 'info');
+                }
+                setTimeout(() => this.leaveOnlineRoom(), 4000);
+            }
+        }
+    }
+
+    async rollOnlineDice() {
+        if (!this.onlineRoomCode || this.isRolling) return;
+        this.isRolling = true;
+        if (window.sound) window.sound.diceRoll('ludo');
+        try {
+            const res = await fetch('/api/ludo/room/roll', {
+                method: 'POST',
+                headers: this._authHeaders(),
+                body: JSON.stringify({ room_code: this.onlineRoomCode })
+            });
+            const d = await res.json();
+            if (d.success && d.room) {
+                this.applyOnlineRoomState(d.room);
+            } else if (d.message) {
+                this.sm.showToast(d.message, 'warning');
+            }
+        } catch (e) {}
+        this.isRolling = false;
+    }
+
+    async moveOnlineToken(tokenId) {
+        if (!this.onlineRoomCode) return;
+        try {
+            const res = await fetch('/api/ludo/room/move', {
+                method: 'POST',
+                headers: this._authHeaders(),
+                body: JSON.stringify({ room_code: this.onlineRoomCode, token_id: tokenId })
+            });
+            const d = await res.json();
+            if (d.success && d.room) {
+                this.applyOnlineRoomState(d.room);
+            } else if (d.message) {
+                this.sm.showToast(d.message, 'warning');
+            }
+        } catch (e) {}
     }
 }
 

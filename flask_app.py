@@ -211,6 +211,24 @@ def init_db():
         # Auto-repair any legacy deposit/withdraw rows where amount slipped into type column
         cursor.execute("UPDATE transactions SET amount = CAST(type AS REAL), type = 'deposit', details = COALESCE(NULLIF(details, ''), 'UPI Deposit') WHERE id LIKE 'DEP%' AND type NOT IN ('deposit', 'withdraw', 'win', 'commission')")
         cursor.execute("UPDATE transactions SET amount = CAST(type AS REAL), type = 'withdraw', details = COALESCE(NULLIF(details, ''), 'Withdrawal Request') WHERE id LIKE 'WTH%' AND type NOT IN ('deposit', 'withdraw', 'win', 'commission')")
+
+        # Friends & Online Multiplayer Ludo Rooms tables
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS friends (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                from_uid INTEGER NOT NULL,
+                to_uid INTEGER NOT NULL,
+                status TEXT DEFAULT 'pending',
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS ludo_rooms (
+                code TEXT PRIMARY KEY,
+                state_json TEXT NOT NULL,
+                updated_at REAL DEFAULT 0
+            )
+        ''')
         conn.commit()
 
 init_db()
@@ -1249,6 +1267,428 @@ def api_admin_create_gift():
         )
         conn.commit()
     return jsonify({'success': True, 'code': code, 'message': f'Gift code {code} (₹{amount}, {max_uses} uses) created!'})
+
+
+# ========================================================
+# FRIENDS BY UID & ONLINE 2P/4P LUDO MULTIPLAYER ROOMS
+# ========================================================
+
+LUDO_SAFE_TRACK = {0, 8, 13, 21, 26, 34, 39, 47}
+LUDO_START_IDX = {'red': 39, 'green': 0, 'yellow': 13, 'blue': 26}
+
+def _mask_phone_short(p):
+    s = str(p or '')
+    return s[:3] + '****' + s[-3:] if len(s) >= 6 else s
+
+def _ludo_valid_tokens(tokens, roll):
+    out = []
+    for t in (tokens or []):
+        prog = t.get('progress', -1)
+        if prog >= 56:
+            continue
+        if prog == -1:
+            if roll == 6:
+                out.append(t)
+        elif prog + roll <= 56:
+            out.append(t)
+    return out
+
+def _ludo_finish_room(conn, room, winner_color):
+    room['status'] = 'finished'
+    room['phase'] = 'finished'
+    room['winner_color'] = winner_color
+    winner = next((p for p in room['players'] if p['color'] == winner_color), None)
+    room['winner_uid'] = winner['uid'] if winner else None
+    pot = int(float(room.get('entry_fee', 0)) * len(room['players']) * 0.92)
+    room['prize'] = pot
+    room['last_event'] = f"🏆 UID {room['winner_uid']} ({winner_color.upper()}) WON" + (f" ₹{pot}!" if pot > 0 else "!")
+    if winner and pot > 0 and not room.get('paid_out'):
+        room['paid_out'] = True
+        c = conn.cursor()
+        c.execute('UPDATE users SET balance = balance + ? WHERE id = ?', (pot, winner['uid']))
+        c.execute(
+            'INSERT INTO transactions (id, user_id, type, amount, status, details, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+            (f"LDO{int(time.time()*1000)}", winner['uid'], 'win', pot, 'approved', f"Ludo Online Room #{room['code']} Win", datetime.now().isoformat())
+        )
+    room['updated_at'] = int(time.time() * 1000)
+
+def _ludo_apply_move(conn, room, color, token_id, roll):
+    tokens = room['tokens'].get(color, [])
+    token = next((t for t in tokens if t['id'] == token_id), None)
+    if not token:
+        return False
+    extra_turn = (roll == 6)
+    if token['progress'] == -1 and roll == 6:
+        token['progress'] = 0
+        room['scores'][color] = room['scores'].get(color, 0) + 6
+    else:
+        token['progress'] += roll
+        room['scores'][color] = room['scores'].get(color, 0) + roll
+
+    mover = next((p for p in room['players'] if p['color'] == color), None)
+    mover_name = f"UID {mover['uid']}" if mover else color.upper()
+
+    if token['progress'] == 56:
+        room['scores'][color] += 56
+        extra_turn = True
+        room['last_event'] = f"🎉 {mover_name} ({color.upper()}) reached HOME! +56 pts"
+    elif 0 <= token['progress'] <= 50:
+        t_idx = (LUDO_START_IDX[color] + token['progress']) % 52
+        if t_idx not in LUDO_SAFE_TRACK:
+            captured = False
+            for opp in room['players']:
+                if opp['color'] == color:
+                    continue
+                for ot in room['tokens'].get(opp['color'], []):
+                    if 0 <= ot['progress'] <= 50:
+                        o_idx = (LUDO_START_IDX[opp['color']] + ot['progress']) % 52
+                        if o_idx == t_idx:
+                            ot['progress'] = -1
+                            extra_turn = True
+                            captured = True
+                            room['scores'][color] += 25
+                            room['last_event'] = f"⚔️ {mover_name} captured {opp['color'].upper()}! +25 pts"
+            if not captured:
+                room['last_event'] = f"{mover_name} moved {roll} steps."
+        else:
+            room['last_event'] = f"{mover_name} landed on safe star ★"
+    else:
+        room['last_event'] = f"{mover_name} moved into Home Stretch!"
+
+    if all(t['progress'] >= 56 for t in tokens):
+        _ludo_finish_room(conn, room, color)
+        return True
+
+    if not extra_turn:
+        next_idx = (room['turn_idx'] + 1) % len(room['players'])
+        if next_idx == 0:
+            room['turns_left'] = max(0, int(room.get('turns_left', 1)) - 1)
+        room['turn_idx'] = next_idx
+
+    if room['turns_left'] <= 0:
+        ranked = sorted(room['players'], key=lambda p: room['scores'].get(p['color'], 0), reverse=True)
+        _ludo_finish_room(conn, room, ranked[0]['color'])
+        return True
+
+    room['phase'] = 'roll'
+    room['updated_at'] = int(time.time() * 1000)
+    return True
+
+@app.route('/api/friends/list', methods=['GET'])
+def api_friends_list():
+    user = get_current_user(request)
+    if not user:
+        return jsonify({'success': False, 'message': 'Unauthorized'}), 401
+    uid = user['id']
+    friends, reqs, invites = [], [], []
+    with get_db() as conn:
+        c = conn.cursor()
+        c.execute('SELECT * FROM friends WHERE from_uid = ? OR to_uid = ?', (uid, uid))
+        for f in c.fetchall():
+            if f['status'] == 'accepted':
+                other_id = f['to_uid'] if f['from_uid'] == uid else f['from_uid']
+                c.execute('SELECT id, phone FROM users WHERE id = ?', (other_id,))
+                u = c.fetchone()
+                if u:
+                    friends.append({'uid': u['id'], 'phone': _mask_phone_short(u['phone']), 'status': 'accepted'})
+            elif f['status'] == 'pending' and f['to_uid'] == uid:
+                c.execute('SELECT id, phone FROM users WHERE id = ?', (f['from_uid'],))
+                u = c.fetchone()
+                if u:
+                    reqs.append({'uid': u['id'], 'phone': _mask_phone_short(u['phone'])})
+        cutoff = (time.time() - 1800) * 1000
+        c.execute('SELECT state_json FROM ludo_rooms WHERE updated_at > ? ORDER BY updated_at DESC LIMIT 40', (cutoff,))
+        for r in c.fetchall():
+            rm = json.loads(r['state_json'])
+            if rm.get('status') == 'waiting' and uid in (rm.get('invited_uids') or []) and not any(p['uid'] == uid for p in rm.get('players', [])):
+                invites.append({
+                    'room_code': rm['code'],
+                    'host_uid': rm['host_uid'],
+                    'host_phone': rm['players'][0]['phone'] if rm.get('players') else '',
+                    'max_players': rm['max_players'],
+                    'joined_count': len(rm.get('players', [])),
+                    'entry_fee': rm.get('entry_fee', 0)
+                })
+    return jsonify({'success': True, 'my_uid': uid, 'friends': friends, 'requests': reqs, 'invites': invites})
+
+@app.route('/api/friends/add', methods=['POST'])
+def api_friends_add():
+    user = get_current_user(request)
+    if not user:
+        return jsonify({'success': False, 'message': 'Unauthorized'}), 401
+    uid = user['id']
+    data = request.get_json(silent=True) or {}
+    try:
+        target_uid = int(data.get('friend_uid', 0))
+    except Exception:
+        target_uid = 0
+    if not target_uid or target_uid == uid:
+        return jsonify({'success': False, 'message': 'Please enter a valid friend User ID (UID) other than your own.'})
+    with get_db() as conn:
+        c = conn.cursor()
+        c.execute('SELECT id FROM users WHERE id = ?', (target_uid,))
+        if not c.fetchone():
+            return jsonify({'success': False, 'message': f'User ID {target_uid} not found! Ask your friend for their UID from Account tab.'})
+        c.execute('SELECT * FROM friends WHERE (from_uid=? AND to_uid=?) OR (from_uid=? AND to_uid=?)', (uid, target_uid, target_uid, uid))
+        ex = c.fetchone()
+        if ex:
+            if ex['status'] == 'accepted':
+                return jsonify({'success': False, 'message': f'UID {target_uid} is already in your Friends list!'})
+            if ex['from_uid'] == target_uid:
+                c.execute('UPDATE friends SET status = "accepted" WHERE id = ?', (ex['id'],))
+                conn.commit()
+                return jsonify({'success': True, 'message': f'🎉 You and UID {target_uid} are now Friends!'})
+            return jsonify({'success': False, 'message': f'Friend request already sent to UID {target_uid}.'})
+        c.execute('INSERT INTO friends (from_uid, to_uid, status, created_at) VALUES (?, ?, "pending", ?)', (uid, target_uid, datetime.now().isoformat()))
+        conn.commit()
+    return jsonify({'success': True, 'message': f'Friend request sent to UID {target_uid}!'})
+
+@app.route('/api/friends/respond', methods=['POST'])
+def api_friends_respond():
+    user = get_current_user(request)
+    if not user:
+        return jsonify({'success': False, 'message': 'Unauthorized'}), 401
+    uid = user['id']
+    data = request.get_json(silent=True) or {}
+    from_uid = int(data.get('friend_uid', 0) or 0)
+    action = 'accept' if data.get('action') == 'accept' else 'reject'
+    with get_db() as conn:
+        c = conn.cursor()
+        c.execute('SELECT id FROM friends WHERE from_uid=? AND to_uid=? AND status="pending"', (from_uid, uid))
+        row = c.fetchone()
+        if not row:
+            return jsonify({'success': False, 'message': 'Friend request not found.'})
+        if action == 'accept':
+            c.execute('UPDATE friends SET status="accepted" WHERE id=?', (row['id'],))
+            msg = f'🎉 Accepted! UID {from_uid} is now your Friend.'
+        else:
+            c.execute('DELETE FROM friends WHERE id=?', (row['id'],))
+            msg = 'Friend request declined.'
+        conn.commit()
+    return jsonify({'success': True, 'message': msg})
+
+@app.route('/api/ludo/room/create', methods=['POST'])
+def api_ludo_room_create():
+    user = get_current_user(request)
+    if not user:
+        return jsonify({'success': False, 'message': 'Unauthorized'}), 401
+    data = request.get_json(silent=True) or {}
+    max_players = 2 if int(data.get('max_players', 4)) == 2 else 4
+    entry_fee = max(0.0, float(data.get('entry_fee', 0) or 0))
+    now_ms = int(time.time() * 1000)
+    code = f"LD{random.randint(1000, 9999)}"
+    with get_db() as conn:
+        c = conn.cursor()
+        c.execute('SELECT balance FROM users WHERE id=?', (user['id'],))
+        cur_bal = float(c.fetchone()['balance'])
+        if entry_fee > 0 and cur_bal < entry_fee:
+            return jsonify({'success': False, 'message': f'Insufficient balance! Need ₹{entry_fee:.0f} to create this room.'})
+        if entry_fee > 0:
+            c.execute('UPDATE users SET balance = MAX(0, balance - ?) WHERE id=?', (entry_fee, user['id']))
+            cur_bal = round(max(0.0, cur_bal - entry_fee), 2)
+        room = {
+            'code': code,
+            'host_uid': user['id'],
+            'max_players': max_players,
+            'entry_fee': entry_fee,
+            'status': 'waiting',
+            'phase': 'waiting',
+            'players': [{'uid': user['id'], 'phone': _mask_phone_short(user['phone']), 'color': 'red'}],
+            'invited_uids': [],
+            'tokens': {},
+            'scores': {},
+            'turn_idx': 0,
+            'turns_left': 18 if max_players == 4 else 24,
+            'dice': 6,
+            'winner_color': None,
+            'winner_uid': None,
+            'prize': 0,
+            'paid_out': False,
+            'last_event': f'Room {code} created! Invite friends by UID or share code.',
+            'created_at': now_ms,
+            'updated_at': now_ms
+        }
+        c.execute('INSERT OR REPLACE INTO ludo_rooms (code, state_json, updated_at) VALUES (?, ?, ?)', (code, json.dumps(room), now_ms))
+        conn.commit()
+    return jsonify({'success': True, 'room': room, 'balance': cur_bal})
+
+@app.route('/api/ludo/room/invite', methods=['POST'])
+def api_ludo_room_invite():
+    user = get_current_user(request)
+    if not user:
+        return jsonify({'success': False, 'message': 'Unauthorized'}), 401
+    data = request.get_json(silent=True) or {}
+    code = str(data.get('room_code', '')).strip().upper()
+    friend_uid = int(data.get('friend_uid', 0) or 0)
+    with get_db() as conn:
+        c = conn.cursor()
+        c.execute('SELECT state_json FROM ludo_rooms WHERE code=?', (code,))
+        r = c.fetchone()
+        if not r:
+            return jsonify({'success': False, 'message': 'Room not found.'})
+        room = json.loads(r['state_json'])
+        if room.get('status') != 'waiting':
+            return jsonify({'success': False, 'message': 'Room already started.'})
+        if friend_uid not in room.setdefault('invited_uids', []):
+            room['invited_uids'].append(friend_uid)
+        room['updated_at'] = int(time.time() * 1000)
+        c.execute('UPDATE ludo_rooms SET state_json=?, updated_at=? WHERE code=?', (json.dumps(room), room['updated_at'], code))
+        conn.commit()
+    return jsonify({'success': True, 'message': f'📩 Ludo invite sent to UID {friend_uid}!'})
+
+@app.route('/api/ludo/room/join', methods=['POST'])
+def api_ludo_room_join():
+    user = get_current_user(request)
+    if not user:
+        return jsonify({'success': False, 'message': 'Unauthorized'}), 401
+    data = request.get_json(silent=True) or {}
+    code = str(data.get('room_code', '')).strip().upper()
+    with get_db() as conn:
+        c = conn.cursor()
+        c.execute('SELECT state_json FROM ludo_rooms WHERE code=?', (code,))
+        r = c.fetchone()
+        if not r:
+            return jsonify({'success': False, 'message': f'Room {code} not found!'})
+        room = json.loads(r['state_json'])
+        c.execute('SELECT balance FROM users WHERE id=?', (user['id'],))
+        cur_bal = float(c.fetchone()['balance'])
+        if any(p['uid'] == user['id'] for p in room['players']):
+            return jsonify({'success': True, 'room': room, 'balance': cur_bal})
+        if room['status'] != 'waiting':
+            return jsonify({'success': False, 'message': 'This Ludo match has already started!'})
+        if len(room['players']) >= room['max_players']:
+            return jsonify({'success': False, 'message': 'Room is already full!'})
+        fee = float(room.get('entry_fee', 0))
+        if fee > 0 and cur_bal < fee:
+            return jsonify({'success': False, 'message': f'Need ₹{fee:.0f} balance to join this room!'})
+        if fee > 0:
+            c.execute('UPDATE users SET balance = MAX(0, balance - ?) WHERE id=?', (fee, user['id']))
+            cur_bal = round(max(0.0, cur_bal - fee), 2)
+        palette = ['red', 'yellow'] if room['max_players'] == 2 else ['red', 'green', 'yellow', 'blue']
+        color = palette[len(room['players'])]
+        room['players'].append({'uid': user['id'], 'phone': _mask_phone_short(user['phone']), 'color': color})
+        room['last_event'] = f"UID {user['id']} joined as {color.upper()}!"
+        room['updated_at'] = int(time.time() * 1000)
+        c.execute('UPDATE ludo_rooms SET state_json=?, updated_at=? WHERE code=?', (json.dumps(room), room['updated_at'], code))
+        conn.commit()
+    return jsonify({'success': True, 'room': room, 'balance': cur_bal})
+
+@app.route('/api/ludo/room/start', methods=['POST'])
+def api_ludo_room_start():
+    user = get_current_user(request)
+    if not user:
+        return jsonify({'success': False, 'message': 'Unauthorized'}), 401
+    data = request.get_json(silent=True) or {}
+    code = str(data.get('room_code', '')).strip().upper()
+    with get_db() as conn:
+        c = conn.cursor()
+        c.execute('SELECT state_json FROM ludo_rooms WHERE code=?', (code,))
+        r = c.fetchone()
+        if not r:
+            return jsonify({'success': False, 'message': 'Room not found.'})
+        room = json.loads(r['state_json'])
+        if room['host_uid'] != user['id']:
+            return jsonify({'success': False, 'message': 'Only the Room Host can start the match.'})
+        if len(room['players']) < 2:
+            return jsonify({'success': False, 'message': 'Wait for at least 1 friend to join before starting!'})
+        room['status'] = 'playing'
+        room['phase'] = 'roll'
+        room['turn_idx'] = 0
+        room['tokens'] = {p['color']: [{'id': 0, 'progress': 0}, {'id': 1, 'progress': 0}, {'id': 2, 'progress': -1}, {'id': 3, 'progress': -1}] for p in room['players']}
+        room['scores'] = {p['color']: 0 for p in room['players']}
+        room['last_event'] = f"🎲 Match Started! UID {room['players'][0]['uid']} (RED) rolls first!"
+        room['updated_at'] = int(time.time() * 1000)
+        c.execute('UPDATE ludo_rooms SET state_json=?, updated_at=? WHERE code=?', (json.dumps(room), room['updated_at'], code))
+        conn.commit()
+    return jsonify({'success': True, 'room': room})
+
+@app.route('/api/ludo/room/<code>', methods=['GET'])
+def api_ludo_room_state(code):
+    user = get_current_user(request)
+    if not user:
+        return jsonify({'success': False, 'message': 'Unauthorized'}), 401
+    code = str(code or '').strip().upper()
+    with get_db() as conn:
+        c = conn.cursor()
+        c.execute('SELECT state_json FROM ludo_rooms WHERE code=?', (code,))
+        r = c.fetchone()
+        if not r:
+            return jsonify({'success': False, 'message': 'Room not found.'})
+        room = json.loads(r['state_json'])
+    return jsonify({'success': True, 'room': room, 'my_uid': user['id']})
+
+@app.route('/api/ludo/room/roll', methods=['POST'])
+def api_ludo_room_roll():
+    user = get_current_user(request)
+    if not user:
+        return jsonify({'success': False, 'message': 'Unauthorized'}), 401
+    data = request.get_json(silent=True) or {}
+    code = str(data.get('room_code', '')).strip().upper()
+    with get_db() as conn:
+        c = conn.cursor()
+        c.execute('SELECT state_json FROM ludo_rooms WHERE code=?', (code,))
+        r = c.fetchone()
+        if not r:
+            return jsonify({'success': False, 'message': 'Active room not found.'})
+        room = json.loads(r['state_json'])
+        if room.get('status') != 'playing':
+            return jsonify({'success': False, 'message': 'Match is not active.'})
+        cur = room['players'][room['turn_idx']]
+        if cur['uid'] != user['id']:
+            return jsonify({'success': False, 'message': 'Not your turn!'})
+        if room.get('phase') != 'roll':
+            return jsonify({'success': False, 'message': 'Tap a glowing pawn to move first!'})
+        roll = random.randint(1, 6)
+        room['dice'] = roll
+        valid = _ludo_valid_tokens(room['tokens'][cur['color']], roll)
+        if not valid:
+            room['last_event'] = f"UID {cur['uid']} rolled {roll} — No valid moves!"
+            next_idx = (room['turn_idx'] + 1) % len(room['players'])
+            if next_idx == 0:
+                room['turns_left'] = max(0, int(room.get('turns_left', 1)) - 1)
+            room['turn_idx'] = next_idx
+            if room['turns_left'] <= 0:
+                ranked = sorted(room['players'], key=lambda p: room['scores'].get(p['color'], 0), reverse=True)
+                _ludo_finish_room(conn, room, ranked[0]['color'])
+        elif len(valid) == 1:
+            _ludo_apply_move(conn, room, cur['color'], valid[0]['id'], roll)
+        else:
+            room['phase'] = 'move'
+            room['last_event'] = f"UID {cur['uid']} rolled {roll}! Tap a glowing {cur['color'].upper()} pawn."
+        room['updated_at'] = int(time.time() * 1000)
+        c.execute('UPDATE ludo_rooms SET state_json=?, updated_at=? WHERE code=?', (json.dumps(room), room['updated_at'], code))
+        conn.commit()
+    return jsonify({'success': True, 'room': room})
+
+@app.route('/api/ludo/room/move', methods=['POST'])
+def api_ludo_room_move():
+    user = get_current_user(request)
+    if not user:
+        return jsonify({'success': False, 'message': 'Unauthorized'}), 401
+    data = request.get_json(silent=True) or {}
+    code = str(data.get('room_code', '')).strip().upper()
+    token_id = int(data.get('token_id', -1))
+    with get_db() as conn:
+        c = conn.cursor()
+        c.execute('SELECT state_json FROM ludo_rooms WHERE code=?', (code,))
+        r = c.fetchone()
+        if not r:
+            return jsonify({'success': False, 'message': 'Active room not found.'})
+        room = json.loads(r['state_json'])
+        if room.get('status') != 'playing':
+            return jsonify({'success': False, 'message': 'Match is not active.'})
+        cur = room['players'][room['turn_idx']]
+        if cur['uid'] != user['id']:
+            return jsonify({'success': False, 'message': 'Not your turn!'})
+        if room.get('phase') != 'move':
+            return jsonify({'success': False, 'message': 'Roll the dice first!'})
+        valid = _ludo_valid_tokens(room['tokens'][cur['color']], room['dice'])
+        if not any(t['id'] == token_id for t in valid):
+            return jsonify({'success': False, 'message': 'Invalid pawn selected!'})
+        _ludo_apply_move(conn, room, cur['color'], token_id, room['dice'])
+        c.execute('UPDATE ludo_rooms SET state_json=?, updated_at=? WHERE code=?', (json.dumps(room), room['updated_at'], code))
+        conn.commit()
+    return jsonify({'success': True, 'room': room})
 
 
 # ========================================================

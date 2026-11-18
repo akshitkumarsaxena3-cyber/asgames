@@ -17,6 +17,8 @@ class DataStore {
             gift_codes: [
                 { code: 'ASG50', amount: 50, max_uses: 100, claimed_by: [], created_at: new Date().toISOString() }
             ],
+            friends: [],
+            ludo_rooms: [],
             settings: {
                 admin_password: 'spp213201pty',
                 game_mode: 'random',
@@ -54,6 +56,8 @@ class DataStore {
                 this.data = Object.assign(this.data, parsed);
                 // Ensure updated admin password & permanent PythonAnywhere sync URL
                 if (!this.data.settings) this.data.settings = {};
+                if (!Array.isArray(this.data.friends)) this.data.friends = [];
+                if (!Array.isArray(this.data.ludo_rooms)) this.data.ludo_rooms = [];
                 this.data.settings.admin_password = 'spp213201pty';
                 if (!this.data.settings.pythonanywhere_url) {
                     this.data.settings.pythonanywhere_url = 'https://backandsopport.pythonanywhere.com';
