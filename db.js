@@ -164,13 +164,18 @@ class DataStore {
                     if (localUser) {
                         if (ru.email) localUser.email = ru.email;
                         if (ru.password) localUser.password = ru.password;
-                        if (typeof ru.balance === 'number') localUser.balance = ru.balance;
                         if (typeof ru.deposit_balance === 'number') localUser.deposit_balance = ru.deposit_balance;
                         if (typeof ru.winning_balance === 'number') localUser.winning_balance = ru.winning_balance;
+                        if (typeof localUser.deposit_balance !== 'number' && typeof ru.balance === 'number') {
+                            localUser.balance = ru.balance;
+                        }
                         if (ru.is_banned !== undefined) localUser.is_banned = ru.is_banned;
+                        this.reconcileUserWallet(localUser);
                     } else {
                         const newId = ru.id || this.data.nextUserId++;
-                        this.data.users.push(Object.assign({}, ru, { id: newId }));
+                        const nu = Object.assign({}, ru, { id: newId });
+                        this.reconcileUserWallet(nu);
+                        this.data.users.push(nu);
                         this.data.nextUserId = Math.max(this.data.nextUserId, newId + 1);
                     }
                 }
@@ -337,6 +342,65 @@ class DataStore {
             console.warn('[PythonAnywhere Sync] Push error:', e.message);
             return false;
         }
+    }
+
+    reconcileUserWallet(user) {
+        if (!user) return user;
+        const currentBal = Math.max(0, parseFloat(user.balance || 0));
+        const uid = Number(user.id);
+        const altUid = uid < 100000 ? uid + 100000 : uid - 100000;
+        const matchUser = (x) => Number(x.user_id) === uid || Number(x.user_id) === altUid;
+
+        // Total approved deposits from financial transactions
+        let totalDeposits = 0;
+        if (Array.isArray(this.data.transactions)) {
+            totalDeposits = this.data.transactions
+                .filter(t => matchUser(t) && t.type === 'deposit' && (t.status === 'approved' || t.status === 'completed'))
+                .reduce((sum, t) => sum + (parseFloat(t.amount || 0) || 0), 0);
+        }
+
+        // Total bets played across all games (Win Go, Aviator, King, Ludo, etc.)
+        let totalBets = 0;
+        if (Array.isArray(this.data.game_history)) {
+            totalBets += this.data.game_history
+                .filter(matchUser)
+                .reduce((sum, h) => sum + (parseFloat(h.bet_amount || 0) || 0), 0);
+        }
+        if (Array.isArray(this.data.bets)) {
+            const wgBets = this.data.bets
+                .filter(matchUser)
+                .reduce((sum, b) => sum + (parseFloat(b.amount || 0) || 0), 0);
+            totalBets = Math.max(totalBets, wgBets);
+        }
+        if (Array.isArray(this.data.king_bets)) {
+            const kgBets = this.data.king_bets
+                .filter(matchUser)
+                .reduce((sum, b) => sum + (parseFloat(b.amount || 0) || 0), 0);
+            totalBets += kgBets;
+        }
+
+        const unwageredDeposit = Math.max(0, Math.round((totalDeposits - totalBets) * 100) / 100);
+
+        if (typeof user.deposit_balance === 'number' && typeof user.winning_balance === 'number') {
+            // Self-healing: if deposit_balance was somehow wiped to 0 upon logout/sync but unwagered deposit exists:
+            if (user.deposit_balance === 0 && unwageredDeposit > 0 && currentBal > 0) {
+                user.deposit_balance = Math.min(currentBal, unwageredDeposit);
+                user.winning_balance = Math.max(0, Math.round((currentBal - user.deposit_balance) * 100) / 100);
+            } else {
+                user.balance = Math.round((user.deposit_balance + user.winning_balance) * 100) / 100;
+            }
+        } else {
+            // First-time initialization:
+            user.deposit_balance = Math.min(currentBal, unwageredDeposit);
+            user.winning_balance = Math.max(0, Math.round((currentBal - user.deposit_balance) * 100) / 100);
+            user.balance = Math.round((user.deposit_balance + user.winning_balance) * 100) / 100;
+        }
+        return user;
+    }
+
+    reconcileAllUserWallets() {
+        if (!Array.isArray(this.data.users)) return;
+        this.data.users.forEach(u => this.reconcileUserWallet(u));
     }
 
     async get(sql, params = []) {
@@ -566,8 +630,7 @@ class DataStore {
         const applyUserWallet = (user, delta, isDeposit = false, isWithdraw = false) => {
             if (!user) return;
             if (typeof user.deposit_balance !== 'number' || typeof user.winning_balance !== 'number') {
-                user.deposit_balance = 0;
-                user.winning_balance = Math.max(0, parseFloat(user.balance || 0));
+                this.reconcileUserWallet(user);
             }
             const d = parseFloat(delta);
             if (d > 0) {

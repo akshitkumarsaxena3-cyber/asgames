@@ -469,15 +469,20 @@ app.post('/api/auth/login', async (req, res) => {
         }
 
         const token = generateToken(user.id, user.phone);
+        DB.reconcileUserWallet(user);
         res.json({
             success: true,
             message: 'Logged in successfully',
             token,
             user: {
                 id: user.id,
+                uid: toPublicUid(user.id),
                 phone: user.phone,
                 email: user.email || '',
                 balance: user.balance,
+                deposit_balance: user.deposit_balance || 0,
+                winning_balance: user.winning_balance || 0,
+                withdrawable_balance: user.winning_balance || 0,
                 invite_code: user.invite_code,
                 vip_level: user.vip_level
             }
@@ -500,12 +505,7 @@ function resolveUserByPublicUid(rawUid) {
 }
 
 app.get('/api/auth/me', requireAuth, async (req, res) => {
-    // Ensure 2-wallet structure (deposit_balance & winning_balance)
-    if (typeof req.user.deposit_balance !== 'number' || typeof req.user.winning_balance !== 'number') {
-        req.user.deposit_balance = 0;
-        req.user.winning_balance = Math.max(0, parseFloat(req.user.balance || 0));
-        req.user.balance = req.user.winning_balance;
-    }
+    DB.reconcileUserWallet(req.user);
     res.json({
         success: true,
         user: {
@@ -772,8 +772,7 @@ function isWithdrawalTimeOpen() {
 function applyUserWalletDelta(user, delta, type = null) {
     if (!user) return;
     if (typeof user.deposit_balance !== 'number' || typeof user.winning_balance !== 'number') {
-        user.deposit_balance = 0;
-        user.winning_balance = Math.max(0, parseFloat(user.balance || 0));
+        DB.reconcileUserWallet(user);
     }
     const d = parseFloat(delta);
     if (d > 0) {
@@ -818,10 +817,7 @@ app.post('/api/wallet/withdraw', requireAuth, async (req, res) => {
         }
 
         // 2. Strict Winning Wallet Rule:
-        if (typeof req.user.deposit_balance !== 'number' || typeof req.user.winning_balance !== 'number') {
-            req.user.deposit_balance = 0;
-            req.user.winning_balance = Math.max(0, parseFloat(req.user.balance || 0));
-        }
+        DB.reconcileUserWallet(req.user);
 
         const winBal = parseFloat(req.user.winning_balance || 0);
         if (withdrawAmt > winBal) {
@@ -879,10 +875,7 @@ app.post('/api/wallet/withdraw', requireAuth, async (req, res) => {
 
 app.get('/api/wallet/turnover-status', requireAuth, async (req, res) => {
     try {
-        if (typeof req.user.deposit_balance !== 'number' || typeof req.user.winning_balance !== 'number') {
-            req.user.deposit_balance = 0;
-            req.user.winning_balance = Math.max(0, parseFloat(req.user.balance || 0));
-        }
+        DB.reconcileUserWallet(req.user);
         res.json({
             success: true,
             balance: req.user.balance,

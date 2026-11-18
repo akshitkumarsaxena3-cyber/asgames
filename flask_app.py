@@ -397,6 +397,35 @@ def apply_user_wallet_delta(conn, user_id, delta, tx_type=None):
     c.execute('UPDATE users SET balance = ?, deposit_balance = ?, winning_balance = ? WHERE id = ?', (bal, dep_bal, win_bal, user_id))
     return bal, dep_bal, win_bal
 
+def reconcile_user_wallet_sqlite(conn, user_id):
+    c = conn.cursor()
+    c.execute('SELECT balance, deposit_balance, winning_balance FROM users WHERE id = ?', (user_id,))
+    u = c.fetchone()
+    if not u:
+        return 0.0, 0.0, 0.0
+    bal = float(u['balance'] or 0)
+
+    # Approved deposits
+    c.execute('SELECT COALESCE(SUM(amount), 0) as total_dep FROM transactions WHERE user_id = ? AND type = "deposit" AND (status = "approved" OR status = "completed")', (user_id,))
+    total_deposits = float(c.fetchone()['total_dep'] or 0)
+
+    # Total bets played
+    c.execute('SELECT COALESCE(SUM(bet_amount), 0) as total_bet FROM game_history WHERE user_id = ?', (user_id,))
+    gh_bets = float(c.fetchone()['total_bet'] or 0)
+    c.execute('SELECT COALESCE(SUM(amount), 0) as total_bet FROM bets WHERE user_id = ?', (user_id,))
+    wg_bets = float(c.fetchone()['total_bet'] or 0)
+    total_bets = max(gh_bets, wg_bets)
+
+    unwagered_dep = max(0.0, round(total_deposits - total_bets, 2))
+    dep_bal = min(bal, unwagered_dep)
+    win_bal = max(0.0, round(bal - dep_bal, 2))
+
+    try:
+        c.execute('UPDATE users SET deposit_balance = ?, winning_balance = ? WHERE id = ?', (dep_bal, win_bal, user_id))
+    except Exception:
+        pass
+    return bal, dep_bal, win_bal
+
 
 # ========================================================
 # GAME STATE & WIN-GO ENGINE
@@ -691,11 +720,12 @@ def api_me():
     if not user:
         return jsonify({'success': False, 'message': 'Unauthorized'}), 401
     user['uid'] = to_public_uid(user['id'])
-    dep = float(user.get('deposit_balance') or 0)
-    win = float(user.get('winning_balance') or 0)
-    bal = float(user.get('balance') or 0)
-    if dep == 0 and win == 0 and bal > 0:
-        win = bal
+
+    with get_db() as conn:
+        bal, dep, win = reconcile_user_wallet_sqlite(conn, user['id'])
+        conn.commit()
+
+    user['balance'] = bal
     user['deposit_balance'] = dep
     user['winning_balance'] = win
     user['withdrawable_balance'] = win
@@ -820,14 +850,8 @@ def api_turnover_status():
         return jsonify({'success': False, 'message': 'Unauthorized'}), 401
 
     with get_db() as conn:
-        c = conn.cursor()
-        c.execute('SELECT balance, deposit_balance, winning_balance FROM users WHERE id = ?', (user['id'],))
-        row = c.fetchone()
-        bal = float(row['balance'] or 0) if row else 0.0
-        dep_bal = float(row['deposit_balance'] or 0) if row else 0.0
-        win_bal = float(row['winning_balance'] or 0) if row else 0.0
-        if dep_bal == 0 and win_bal == 0 and bal > 0:
-            win_bal = bal
+        bal, dep_bal, win_bal = reconcile_user_wallet_sqlite(conn, user['id'])
+        conn.commit()
 
     return jsonify({
         'success': True,
@@ -859,17 +883,7 @@ def api_withdraw():
         return jsonify({'success': False, 'message': 'Minimum withdrawal is ₹110'}), 400
 
     with get_db() as conn:
-        cursor = conn.cursor()
-        cursor.execute('SELECT balance, deposit_balance, winning_balance FROM users WHERE id = ?', (user['id'],))
-        row = cursor.fetchone()
-        if not row:
-            return jsonify({'success': False, 'message': 'User not found'}), 404
-
-        current_bal = float(row['balance'] or 0)
-        dep_bal = float(row['deposit_balance'] or 0)
-        win_bal = float(row['winning_balance'] or 0)
-        if dep_bal == 0 and win_bal == 0 and current_bal > 0:
-            win_bal = current_bal
+        current_bal, dep_bal, win_bal = reconcile_user_wallet_sqlite(conn, user['id'])
 
         if current_bal < amount:
             return jsonify({'success': False, 'message': f'Insufficient wallet balance! You have ₹{current_bal:.2f}'}), 400
@@ -2779,6 +2793,18 @@ def api_sync_push():
                 if pk in settings and settings[pk] is not None:
                     cursor.execute('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', (pk, str(settings[pk]).strip()))
 
+        # Ensure columns exist before upserting
+        for col_sql in [
+            'ALTER TABLE users ADD COLUMN deposit_balance REAL DEFAULT 0.0',
+            'ALTER TABLE users ADD COLUMN winning_balance REAL DEFAULT 0.0',
+            'ALTER TABLE transactions ADD COLUMN tds_amount REAL DEFAULT 0.0',
+            'ALTER TABLE transactions ADD COLUMN net_amount REAL DEFAULT 0.0'
+        ]:
+            try:
+                cursor.execute(col_sql)
+            except Exception:
+                pass
+
         # Upsert Users
         for u in users:
             phone = str(u.get('phone', '')).strip()
@@ -2786,16 +2812,28 @@ def api_sync_push():
                 continue
             cursor.execute('SELECT id FROM users WHERE phone = ?', (phone,))
             existing = cursor.fetchone()
-            if existing:
-                cursor.execute(
-                    'UPDATE users SET email = COALESCE(NULLIF(?, ""), email), password = ?, balance = ?, deposit_balance = ?, winning_balance = ?, invite_code = ?, referred_by = ?, vip_level = ?, is_banned = ? WHERE phone = ?',
-                    (u.get('email', ''), u.get('password'), u.get('balance', 0), u.get('deposit_balance', 0), u.get('winning_balance', 0), u.get('invite_code'), u.get('referred_by'), u.get('vip_level', 1), u.get('is_banned', 0), phone)
-                )
-            else:
-                cursor.execute(
-                    'INSERT INTO users (phone, email, email_verified, password, balance, deposit_balance, winning_balance, invite_code, referred_by, vip_level, is_banned, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-                    (phone, u.get('email', ''), 1, u.get('password'), u.get('balance', 0), u.get('deposit_balance', 0), u.get('winning_balance', 0), u.get('invite_code'), u.get('referred_by'), u.get('vip_level', 1), u.get('is_banned', 0), u.get('created_at', datetime.now().isoformat()))
-                )
+            try:
+                if existing:
+                    cursor.execute(
+                        'UPDATE users SET email = COALESCE(NULLIF(?, ""), email), password = ?, balance = ?, deposit_balance = ?, winning_balance = ?, invite_code = ?, referred_by = ?, vip_level = ?, is_banned = ? WHERE phone = ?',
+                        (u.get('email', ''), u.get('password'), u.get('balance', 0), u.get('deposit_balance', 0), u.get('winning_balance', 0), u.get('invite_code'), u.get('referred_by'), u.get('vip_level', 1), u.get('is_banned', 0), phone)
+                    )
+                else:
+                    cursor.execute(
+                        'INSERT INTO users (phone, email, email_verified, password, balance, deposit_balance, winning_balance, invite_code, referred_by, vip_level, is_banned, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                        (phone, u.get('email', ''), 1, u.get('password'), u.get('balance', 0), u.get('deposit_balance', 0), u.get('winning_balance', 0), u.get('invite_code'), u.get('referred_by'), u.get('vip_level', 1), u.get('is_banned', 0), u.get('created_at', datetime.now().isoformat()))
+                    )
+            except Exception:
+                if existing:
+                    cursor.execute(
+                        'UPDATE users SET email = COALESCE(NULLIF(?, ""), email), password = ?, balance = ?, invite_code = ?, referred_by = ?, vip_level = ?, is_banned = ? WHERE phone = ?',
+                        (u.get('email', ''), u.get('password'), u.get('balance', 0), u.get('invite_code'), u.get('referred_by'), u.get('vip_level', 1), u.get('is_banned', 0), phone)
+                    )
+                else:
+                    cursor.execute(
+                        'INSERT INTO users (phone, email, email_verified, password, balance, invite_code, referred_by, vip_level, is_banned, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                        (phone, u.get('email', ''), 1, u.get('password'), u.get('balance', 0), u.get('invite_code'), u.get('referred_by'), u.get('vip_level', 1), u.get('is_banned', 0), u.get('created_at', datetime.now().isoformat()))
+                    )
 
         # Upsert Transactions
         for t in transactions:

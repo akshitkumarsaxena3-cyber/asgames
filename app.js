@@ -5,6 +5,15 @@ class StateManager {
         this.token = localStorage.getItem('asg_token') || null;
         this.user = null;
         this.balance = this.token ? (parseFloat(localStorage.getItem('asg_balance')) || 0.00) : 0.00;
+        const cachedDep = parseFloat(localStorage.getItem('asg_deposit_balance'));
+        const cachedWin = parseFloat(localStorage.getItem('asg_winning_balance'));
+        if (this.token && !isNaN(cachedDep) && !isNaN(cachedWin)) {
+            this.user = {
+                balance: this.balance,
+                deposit_balance: cachedDep,
+                winning_balance: cachedWin
+            };
+        }
         this.uid = localStorage.getItem('asg_uid') || '849204';
         this.vipLevel = 1;
         this.inviteCode = localStorage.getItem('asg_invite') || 'ASG84920';
@@ -71,6 +80,8 @@ class StateManager {
                 this.vipLevel = data.user.vip_level || 1;
 
                 localStorage.setItem('asg_balance', this.balance);
+                if (typeof data.user.deposit_balance === 'number') localStorage.setItem('asg_deposit_balance', data.user.deposit_balance);
+                if (typeof data.user.winning_balance === 'number') localStorage.setItem('asg_winning_balance', data.user.winning_balance);
                 localStorage.setItem('asg_uid', this.uid);
                 localStorage.setItem('asg_invite', this.inviteCode);
 
@@ -102,6 +113,8 @@ class StateManager {
                     if (confirm('Do you want to log out?')) {
                         localStorage.removeItem('asg_token');
                         localStorage.removeItem('asg_balance');
+                        localStorage.removeItem('asg_deposit_balance');
+                        localStorage.removeItem('asg_winning_balance');
                         location.reload();
                     }
                 };
@@ -132,6 +145,9 @@ class StateManager {
                 });
                 const data = await res.json();
                 if (data.success && data.user && typeof data.user.balance === 'number') {
+                    this.user = data.user;
+                    if (typeof data.user.deposit_balance === 'number') localStorage.setItem('asg_deposit_balance', data.user.deposit_balance);
+                    if (typeof data.user.winning_balance === 'number') localStorage.setItem('asg_winning_balance', data.user.winning_balance);
                     const serverBal = Math.round(data.user.balance * 100) / 100;
                     const localBal = Math.round(this.balance * 100) / 100;
                     const diff = Math.round((serverBal - localBal) * 100) / 100;
@@ -169,7 +185,7 @@ class StateManager {
             : (window._currentTurnoverInfo && typeof window._currentTurnoverInfo.deposit_balance === 'number' ? window._currentTurnoverInfo.deposit_balance : 0);
         const winBal = (this.user && typeof this.user.winning_balance === 'number')
             ? this.user.winning_balance
-            : (window._currentTurnoverInfo && typeof window._currentTurnoverInfo.winning_balance === 'number' ? window._currentTurnoverInfo.winning_balance : this.balance);
+            : (window._currentTurnoverInfo && typeof window._currentTurnoverInfo.winning_balance === 'number' ? window._currentTurnoverInfo.winning_balance : (this.user ? Math.max(0, this.balance - depBal) : 0));
 
         const depEl = document.getElementById('wd-deposit-bal-val');
         const winEl = document.getElementById('wd-winning-bal-val');
@@ -1304,6 +1320,11 @@ async function submitLogin() {
         const d = await res.json();
         if (d.success) {
             localStorage.setItem('asg_token', d.token);
+            if (d.user) {
+                localStorage.setItem('asg_balance', d.user.balance || 0);
+                if (typeof d.user.deposit_balance === 'number') localStorage.setItem('asg_deposit_balance', d.user.deposit_balance);
+                if (typeof d.user.winning_balance === 'number') localStorage.setItem('asg_winning_balance', d.user.winning_balance);
+            }
             sessionStorage.setItem('asg_just_logged_in', '1');
             closeAuthModal();
             location.reload();
@@ -1358,6 +1379,11 @@ async function submitRegister() {
         const d = await res.json();
         if (d.success) {
             localStorage.setItem('asg_token', d.token);
+            if (d.user) {
+                localStorage.setItem('asg_balance', d.user.balance || 0);
+                if (typeof d.user.deposit_balance === 'number') localStorage.setItem('asg_deposit_balance', d.user.deposit_balance);
+                if (typeof d.user.winning_balance === 'number') localStorage.setItem('asg_winning_balance', d.user.winning_balance);
+            }
             sessionStorage.setItem('asg_just_logged_in', '1');
             closeAuthModal();
             location.reload();
@@ -2309,13 +2335,16 @@ function updateWithdrawSummary() {
     const btn = document.getElementById('btn-submit-withdraw');
 
     let depositBal = 0;
-    let winningBal = bal;
-    if (window._currentTurnoverInfo) {
+    let winningBal = 0;
+    if (window._currentTurnoverInfo && typeof window._currentTurnoverInfo.winning_balance === 'number') {
         depositBal = typeof window._currentTurnoverInfo.deposit_balance === 'number' ? window._currentTurnoverInfo.deposit_balance : 0;
-        winningBal = typeof window._currentTurnoverInfo.winning_balance === 'number' ? window._currentTurnoverInfo.winning_balance : (window._currentTurnoverInfo.withdrawable_balance ?? bal);
+        winningBal = window._currentTurnoverInfo.winning_balance;
+    } else if (sm && sm.user && typeof sm.user.winning_balance === 'number') {
+        depositBal = typeof sm.user.deposit_balance === 'number' ? sm.user.deposit_balance : 0;
+        winningBal = sm.user.winning_balance;
     } else if (sm && sm.user) {
         depositBal = typeof sm.user.deposit_balance === 'number' ? sm.user.deposit_balance : 0;
-        winningBal = typeof sm.user.winning_balance === 'number' ? sm.user.winning_balance : bal;
+        winningBal = Math.max(0, bal - depositBal);
     }
 
     const tds = Math.round(amt * 0.18 * 100) / 100;
@@ -2350,11 +2379,14 @@ function updateWithdrawSummary() {
 function fillAllWithdrawBalance() {
     const sm = window.stateManager;
     const bal = sm ? Number(sm.balance || 0) : 0;
-    let winningBal = bal;
+    let winningBal = 0;
     if (window._currentTurnoverInfo && typeof window._currentTurnoverInfo.winning_balance === 'number') {
         winningBal = window._currentTurnoverInfo.winning_balance;
     } else if (sm && sm.user && typeof sm.user.winning_balance === 'number') {
         winningBal = sm.user.winning_balance;
+    } else if (sm && sm.user) {
+        const dep = Number(sm.user.deposit_balance || 0);
+        winningBal = Math.max(0, bal - dep);
     }
 
     const withdrawable = Math.floor(winningBal);
