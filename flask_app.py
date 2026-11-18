@@ -190,8 +190,12 @@ def init_db():
             'admin_password': 'spp213201pty',
             'game_mode': 'random',
             'manual_number': '',
-            'upi_id': 'asgames@upi',
-            'upi_name': 'ASGames Official',
+            'upi_id': 'akshit9908@barodampay',
+            'upi_name': 'AKSHIT KUMAR SAXENA',
+            'deposit_upi_id': 'akshit9908@barodampay',
+            'deposit_upi_name': 'AKSHIT KUMAR SAXENA',
+            'deposit_arpay_upi': 'manusaxena465267@ikwik',
+            'deposit_qr_url': '/assets/deposit-qr.jpg',
             'min_deposit': '100',
             'min_withdraw': '110'
         }
@@ -1258,14 +1262,14 @@ def api_payment_details():
         c = conn.cursor()
         c.execute('SELECT key, value FROM settings WHERE key IN ("deposit_upi_id", "deposit_upi_name", "deposit_arpay_upi", "deposit_usdt_address", "deposit_qr_url")')
         s = {r['key']: r['value'] for r in c.fetchall()}
-    upi_id = s.get('deposit_upi_id') or 'asgames@upi'
+    upi_id = s.get('deposit_upi_id') or 'akshit9908@barodampay'
     return jsonify({
         'success': True,
         'upi_id': upi_id,
-        'upi_name': s.get('deposit_upi_name') or 'ASGames',
-        'arpay_upi': s.get('deposit_arpay_upi') or upi_id,
+        'upi_name': s.get('deposit_upi_name') or 'AKSHIT KUMAR SAXENA',
+        'arpay_upi': s.get('deposit_arpay_upi') or 'manusaxena465267@ikwik',
         'usdt_address': s.get('deposit_usdt_address') or 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t',
-        'qr_url': s.get('deposit_qr_url') or ''
+        'qr_url': s.get('deposit_qr_url') or '/assets/deposit-qr.jpg'
     })
 
 @app.route('/api/admin/payment-details', methods=['POST'])

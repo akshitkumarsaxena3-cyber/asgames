@@ -1931,28 +1931,63 @@ function clearDepositAmount() {
 }
 
 window._livePaymentDetails = {
-    upi_id: 'asgames@upi',
-    upi_name: 'ASGames',
-    arpay_upi: 'asgames@upi',
+    upi_id: 'akshit9908@barodampay',
+    upi_name: 'AKSHIT KUMAR SAXENA',
+    arpay_upi: 'manusaxena465267@ikwik',
     usdt_address: 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t',
-    qr_url: ''
+    qr_url: '/assets/deposit-qr.jpg'
 };
+window._depCheckoutAmount = 500;
+window._depCheckoutSlot = 1;
 
 async function fetchLivePaymentDetails() {
     try {
-        const res = await fetch('/api/payment-details');
+        const res = await fetch('/api/payment-details', { cache: 'no-store' });
         const d = await res.json();
         if (d.success) {
             window._livePaymentDetails = {
-                upi_id: d.upi_id || 'asgames@upi',
-                upi_name: d.upi_name || 'ASGames',
-                arpay_upi: d.arpay_upi || d.upi_id || 'asgames@upi',
+                upi_id: d.upi_id || 'akshit9908@barodampay',
+                upi_name: d.upi_name || 'AKSHIT KUMAR SAXENA',
+                arpay_upi: d.arpay_upi || 'manusaxena465267@ikwik',
                 usdt_address: d.usdt_address || 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t',
-                qr_url: d.qr_url || ''
+                qr_url: d.qr_url || '/assets/deposit-qr.jpg'
             };
         }
     } catch (e) {}
     return window._livePaymentDetails;
+}
+
+function selectDepositUpiSlot(slot) {
+    window._depCheckoutSlot = slot === 2 ? 2 : 1;
+    const pay = window._livePaymentDetails || {};
+    const amt = Number(window._depCheckoutAmount || 500);
+    const idLbl = document.getElementById('dep-pay-id-label');
+    const idVal = document.getElementById('dep-pay-id-val');
+    const qrImg = document.getElementById('dep-pay-qr-img');
+    const btn1 = document.getElementById('dep-upi-btn-1');
+    const btn2 = document.getElementById('dep-upi-btn-2');
+
+    const activeStyle = 'padding:8px 6px; border-radius:8px; border:1px solid #d9ac4f; background:linear-gradient(135deg,#fae59f,#c4933f); color:#1a1305; font-size:11px; font-weight:800; cursor:pointer;';
+    const idleStyle = 'padding:8px 6px; border-radius:8px; border:1px solid rgba(255,255,255,0.14); background:#18181b; color:#e4e4e7; font-size:11px; font-weight:700; cursor:pointer;';
+    if (btn1) btn1.style.cssText = window._depCheckoutSlot === 1 ? activeStyle : idleStyle;
+    if (btn2) btn2.style.cssText = window._depCheckoutSlot === 2 ? activeStyle : idleStyle;
+
+    const addr = window._depCheckoutSlot === 2
+        ? (pay.arpay_upi || 'manusaxena465267@ikwik')
+        : (pay.upi_id || 'akshit9908@barodampay');
+    const payeeName = window._depCheckoutSlot === 2 ? 'MANU SAXENA' : (pay.upi_name || 'AKSHIT KUMAR SAXENA');
+
+    if (idLbl) idLbl.textContent = `Official Deposit UPI (${payeeName})`;
+    if (idVal) idVal.textContent = addr;
+
+    if (qrImg) {
+        if (window._depCheckoutSlot === 1 && pay.qr_url) {
+            qrImg.src = pay.qr_url;
+        } else {
+            const qrPayload = `upi://pay?pa=${addr}&pn=${encodeURIComponent(payeeName)}&am=${amt.toFixed(2)}&cu=INR`;
+            qrImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&margin=6&data=${encodeURIComponent(qrPayload)}`;
+        }
+    }
 }
 
 async function openDepositCheckoutSheet() {
@@ -1968,36 +2003,32 @@ async function openDepositCheckoutSheet() {
         sm.showToast('Please select or enter at least ₹100 to deposit.', 'warning');
         return;
     }
+    window._depCheckoutAmount = amt;
 
     const pay = await fetchLivePaymentDetails();
     const ch = window._selectedDepositChannel || window._selectedDepositMethod || 'UPI-QR';
     const isUsdt = window._selectedDepositMethod === 'USDT';
     const isArPay = window._selectedDepositMethod === 'ARPay';
 
-    const payAddr = isUsdt
-        ? (pay.usdt_address || 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t')
-        : (isArPay ? (pay.arpay_upi || pay.upi_id) : pay.upi_id);
-
-    const qrPayload = isUsdt
-        ? payAddr
-        : `upi://pay?pa=${payAddr}&pn=${encodeURIComponent(pay.upi_name || 'ASGames')}&am=${amt.toFixed(2)}&cu=INR`;
-
     const chLbl = document.getElementById('dep-pay-channel-lbl');
     const amtLbl = document.getElementById('dep-pay-amount-lbl');
     const idLbl = document.getElementById('dep-pay-id-label');
     const idVal = document.getElementById('dep-pay-id-val');
     const qrImg = document.getElementById('dep-pay-qr-img');
+    const switcher = document.getElementById('dep-upi-switcher');
 
     if (chLbl) chLbl.textContent = ch;
     if (amtLbl) amtLbl.textContent = `₹${amt.toFixed(2)}`;
-    if (idLbl) idLbl.textContent = isUsdt ? 'Official USDT (TRC20) Address' : `Official Deposit UPI (${pay.upi_name || 'ASGames'})`;
-    if (idVal) idVal.textContent = payAddr;
-    if (qrImg) {
-        if (!isUsdt && pay.qr_url) {
-            qrImg.src = pay.qr_url;
-        } else {
-            qrImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&margin=6&data=${encodeURIComponent(qrPayload)}`;
-        }
+
+    if (isUsdt) {
+        if (switcher) switcher.style.display = 'none';
+        const usdtAddr = pay.usdt_address || 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t';
+        if (idLbl) idLbl.textContent = 'Official USDT (TRC20) Address';
+        if (idVal) idVal.textContent = usdtAddr;
+        if (qrImg) qrImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&margin=6&data=${encodeURIComponent(usdtAddr)}`;
+    } else {
+        if (switcher) switcher.style.display = (pay.arpay_upi && pay.arpay_upi !== pay.upi_id) ? 'grid' : 'none';
+        selectDepositUpiSlot(isArPay ? 2 : 1);
     }
 
     const sheet = document.getElementById('dep-checkout-sheet');
@@ -2010,7 +2041,7 @@ function closeDepositCheckoutSheet() {
 }
 
 function copyDepositPayAddress() {
-    const val = document.getElementById('dep-pay-id-val')?.textContent || 'asgames@upi';
+    const val = document.getElementById('dep-pay-id-val')?.textContent || 'akshit9908@barodampay';
     if (navigator.clipboard) navigator.clipboard.writeText(val).catch(() => {});
     if (window.stateManager) window.stateManager.showToast(`Copied: ${val}`, 'success');
 }

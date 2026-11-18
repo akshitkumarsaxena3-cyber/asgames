@@ -1019,11 +1019,11 @@ app.get('/api/payment-details', async (req, res) => {
     const s = DB.data.settings || {};
     res.json({
         success: true,
-        upi_id: s.deposit_upi_id || 'asgames@upi',
-        upi_name: s.deposit_upi_name || 'ASGames',
-        arpay_upi: s.deposit_arpay_upi || s.deposit_upi_id || 'asgames@upi',
+        upi_id: s.deposit_upi_id || 'akshit9908@barodampay',
+        upi_name: s.deposit_upi_name || 'AKSHIT KUMAR SAXENA',
+        arpay_upi: s.deposit_arpay_upi || 'manusaxena465267@ikwik',
         usdt_address: s.deposit_usdt_address || 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t',
-        qr_url: s.deposit_qr_url || ''
+        qr_url: s.deposit_qr_url !== undefined && s.deposit_qr_url !== '' ? s.deposit_qr_url : '/assets/deposit-qr.jpg'
     });
 });
 

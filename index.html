@@ -729,13 +729,17 @@
                             <div style="font-size:11px; color:#a1a1aa;">Pay Exact Amount</div>
                             <div id="dep-pay-amount-lbl" style="font-size:28px; font-weight:900; color:#fae59f;">₹500.00</div>
                         </div>
+                        <div id="dep-upi-switcher" style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:10px;">
+                            <button type="button" id="dep-upi-btn-1" onclick="selectDepositUpiSlot(1)" style="padding:8px 6px; border-radius:8px; border:1px solid #d9ac4f; background:linear-gradient(135deg,#fae59f,#c4933f); color:#1a1305; font-size:11px; font-weight:800; cursor:pointer;">⚡ UPI 1 (BarodaPay)</button>
+                            <button type="button" id="dep-upi-btn-2" onclick="selectDepositUpiSlot(2)" style="padding:8px 6px; border-radius:8px; border:1px solid rgba(255,255,255,0.14); background:#18181b; color:#e4e4e7; font-size:11px; font-weight:700; cursor:pointer;">⚡ UPI 2 (iKwik)</button>
+                        </div>
                         <div class="dep-checkout-qr-wrap">
-                            <img id="dep-pay-qr-img" src="" alt="Payment QR" style="width:154px; height:154px; border-radius:8px; background:#fff; padding:6px; display:block; margin:0 auto;">
+                            <img id="dep-pay-qr-img" src="/assets/deposit-qr.jpg" alt="Payment QR" style="width:188px; height:auto; max-height:220px; object-fit:contain; border-radius:10px; background:#fff; padding:6px; display:block; margin:0 auto;">
                         </div>
                         <div class="dep-checkout-upi-row">
                             <div>
-                                <div id="dep-pay-id-label" style="font-size:10px; color:#94a3b8;">Official Deposit UPI ID</div>
-                                <div id="dep-pay-id-val" style="font-size:13px; font-weight:700; color:#fae59f;">asgames@upi</div>
+                                <div id="dep-pay-id-label" style="font-size:10px; color:#94a3b8;">Official Deposit UPI (AKSHIT KUMAR SAXENA)</div>
+                                <div id="dep-pay-id-val" style="font-size:13px; font-weight:700; color:#fae59f;">akshit9908@barodampay</div>
                             </div>
                             <button type="button" class="btn-action" style="background:#10b981; color:#fff; padding:6px 12px;" onclick="copyDepositPayAddress()">Copy</button>
                         </div>
