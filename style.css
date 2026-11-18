@@ -6062,3 +6062,76 @@ body {
     color: #f4f4f5;
     line-height: 1.4;
 }
+
+/* ======================================================== */
+/* 2-PLAYER & 4-PLAYER LUDO CASH SUPREME UI                 */
+/* ======================================================== */
+.ludo-top-hud {
+    padding: 0 12px 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.ludo-scoreboard-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 6px;
+}
+
+.ludo-green-box {
+    background: linear-gradient(135deg, rgba(16, 185, 129, 0.25), rgba(6, 78, 59, 0.55));
+    border: 1px solid rgba(16, 185, 129, 0.45);
+    color: #a7f3d0;
+}
+
+.ludo-blue-box {
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.25), rgba(30, 58, 138, 0.55));
+    border: 1px solid rgba(59, 130, 246, 0.45);
+    color: #bfdbfe;
+}
+
+.ludo-active-turn {
+    box-shadow: 0 0 0 2px #fae59f, 0 0 16px rgba(245, 196, 67, 0.65) !important;
+    transform: scale(1.03);
+    transition: all 0.2s;
+}
+
+.ludo-turns-strip {
+    text-align: center;
+    font-size: 11.5px;
+    font-weight: 700;
+    color: #cbd5e1;
+    background: rgba(30, 30, 38, 0.85);
+    border: 1px solid rgba(245, 196, 67, 0.2);
+    border-radius: 20px;
+    padding: 4px 12px;
+    align-self: center;
+}
+
+.ludo-toggle-2col {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+}
+
+.ludo-pcount-pill,
+.ludo-mode-pill {
+    background: #23232a;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: #cbd5e1;
+    border-radius: 10px;
+    padding: 9px 8px;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.ludo-pcount-pill.active,
+.ludo-mode-pill.active {
+    background: linear-gradient(135deg, #fae59f 0%, #c6913a 100%);
+    color: #2b1704;
+    border-color: #fff0b8;
+    box-shadow: 0 4px 12px rgba(217, 172, 79, 0.4);
+}

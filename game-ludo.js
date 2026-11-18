@@ -1,5 +1,6 @@
 // Ludo Supreme Cash Game Engine - ASGames Authentic 15x15 Canvas Board
-// Player (Red) vs AI Bot (Yellow) with Entry Fee, 1.9x Cash Prize, Captures & Admin Rigging Control
+// Supports 2-Player (1v1, 1.9x Prize) & 4-Player (4-Way, 3.6x Prize)
+// Modes: Cash Match (VS AI Opponents + Admin Rigging) & Pass-and-Play (2 or 4 Friends Together!)
 
 class LudoGame {
     constructor(stateManager) {
@@ -9,13 +10,15 @@ class LudoGame {
         this.boardSize = 360;
         this.cellSize = 24;
 
+        this.playerCount = 4;     // 2 or 4 players
+        this.playMode = 'cash';   // 'cash' (1 human vs bots for cash) | 'friends' (all humans pass & play)
         this.entryFee = 50;
         this.isPlaying = false;
-        this.turn = 'player'; // 'player' | 'bot'
+        this.turnIdx = 0;
         this.diceValue = 6;
         this.isRolling = false;
         this.waitingForTokenPick = false;
-        this.turnsLeft = 24; // Rapid 24-turn Ludo Cash Match (like Zupee Ludo Supreme)
+        this.turnsLeft = 24;
         this.rigMode = 'fair';
 
         // 52-step outer loop coordinates [col, row] on 15x15 grid
@@ -34,36 +37,161 @@ class LudoGame {
             [0,7],[0,6]
         ];
 
-        // Player (Red) starts at track index 40 ([6,13]) -> travels 50 steps -> home column [7,13]..[7,8]
-        // Bot (Yellow) starts at track index 14 ([8,2]) -> travels 50 steps -> home column [7,1]..[7,6]
-        this.playerStartIdx = 39; // [6,13]
-        this.botStartIdx = 13;    // [8,1]
-
-        this.playerHomePath = [[7,13],[7,12],[7,11],[7,10],[7,9],[7,8]];
-        this.botHomePath    = [[7,1],[7,2],[7,3],[7,4],[7,5],[7,6]];
-
         this.safeTrackIndices = new Set([0, 8, 13, 21, 26, 34, 39, 47]);
+
+        // Full 4-Player Board Config (Clockwise: Red -> Green -> Yellow -> Blue)
+        this.playerConfigs = {
+            red: {
+                key: 'red',
+                name: 'RED',
+                emoji: '🔴',
+                fill: '#dc2626',
+                ring: '#ffffff',
+                glow: 'rgba(239, 68, 68, 0.55)',
+                startIdx: 39,
+                homePath: [[7,13],[7,12],[7,11],[7,10],[7,9],[7,8]],
+                yardSpots: [[1.5,10.5],[3.5,10.5],[1.5,12.5],[3.5,12.5]],
+                finishPos: { x: 7, y: 7.45 }
+            },
+            green: {
+                key: 'green',
+                name: 'GREEN',
+                emoji: '🟢',
+                fill: '#10b981',
+                ring: '#ffffff',
+                glow: 'rgba(16, 185, 129, 0.55)',
+                startIdx: 0,
+                homePath: [[1,7],[2,7],[3,7],[4,7],[5,7],[6,7]],
+                yardSpots: [[1.5,1.5],[3.5,1.5],[1.5,3.5],[3.5,3.5]],
+                finishPos: { x: 6.55, y: 7 }
+            },
+            yellow: {
+                key: 'yellow',
+                name: 'YELLOW',
+                emoji: '🟡',
+                fill: '#f59e0b',
+                ring: '#78350f',
+                glow: 'rgba(245, 158, 11, 0.55)',
+                startIdx: 13,
+                homePath: [[7,1],[7,2],[7,3],[7,4],[7,5],[7,6]],
+                yardSpots: [[10.5,1.5],[12.5,1.5],[10.5,3.5],[12.5,3.5]],
+                finishPos: { x: 7, y: 6.55 }
+            },
+            blue: {
+                key: 'blue',
+                name: 'BLUE',
+                emoji: '🔵',
+                fill: '#2563eb',
+                ring: '#ffffff',
+                glow: 'rgba(59, 130, 246, 0.55)',
+                startIdx: 26,
+                homePath: [[13,7],[12,7],[11,7],[10,7],[9,7],[8,7]],
+                yardSpots: [[10.5,10.5],[12.5,10.5],[10.5,12.5],[12.5,12.5]],
+                finishPos: { x: 7.45, y: 7 }
+            }
+        };
+
+        this.activePlayers = ['red', 'green', 'yellow', 'blue'];
+        this.tokens = {};
+        this.scores = {};
 
         this.resetTokens();
         this.init();
     }
 
+    getPrizeMultiplier() {
+        return this.playerCount === 4 ? 3.6 : 1.9;
+    }
+
+    setPlayerCount(count) {
+        if (this.isPlaying) return;
+        this.playerCount = count === 4 ? 4 : 2;
+        this.activePlayers = this.playerCount === 4
+            ? ['red', 'green', 'yellow', 'blue']
+            : ['red', 'yellow'];
+
+        document.querySelectorAll('.ludo-pcount-pill').forEach(el => {
+            el.classList.toggle('active', parseInt(el.dataset.pcount, 10) === this.playerCount);
+        });
+
+        this.resetTokens();
+        this.updatePrizeDisplay();
+        this.drawBoard();
+        this.updateUI();
+        if (window.sound) window.sound.click('ludo');
+    }
+
+    setPlayMode(mode) {
+        if (this.isPlaying) return;
+        this.playMode = mode === 'friends' ? 'friends' : 'cash';
+        document.querySelectorAll('.ludo-mode-pill').forEach(el => {
+            el.classList.toggle('active', el.dataset.lmode === this.playMode);
+        });
+        const feeSection = document.getElementById('ludo-fee-section');
+        if (feeSection) feeSection.classList.toggle('hidden', this.playMode === 'friends');
+        this.updatePrizeDisplay();
+        this.updateUI();
+        if (window.sound) window.sound.click('ludo');
+    }
+
+    setEntryFee(amt) {
+        if (this.isPlaying) return;
+        this.entryFee = amt;
+        document.querySelectorAll('.ludo-fee-pill').forEach(el => {
+            el.classList.toggle('active', parseInt(el.dataset.fee, 10) === amt);
+        });
+        this.updatePrizeDisplay();
+    }
+
+    updatePrizeDisplay() {
+        const prizeEl = document.getElementById('ludo-prize-val');
+        const startBtn = document.getElementById('btn-ludo-start');
+        const mult = this.getPrizeMultiplier();
+        if (prizeEl) {
+            prizeEl.textContent = this.playMode === 'friends'
+                ? 'FREE (Friends Mode)'
+                : `₹${Math.floor(this.entryFee * mult)} (${mult}x)`;
+        }
+        if (startBtn) {
+            startBtn.textContent = this.playMode === 'friends'
+                ? `🤝 START ${this.playerCount}-PLAYER FRIENDS MATCH`
+                : `🎲 START ${this.playerCount}P CASH MATCH (WIN ₹${Math.floor(this.entryFee * mult)})`;
+        }
+    }
+
+    getPlayerLabel(key) {
+        const cfg = this.playerConfigs[key];
+        if (this.playMode === 'friends') {
+            const idx = this.activePlayers.indexOf(key) + 1;
+            return `${cfg.emoji} P${idx} (${cfg.name})`;
+        }
+        if (key === 'red') return '🔴 YOU (RED)';
+        const botIdx = this.activePlayers.indexOf(key);
+        return `${cfg.emoji} ${this.playerCount === 2 ? 'OPPONENT' : `BOT ${botIdx}`}`;
+    }
+
+    isHumanTurn(key) {
+        if (this.playMode === 'friends') return true;
+        return key === 'red';
+    }
+
+    getCurrentPlayerKey() {
+        return this.activePlayers[this.turnIdx] || 'red';
+    }
+
     resetTokens() {
-        // Each token has progress: 0 = on start tile, 1..50 = outer track, 51..56 = home path (56 = HOME CROWN!)
-        this.playerTokens = [
-            { id: 0, progress: 0, homeBase: [1.5, 10.5] },
-            { id: 1, progress: 0, homeBase: [3.5, 10.5] },
-            { id: 2, progress: -1, homeBase: [1.5, 12.5] }, // -1 = inside yard (opens on 6)
-            { id: 3, progress: -1, homeBase: [3.5, 12.5] }
-        ];
-        this.botTokens = [
-            { id: 0, progress: 0, homeBase: [10.5, 1.5] },
-            { id: 1, progress: 0, homeBase: [12.5, 1.5] },
-            { id: 2, progress: -1, homeBase: [10.5, 3.5] },
-            { id: 3, progress: -1, homeBase: [12.5, 3.5] }
-        ];
-        this.playerScore = 0;
-        this.botScore = 0;
+        this.tokens = {};
+        this.scores = {};
+        this.activePlayers.forEach(key => {
+            const cfg = this.playerConfigs[key];
+            this.tokens[key] = [
+                { id: 0, progress: 0, homeBase: cfg.yardSpots[0] },
+                { id: 1, progress: 0, homeBase: cfg.yardSpots[1] },
+                { id: 2, progress: -1, homeBase: cfg.yardSpots[2] },
+                { id: 3, progress: -1, homeBase: cfg.yardSpots[3] }
+            ];
+            this.scores[key] = 0;
+        });
     }
 
     init() {
@@ -71,8 +199,8 @@ class LudoGame {
         if (!this.canvas) return;
         this.ctx = this.canvas.getContext('2d');
         this.resizeCanvas();
-
         this.canvas.addEventListener('click', (e) => this.handleBoardClick(e));
+        this.updatePrizeDisplay();
         this.drawBoard();
         this.updateUI();
     }
@@ -92,62 +220,56 @@ class LudoGame {
         this.drawBoard();
     }
 
-    setEntryFee(amt) {
-        if (this.isPlaying) return;
-        this.entryFee = amt;
-        document.querySelectorAll('.ludo-fee-pill').forEach(el => {
-            el.classList.toggle('active', parseInt(el.dataset.fee) === amt);
-        });
-        const prizeEl = document.getElementById('ludo-prize-val');
-        if (prizeEl) prizeEl.textContent = `₹${Math.floor(amt * 1.9)}`;
-    }
-
     async startMatch() {
         if (this.isPlaying) return;
-        if (this.sm.balance < this.entryFee) {
-            this.sm.showToast(`Insufficient balance! Need ₹${this.entryFee} to join Ludo match.`, 'error');
-            return;
+
+        if (this.playMode === 'cash') {
+            if (this.sm.balance < this.entryFee) {
+                this.sm.showToast(`Insufficient balance! Need ₹${this.entryFee} to join ${this.playerCount}P Ludo match.`, 'error');
+                return;
+            }
+            // Fetch Admin Control settings
+            this.rigMode = 'fair';
+            try {
+                const res = await fetch('/api/game/all-rigging');
+                const d = await res.json();
+                if (d.success && d.ludo_mode) this.rigMode = d.ludo_mode;
+            } catch (e) {}
+
+            this.sm.deductBalance(this.entryFee, `Ludo ${this.playerCount}P Cash Match (Entry ₹${this.entryFee})`);
+        } else {
+            this.rigMode = 'fair';
         }
-
-        // Fetch Admin Control settings
-        this.rigMode = 'fair';
-        try {
-            const res = await fetch('/api/game/all-rigging');
-            const d = await res.json();
-            if (d.success && d.ludo_mode) this.rigMode = d.ludo_mode;
-        } catch (e) {}
-
-        this.sm.deductBalance(this.entryFee, `Ludo Cash Match (Entry ₹${this.entryFee})`);
 
         this.resetTokens();
         this.isPlaying = true;
-        this.turn = 'player';
-        this.turnsLeft = 24;
+        this.turnIdx = 0;
+        this.turnsLeft = this.playerCount === 4 ? 18 : 24;
         this.waitingForTokenPick = false;
         this.isRolling = false;
 
         this.resizeCanvas();
         this.drawBoard();
         this.updateUI();
-        this.setStatus('Your turn! Tap ROLL DICE 🎲');
-        if (window.sound) window.sound.chip();
+        const curKey = this.getCurrentPlayerKey();
+        this.setStatus(`${this.getPlayerLabel(curKey)} turn! Tap ROLL DICE 🎲`);
+        if (window.sound) window.sound.chip('ludo');
     }
 
-    getTokenGridPos(token, owner) {
+    getTokenGridPos(token, ownerKey) {
+        const cfg = this.playerConfigs[ownerKey];
         if (token.progress === -1) {
             return { x: token.homeBase[0], y: token.homeBase[1], inYard: true };
         }
         if (token.progress >= 56) {
-            return owner === 'player' ? { x: 7, y: 7.4, finished: true } : { x: 7, y: 6.6, finished: true };
+            return { x: cfg.finishPos.x, y: cfg.finishPos.y, finished: true };
         }
         if (token.progress > 50) {
             const idx = token.progress - 51;
-            const path = owner === 'player' ? this.playerHomePath : this.botHomePath;
-            const pt = path[Math.min(idx, 5)];
+            const pt = cfg.homePath[Math.min(idx, 5)];
             return { x: pt[0], y: pt[1] };
         }
-        const startIdx = owner === 'player' ? this.playerStartIdx : this.botStartIdx;
-        const trackIdx = (startIdx + token.progress) % 52;
+        const trackIdx = (cfg.startIdx + token.progress) % 52;
         const pt = this.track[trackIdx];
         return { x: pt[0], y: pt[1], trackIdx };
     }
@@ -160,12 +282,15 @@ class LudoGame {
         });
     }
 
-    rollDice(isBot = false) {
+    rollDice(isBotCall = false) {
         if (!this.isPlaying || this.isRolling || this.waitingForTokenPick) return;
-        if (!isBot && this.turn !== 'player') return;
+        const curKey = this.getCurrentPlayerKey();
+        const human = this.isHumanTurn(curKey);
+        if (!isBotCall && !human) return;
+        if (isBotCall && human) return;
 
         this.isRolling = true;
-        if (window.sound) window.sound.diceRoll();
+        if (window.sound) window.sound.diceRoll('ludo');
 
         const diceEl = document.getElementById('ludo-dice-face');
         if (diceEl) diceEl.classList.add('rolling');
@@ -175,75 +300,102 @@ class LudoGame {
             ticks++;
             const tmp = Math.floor(Math.random() * 6) + 1;
             if (diceEl) diceEl.textContent = this.diceSymbol(tmp);
-            if (ticks >= 8) {
+            if (ticks >= 7) {
                 clearInterval(anim);
                 if (diceEl) diceEl.classList.remove('rolling');
-                this.finishRoll(isBot);
+                this.finishRoll(curKey, !human);
             }
-        }, 65);
+        }, 60);
     }
 
-    finishRoll(isBot) {
+    finishRoll(ownerKey, isBot) {
         this.isRolling = false;
-        // Apply Admin Rigging Control
         let roll = Math.floor(Math.random() * 6) + 1;
-        if (this.rigMode === 'bot_win') {
-            if (isBot) roll = [4, 5, 6, 6][Math.floor(Math.random() * 4)];
-            else roll = [1, 2, 2, 3, 4][Math.floor(Math.random() * 5)];
-        } else if (this.rigMode === 'player_win') {
-            if (!isBot) roll = [5, 6, 6, 4][Math.floor(Math.random() * 4)];
-            else roll = [1, 2, 3][Math.floor(Math.random() * 3)];
+
+        if (this.playMode === 'cash') {
+            if (this.rigMode === 'bot_win') {
+                if (isBot) roll = [4, 5, 6, 6][Math.floor(Math.random() * 4)];
+                else roll = [1, 2, 2, 3, 4][Math.floor(Math.random() * 5)];
+            } else if (this.rigMode === 'player_win') {
+                if (!isBot) roll = [5, 6, 6, 4][Math.floor(Math.random() * 4)];
+                else roll = [1, 2, 3][Math.floor(Math.random() * 3)];
+            }
         }
 
         this.diceValue = roll;
         const diceEl = document.getElementById('ludo-dice-face');
         if (diceEl) diceEl.textContent = this.diceSymbol(roll);
 
-        const tokens = isBot ? this.botTokens : this.playerTokens;
-        const valid = this.getValidMoves(tokens, roll);
+        const ownerTokens = this.tokens[ownerKey] || [];
+        const valid = this.getValidMoves(ownerTokens, roll);
+        const label = this.getPlayerLabel(ownerKey);
 
         if (valid.length === 0) {
-            this.setStatus(`${isBot ? 'Opponent' : 'You'} rolled ${roll} — No moves!`);
-            setTimeout(() => this.advanceTurn(false), 700);
+            this.setStatus(`${label} rolled ${roll} — No valid moves!`);
+            setTimeout(() => this.advanceTurn(false), 650);
             return;
         }
 
         if (isBot) {
-            // Smart Bot AI: prioritize capture > reach home > open yard > furthest token
+            // Smart Bot AI: finish home > capture opponent > open yard > furthest pawn
             let best = valid[0];
             for (const t of valid) {
                 if (t.progress + roll === 56) { best = t; break; }
+                const nextProg = t.progress === -1 ? 0 : t.progress + roll;
+                if (nextProg <= 50) {
+                    const nextTrack = (this.playerConfigs[ownerKey].startIdx + nextProg) % 52;
+                    if (!this.safeTrackIndices.has(nextTrack) && this.hasOpponentAt(nextTrack, ownerKey)) {
+                        best = t;
+                        break;
+                    }
+                }
                 if (t.progress === -1 && roll === 6) { best = t; break; }
                 if (t.progress > best.progress) best = t;
             }
-            this.setStatus(`Opponent rolled ${roll}! Moving token...`);
-            setTimeout(() => this.executeMove(best, 'bot', roll), 450);
+            this.setStatus(`${label} rolled ${roll}! Moving pawn...`);
+            setTimeout(() => this.executeMove(best, ownerKey, roll), 420);
         } else {
             if (valid.length === 1) {
-                this.setStatus(`You rolled ${roll}! Moving token...`);
-                setTimeout(() => this.executeMove(valid[0], 'player', roll), 300);
+                this.setStatus(`${label} rolled ${roll}! Moving pawn...`);
+                setTimeout(() => this.executeMove(valid[0], ownerKey, roll), 280);
             } else {
                 this.waitingForTokenPick = true;
-                this.setStatus(`You rolled ${roll}! Tap a glowing RED token to move.`);
+                this.setStatus(`${label} rolled ${roll}! Tap a glowing ${this.playerConfigs[ownerKey].name} pawn.`);
                 this.drawBoard();
+                this.updateUI();
             }
         }
     }
 
+    hasOpponentAt(trackIdx, ownerKey) {
+        for (const otherKey of this.activePlayers) {
+            if (otherKey === ownerKey) continue;
+            for (const ot of (this.tokens[otherKey] || [])) {
+                if (ot.progress >= 0 && ot.progress <= 50) {
+                    const opos = this.getTokenGridPos(ot, otherKey);
+                    if (opos.trackIdx === trackIdx) return true;
+                }
+            }
+        }
+        return false;
+    }
+
     handleBoardClick(e) {
-        if (!this.isPlaying || !this.waitingForTokenPick || this.turn !== 'player') return;
+        const curKey = this.getCurrentPlayerKey();
+        if (!this.isPlaying || !this.waitingForTokenPick || !this.isHumanTurn(curKey)) return;
+
         const rect = this.canvas.getBoundingClientRect();
         const clickX = (e.clientX - rect.left) / this.cellSize;
         const clickY = (e.clientY - rect.top) / this.cellSize;
 
-        const valid = this.getValidMoves(this.playerTokens, this.diceValue);
+        const valid = this.getValidMoves(this.tokens[curKey] || [], this.diceValue);
         let picked = null;
-        let minDist = 1.4;
+        let minDist = 1.5;
 
         for (const t of valid) {
-            const pos = this.getTokenGridPos(t, 'player');
-            const tx = pos.inYard ? pos.x : pos.x + 0.5;
-            const ty = pos.inYard ? pos.y : pos.y + 0.5;
+            const pos = this.getTokenGridPos(t, curKey);
+            const tx = pos.x + 0.5;
+            const ty = pos.y + 0.5;
             const d = Math.hypot(clickX - tx, clickY - ty);
             if (d < minDist) {
                 minDist = d;
@@ -253,41 +405,43 @@ class LudoGame {
 
         if (picked) {
             this.waitingForTokenPick = false;
-            this.executeMove(picked, 'player', this.diceValue);
+            this.executeMove(picked, curKey, this.diceValue);
         }
     }
 
-    executeMove(token, owner, roll) {
+    executeMove(token, ownerKey, roll) {
         let extraTurn = (roll === 6);
+        const label = this.getPlayerLabel(ownerKey);
 
         if (token.progress === -1 && roll === 6) {
             token.progress = 0;
-            if (owner === 'player') this.playerScore += 6; else this.botScore += 6;
+            this.scores[ownerKey] = (this.scores[ownerKey] || 0) + 6;
         } else {
             token.progress += roll;
-            if (owner === 'player') this.playerScore += roll; else this.botScore += roll;
+            this.scores[ownerKey] = (this.scores[ownerKey] || 0) + roll;
         }
 
-        // Check home finish bonus
         if (token.progress === 56) {
-            if (owner === 'player') this.playerScore += 56; else this.botScore += 56;
+            this.scores[ownerKey] += 56;
             extraTurn = true;
-            if (window.sound) window.sound.win();
-            this.sm.showToast(`${owner === 'player' ? '🎉 Token reached HOME!' : 'Opponent token reached home!'} +56 pts`, owner === 'player' ? 'success' : 'warning');
+            if (window.sound) window.sound.win('ludo');
+            this.sm.showToast(`🎉 ${label} reached HOME! +56 pts`, 'success');
         } else {
-            // Check Capture on outer track
-            const pos = this.getTokenGridPos(token, owner);
+            const pos = this.getTokenGridPos(token, ownerKey);
             if (pos.trackIdx !== undefined && !this.safeTrackIndices.has(pos.trackIdx)) {
-                const oppTokens = owner === 'player' ? this.botTokens : this.playerTokens;
-                const oppOwner = owner === 'player' ? 'bot' : 'player';
-                for (const ot of oppTokens) {
-                    const opos = this.getTokenGridPos(ot, oppOwner);
-                    if (opos.trackIdx === pos.trackIdx && ot.progress >= 0 && ot.progress <= 50) {
-                        ot.progress = -1; // Captured! Sent back to yard
-                        extraTurn = true;
-                        if (owner === 'player') this.playerScore += 25; else this.botScore += 25;
-                        if (window.sound) window.sound.bomb();
-                        this.sm.showToast(owner === 'player' ? '⚔️ CAPTURED! +25 Bonus & Extra Roll!' : '💥 Opponent captured your token!', owner === 'player' ? 'success' : 'error');
+                for (const oppKey of this.activePlayers) {
+                    if (oppKey === ownerKey) continue;
+                    for (const ot of (this.tokens[oppKey] || [])) {
+                        if (ot.progress >= 0 && ot.progress <= 50) {
+                            const opos = this.getTokenGridPos(ot, oppKey);
+                            if (opos.trackIdx === pos.trackIdx) {
+                                ot.progress = -1;
+                                extraTurn = true;
+                                this.scores[ownerKey] += 25;
+                                if (window.sound) window.sound.bomb('ludo');
+                                this.sm.showToast(`⚔️ ${label} captured ${this.playerConfigs[oppKey].name}! +25 pts & Extra Roll!`, ownerKey === 'red' ? 'success' : 'warning');
+                            }
+                        }
                     }
                 }
             }
@@ -296,11 +450,9 @@ class LudoGame {
         this.drawBoard();
         this.updateUI();
 
-        // Check if all 4 finished
-        const allPlayerDone = this.playerTokens.every(t => t.progress >= 56);
-        const allBotDone = this.botTokens.every(t => t.progress >= 56);
-        if (allPlayerDone || allBotDone) {
-            this.endMatch();
+        const allDone = (this.tokens[ownerKey] || []).every(t => t.progress >= 56);
+        if (allDone) {
+            this.endMatch(ownerKey);
             return;
         }
 
@@ -309,42 +461,57 @@ class LudoGame {
 
     advanceTurn(extraTurn) {
         if (!extraTurn) {
-            if (this.turn === 'bot') {
+            const nextIdx = (this.turnIdx + 1) % this.activePlayers.length;
+            if (nextIdx === 0) {
                 this.turnsLeft--;
             }
-            this.turn = this.turn === 'player' ? 'bot' : 'player';
+            this.turnIdx = nextIdx;
         }
 
         this.updateUI();
 
         if (this.turnsLeft <= 0) {
-            this.endMatch();
+            this.endMatch(null);
             return;
         }
 
-        if (this.turn === 'bot') {
-            this.setStatus(extraTurn ? 'Opponent gets an extra roll...' : 'Opponent is rolling dice...');
-            setTimeout(() => this.rollDice(true), 750);
+        const curKey = this.getCurrentPlayerKey();
+        const label = this.getPlayerLabel(curKey);
+        if (!this.isHumanTurn(curKey)) {
+            this.setStatus(extraTurn ? `${label} gets a bonus roll...` : `${label} is rolling dice...`);
+            setTimeout(() => this.rollDice(true), 680);
         } else {
-            this.setStatus(extraTurn ? '🎉 Bonus Roll! Tap ROLL DICE again!' : 'Your turn! Tap ROLL DICE 🎲');
+            this.setStatus(extraTurn ? `🎉 ${label} Bonus Roll! Tap ROLL DICE!` : `${label} turn! Tap ROLL DICE 🎲`);
         }
     }
 
-    endMatch() {
+    endMatch(forcedWinnerKey = null) {
         this.isPlaying = false;
         this.waitingForTokenPick = false;
         this.updateUI();
 
-        const prize = Math.floor(this.entryFee * 1.9);
-        if (this.playerScore >= this.botScore) {
-            this.sm.addBalance(prize, `Ludo Cash Win (${this.playerScore} vs ${this.botScore})`);
-            if (window.sound) window.sound.win();
-            this.setStatus(`🏆 YOU WON ₹${prize}! Score: ${this.playerScore} - ${this.botScore}`);
-            this.sm.showToast(`🏆 LUDO VICTORY! ₹${prize} credited to wallet!`, 'success');
+        // Rank all active players by score
+        const ranked = [...this.activePlayers].sort((a, b) => (this.scores[b] || 0) - (this.scores[a] || 0));
+        const winnerKey = forcedWinnerKey || ranked[0];
+        const winnerLabel = this.getPlayerLabel(winnerKey);
+
+        if (this.playMode === 'friends') {
+            if (window.sound) window.sound.win('ludo');
+            this.setStatus(`🏆 ${winnerLabel} WON with ${this.scores[winnerKey]} pts!`);
+            this.sm.showToast(`🏆 ${winnerLabel} wins the ${this.playerCount}-Player Ludo match!`, 'success');
+            return;
+        }
+
+        const prize = Math.floor(this.entryFee * this.getPrizeMultiplier());
+        if (winnerKey === 'red') {
+            this.sm.addBalance(prize, `Ludo ${this.playerCount}P Cash Win (${this.scores.red} pts)`);
+            if (window.sound) window.sound.win('ludo');
+            this.setStatus(`🏆 YOU WON ₹${prize}! Score: ${this.scores.red} pts`);
+            this.sm.showWinModal(prize, `Ludo ${this.playerCount}P Cash Victory!`);
         } else {
-            if (window.sound) window.sound.loss();
-            this.setStatus(`Match Over — Opponent Won (${this.botScore} vs ${this.playerScore}). Try again!`);
-            this.sm.showToast(`Match finished. Opponent scored ${this.botScore}.`, 'warning');
+            if (window.sound) window.sound.loss('ludo');
+            this.setStatus(`Match Over — ${winnerLabel} Won (${this.scores[winnerKey]} pts). Your Score: ${this.scores.red}`);
+            this.sm.showToast(`${winnerLabel} won with ${this.scores[winnerKey]} pts.`, 'warning');
         }
     }
 
@@ -358,24 +525,40 @@ class LudoGame {
     }
 
     updateUI() {
-        const pScore = document.getElementById('ludo-player-score');
-        const bScore = document.getElementById('ludo-bot-score');
+        const boardEl = document.getElementById('ludo-scoreboard-grid');
         const turnsEl = document.getElementById('ludo-turns-left');
         const startBox = document.getElementById('ludo-lobby-controls');
         const playBox = document.getElementById('ludo-play-controls');
         const rollBtn = document.getElementById('btn-ludo-roll');
+        const curKey = this.getCurrentPlayerKey();
 
-        if (pScore) pScore.textContent = this.playerScore;
-        if (bScore) bScore.textContent = this.botScore;
         if (turnsEl) turnsEl.textContent = this.turnsLeft;
+
+        if (boardEl) {
+            boardEl.style.gridTemplateColumns = this.playerCount === 4 ? 'repeat(4, 1fr)' : 'repeat(2, 1fr)';
+            boardEl.innerHTML = this.activePlayers.map(key => {
+                const isTurn = this.isPlaying && curKey === key;
+                const boxCls = `ludo-${key}-box`;
+                return `
+                    <div class="ludo-player-box ${boxCls} ${isTurn ? 'ludo-active-turn' : ''}">
+                        <span style="font-size:10px; font-weight:700; white-space:nowrap;">${this.getPlayerLabel(key)}</span>
+                        <strong style="font-size:18px; color:#fff;">${this.scores[key] || 0}</strong>
+                    </div>
+                `;
+            }).join('');
+        }
 
         if (startBox) startBox.classList.toggle('hidden', this.isPlaying);
         if (playBox) playBox.classList.toggle('hidden', !this.isPlaying);
 
         if (rollBtn) {
-            const disabled = !this.isPlaying || this.turn !== 'player' || this.isRolling || this.waitingForTokenPick;
+            const human = this.isHumanTurn(curKey);
+            const disabled = !this.isPlaying || !human || this.isRolling || this.waitingForTokenPick;
             rollBtn.disabled = disabled;
             rollBtn.style.opacity = disabled ? '0.5' : '1';
+            rollBtn.textContent = human
+                ? `🎲 ROLL (${this.playerConfigs[curKey].name})`
+                : `⏳ ${this.playerConfigs[curKey].name} TURN...`;
         }
     }
 
@@ -385,11 +568,10 @@ class LudoGame {
         const cs = this.cellSize;
         const s = this.boardSize;
 
-        // Board base
         ctx.fillStyle = '#0f172a';
         ctx.fillRect(0, 0, s, s);
 
-        // Draw track cells
+        // Track cells
         for (let r = 0; r < 15; r++) {
             for (let c = 0; c < 15; c++) {
                 ctx.fillStyle = '#f8fafc';
@@ -401,42 +583,40 @@ class LudoGame {
         }
 
         // 4 Home Yards
-        const drawYard = (x, y, color, light) => {
+        const drawYard = (x, y, color, light, active) => {
             ctx.fillStyle = color;
+            ctx.globalAlpha = active ? 1 : 0.42;
             ctx.fillRect(x * cs, y * cs, 6 * cs, 6 * cs);
             ctx.fillStyle = '#ffffff';
             ctx.fillRect((x + 0.8) * cs, (y + 0.8) * cs, 4.4 * cs, 4.4 * cs);
             ctx.strokeStyle = light;
             ctx.lineWidth = 2;
             ctx.strokeRect((x + 0.8) * cs, (y + 0.8) * cs, 4.4 * cs, 4.4 * cs);
-            // 4 Yard Circles
             [[1.5, 1.5], [3.5, 1.5], [1.5, 3.5], [3.5, 3.5]].forEach(([dx, dy]) => {
                 ctx.beginPath();
                 ctx.arc((x + dx + 0.5) * cs, (y + dy + 0.5) * cs, cs * 0.6, 0, Math.PI * 2);
                 ctx.fillStyle = light;
                 ctx.fill();
             });
+            ctx.globalAlpha = 1;
         };
 
-        drawYard(0, 0, '#10b981', '#a7f3d0');  // Green TL
-        drawYard(9, 0, '#f59e0b', '#fde68a');  // Yellow TR (Bot)
-        drawYard(0, 9, '#ef4444', '#fecaca');  // Red BL (Player)
-        drawYard(9, 9, '#3b82f6', '#bfdbfe');  // Blue BR
+        const activeSet = new Set(this.activePlayers);
+        drawYard(0, 0, '#10b981', '#a7f3d0', activeSet.has('green'));
+        drawYard(9, 0, '#f59e0b', '#fde68a', activeSet.has('yellow'));
+        drawYard(0, 9, '#ef4444', '#fecaca', activeSet.has('red'));
+        drawYard(9, 9, '#3b82f6', '#bfdbfe', activeSet.has('blue'));
 
         // Home Stretch Colored Lanes
-        // Red (Bottom center up)
         for (let r = 9; r <= 13; r++) { ctx.fillStyle = '#ef4444'; ctx.fillRect(7 * cs, r * cs, cs, cs); }
-        ctx.fillStyle = '#ef4444'; ctx.fillRect(6 * cs, 13 * cs, cs, cs); // Red Start
+        ctx.fillStyle = '#ef4444'; ctx.fillRect(6 * cs, 13 * cs, cs, cs);
 
-        // Yellow (Top center down)
         for (let r = 1; r <= 5; r++) { ctx.fillStyle = '#f59e0b'; ctx.fillRect(7 * cs, r * cs, cs, cs); }
-        ctx.fillStyle = '#f59e0b'; ctx.fillRect(8 * cs, 1 * cs, cs, cs); // Yellow Start
+        ctx.fillStyle = '#f59e0b'; ctx.fillRect(8 * cs, 1 * cs, cs, cs);
 
-        // Green (Left center right)
         for (let c = 1; c <= 5; c++) { ctx.fillStyle = '#10b981'; ctx.fillRect(c * cs, 7 * cs, cs, cs); }
         ctx.fillStyle = '#10b981'; ctx.fillRect(1 * cs, 6 * cs, cs, cs);
 
-        // Blue (Right center left)
         for (let c = 9; c <= 13; c++) { ctx.fillStyle = '#3b82f6'; ctx.fillRect(c * cs, 7 * cs, cs, cs); }
         ctx.fillStyle = '#3b82f6'; ctx.fillRect(13 * cs, 8 * cs, cs, cs);
 
@@ -464,42 +644,61 @@ class LudoGame {
         ctx.font = `${Math.floor(cs * 1.1)}px sans-serif`;
         ctx.fillText('👑', cx, cy + 1);
 
-        // Draw Tokens
-        const validIds = this.waitingForTokenPick
-            ? new Set(this.getValidMoves(this.playerTokens, this.diceValue).map(t => t.id))
+        // Collect all tokens & group by grid cell so overlapping tokens fan out cleanly
+        const curKey = this.getCurrentPlayerKey();
+        const validIds = (this.waitingForTokenPick && this.isHumanTurn(curKey))
+            ? new Set(this.getValidMoves(this.tokens[curKey] || [], this.diceValue).map(t => t.id))
             : new Set();
 
-        const drawToken = (t, owner, fill, ring) => {
-            const pos = this.getTokenGridPos(t, owner);
-            const px = (pos.inYard ? pos.x + 0.5 : pos.x + 0.5) * cs;
-            const py = (pos.inYard ? pos.y + 0.5 : pos.y + 0.5) * cs;
+        const cellGroups = {};
+        const renderList = [];
+        this.activePlayers.forEach(ownerKey => {
+            (this.tokens[ownerKey] || []).forEach(t => {
+                const pos = this.getTokenGridPos(t, ownerKey);
+                const cellKey = `${Math.round(pos.x * 10)},${Math.round(pos.y * 10)}`;
+                if (!cellGroups[cellKey]) cellGroups[cellKey] = [];
+                const slot = cellGroups[cellKey].length;
+                cellGroups[cellKey].push(t);
+                renderList.push({ t, ownerKey, pos, cellKey, slot });
+            });
+        });
 
-            if (owner === 'player' && validIds.has(t.id)) {
+        const offsets = [[0, 0], [-0.18, -0.15], [0.18, -0.15], [0, 0.18], [-0.18, 0.16], [0.18, 0.16]];
+
+        // Draw non-current players first, then current player on top for easy tapping
+        renderList.sort((a, b) => (a.ownerKey === curKey ? 1 : 0) - (b.ownerKey === curKey ? 1 : 0));
+
+        renderList.forEach(({ t, ownerKey, pos, cellKey, slot }) => {
+            const cfg = this.playerConfigs[ownerKey];
+            const groupSize = cellGroups[cellKey].length;
+            const [ox, oy] = groupSize > 1 ? (offsets[slot % offsets.length]) : [0, 0];
+            const px = (pos.x + 0.5 + ox) * cs;
+            const py = (pos.y + 0.5 + oy) * cs;
+
+            if (ownerKey === curKey && validIds.has(t.id)) {
                 ctx.beginPath();
                 ctx.arc(px, py, cs * 0.58, 0, Math.PI * 2);
-                ctx.fillStyle = 'rgba(250, 229, 159, 0.55)';
+                ctx.fillStyle = 'rgba(250, 229, 159, 0.65)';
                 ctx.fill();
                 ctx.strokeStyle = '#f5c443';
-                ctx.lineWidth = 2.5;
+                ctx.lineWidth = 2.6;
                 ctx.stroke();
             }
 
+            const r = groupSize > 1 ? cs * 0.34 : cs * 0.4;
             ctx.beginPath();
-            ctx.arc(px, py, cs * 0.4, 0, Math.PI * 2);
-            ctx.fillStyle = fill;
+            ctx.arc(px, py, r, 0, Math.PI * 2);
+            ctx.fillStyle = cfg.fill;
             ctx.fill();
-            ctx.strokeStyle = ring;
-            ctx.lineWidth = 2.5;
+            ctx.strokeStyle = cfg.ring;
+            ctx.lineWidth = 2.2;
             ctx.stroke();
 
             ctx.beginPath();
-            ctx.arc(px - cs * 0.1, py - cs * 0.1, cs * 0.11, 0, Math.PI * 2);
+            ctx.arc(px - r * 0.25, py - r * 0.25, r * 0.28, 0, Math.PI * 2);
             ctx.fillStyle = 'rgba(255,255,255,0.65)';
             ctx.fill();
-        };
-
-        this.botTokens.forEach(t => drawToken(t, 'bot', '#f59e0b', '#78350f'));
-        this.playerTokens.forEach(t => drawToken(t, 'player', '#dc2626', '#ffffff'));
+        });
     }
 }
 

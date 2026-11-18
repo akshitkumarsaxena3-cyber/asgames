@@ -940,13 +940,13 @@
                         <img src="assets/card-ludo.jpg" alt="Ludo Cash" class="game-card-art" loading="lazy">
                         <div class="game-card-scrim"></div>
                         <div class="card-top">
-                            <span class="game-badge-hot">1.9x CASH 👑</span>
-                            <span class="game-tag-glass">Live Ludo</span>
+                            <span class="game-badge-hot">2P / 4P 👑</span>
+                            <span class="game-tag-glass">Up to 3.6x</span>
                         </div>
                         <div class="card-bottom">
                             <div>
                                 <div class="game-title">Ludo Cash</div>
-                                <div class="game-sub">Play &amp; Win 1.9x</div>
+                                <div class="game-sub">2 &amp; 4 Players Live</div>
                             </div>
                             <span class="btn-play-mini">PLAY</span>
                         </div>
@@ -1411,44 +1411,55 @@
                     <span class="game-wallet-mini user-balance-val">₹0.00</span>
                 </div>
 
-                <!-- Scoreboard Bar -->
-                <div class="ludo-scoreboard">
-                    <div class="ludo-player-box ludo-red-box">
-                        <span style="font-size:11px; color:#fecaca;">🔴 YOU (RED)</span>
-                        <strong id="ludo-player-score" style="font-size:20px; color:#fff;">0</strong>
+                <!-- Dynamic 2P / 4P Scoreboard Bar -->
+                <div class="ludo-top-hud">
+                    <div id="ludo-scoreboard-grid" class="ludo-scoreboard-grid">
+                        <!-- Dynamically populated for 2P or 4P -->
                     </div>
-                    <div class="ludo-turns-box">
-                        <span style="font-size:10px; color:#fae59f;">TURNS LEFT</span>
-                        <strong id="ludo-turns-left" style="font-size:18px; color:#fde047;">24</strong>
-                    </div>
-                    <div class="ludo-player-box ludo-yellow-box">
-                        <span style="font-size:11px; color:#fde68a;">🟡 OPPONENT</span>
-                        <strong id="ludo-bot-score" style="font-size:20px; color:#fff;">0</strong>
+                    <div class="ludo-turns-strip">
+                        <span>⏱️ ROUNDS LEFT: <strong id="ludo-turns-left" style="color:#fde047;">18</strong></span>
                     </div>
                 </div>
 
                 <!-- Status Banner -->
-                <div id="ludo-status-text" class="ludo-status-banner">Select entry fee & tap START MATCH to win 1.9x cash!</div>
+                <div id="ludo-status-text" class="ludo-status-banner">Choose 2P or 4P mode &amp; tap START MATCH!</div>
 
                 <!-- 15x15 Canvas Board -->
                 <div class="ludo-board-wrapper">
                     <canvas id="ludo-canvas" width="360" height="360"></canvas>
                 </div>
 
-                <!-- Lobby Controls (Entry Fee Selection) -->
+                <!-- Lobby Controls (2P/4P Selector + Cash/Friends Mode + Entry Fee) -->
                 <div id="ludo-lobby-controls" class="ludo-controls-card">
-                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
-                        <span style="font-size:12px; color:#94a3b8; font-weight:600;">Select Entry Fee:</span>
-                        <span style="font-size:13px; color:#10b981; font-weight:800;">Win Prize: <span id="ludo-prize-val">₹95</span></span>
+                    <!-- 2 Players / 4 Players Toggle -->
+                    <div style="font-size:11px; color:#94a3b8; font-weight:700; margin-bottom:6px;">Select Players:</div>
+                    <div class="ludo-toggle-2col" style="margin-bottom:10px;">
+                        <button type="button" class="ludo-pcount-pill" data-pcount="2" onclick="window.ludoGame.setPlayerCount(2)">👥 2 Players (1.9x)</button>
+                        <button type="button" class="ludo-pcount-pill active" data-pcount="4" onclick="window.ludoGame.setPlayerCount(4)">👨‍👩‍👧‍👦 4 Players (3.6x)</button>
                     </div>
-                    <div class="ludo-fee-grid">
-                        <button class="ludo-fee-pill" data-fee="10" onclick="window.ludoGame.setEntryFee(10)">₹10</button>
-                        <button class="ludo-fee-pill active" data-fee="50" onclick="window.ludoGame.setEntryFee(50)">₹50</button>
-                        <button class="ludo-fee-pill" data-fee="100" onclick="window.ludoGame.setEntryFee(100)">₹100</button>
-                        <button class="ludo-fee-pill" data-fee="500" onclick="window.ludoGame.setEntryFee(500)">₹500</button>
-                        <button class="ludo-fee-pill" data-fee="1000" onclick="window.ludoGame.setEntryFee(1000)">₹1,000</button>
+
+                    <!-- Play Mode: Cash Match vs Friends Pass & Play -->
+                    <div style="font-size:11px; color:#94a3b8; font-weight:700; margin-bottom:6px;">Game Mode:</div>
+                    <div class="ludo-toggle-2col" style="margin-bottom:12px;">
+                        <button type="button" class="ludo-mode-pill active" data-lmode="cash" onclick="window.ludoGame.setPlayMode('cash')">💰 Cash Match</button>
+                        <button type="button" class="ludo-mode-pill" data-lmode="friends" onclick="window.ludoGame.setPlayMode('friends')">🤝 4 Friends Together</button>
                     </div>
-                    <button class="btn-full btn-gold" style="margin-top:12px; font-size:14px; font-weight:800;" onclick="window.ludoGame.startMatch()">🎲 START LUDO CASH MATCH</button>
+
+                    <div id="ludo-fee-section">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                            <span style="font-size:12px; color:#94a3b8; font-weight:600;">Select Entry Fee:</span>
+                            <span style="font-size:13px; color:#10b981; font-weight:800;">Win Prize: <span id="ludo-prize-val">₹180 (3.6x)</span></span>
+                        </div>
+                        <div class="ludo-fee-grid">
+                            <button class="ludo-fee-pill" data-fee="10" onclick="window.ludoGame.setEntryFee(10)">₹10</button>
+                            <button class="ludo-fee-pill active" data-fee="50" onclick="window.ludoGame.setEntryFee(50)">₹50</button>
+                            <button class="ludo-fee-pill" data-fee="100" onclick="window.ludoGame.setEntryFee(100)">₹100</button>
+                            <button class="ludo-fee-pill" data-fee="500" onclick="window.ludoGame.setEntryFee(500)">₹500</button>
+                            <button class="ludo-fee-pill" data-fee="1000" onclick="window.ludoGame.setEntryFee(1000)">₹1,000</button>
+                        </div>
+                    </div>
+
+                    <button id="btn-ludo-start" class="btn-full btn-gold" style="margin-top:12px; font-size:14px; font-weight:800;" onclick="window.ludoGame.startMatch()">🎲 START 4P CASH MATCH (WIN ₹180)</button>
                 </div>
 
                 <!-- Active Match Dice Controls -->
