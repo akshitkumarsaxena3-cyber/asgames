@@ -180,13 +180,25 @@ class K3Game {
         }
 
         this.sm.deductBalance(amount, `K3 Bet (${type} ${value})`);
+        const histId = 'K3' + Date.now() + Math.floor(Math.random() * 999);
         this.userBets.unshift({
+            histId: histId,
             period: this.currentPeriod,
             type: type, // 'sum', 'size', 'parity'
             value: value,
             amount: amount,
             status: 'Pending'
         });
+        if (this.sm.recordGameHistory) {
+            this.sm.recordGameHistory({
+                id: histId,
+                game: 'K3 Lottery',
+                detail: `#${this.currentPeriod} • Pick: ${value}`,
+                bet_amount: amount,
+                win_amount: 0,
+                status: 'Pending'
+            });
+        }
 
         if (window.sound) window.sound.chip();
         this.sm.showToast(`K3 Bet ₹${amount} placed on ${value}!`, 'success');
@@ -222,6 +234,7 @@ class K3Game {
                     this.sm.addBalance(payout, `K3 Win Period #${record.period}`);
                     if (this.sm.recordGameHistory) {
                         this.sm.recordGameHistory({
+                            id: bet.histId,
                             game: 'K3 Lottery',
                             detail: `#${record.period} • Pick: ${bet.value} (Sum ${record.sum})`,
                             bet_amount: bet.amount,
@@ -233,6 +246,7 @@ class K3Game {
                     bet.status = 'Lost';
                     if (this.sm.recordGameHistory) {
                         this.sm.recordGameHistory({
+                            id: bet.histId,
                             game: 'K3 Lottery',
                             detail: `#${record.period} • Pick: ${bet.value} (Sum ${record.sum})`,
                             bet_amount: bet.amount,

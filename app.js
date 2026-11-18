@@ -219,11 +219,34 @@ class StateManager {
     }
 
     getLocalGameHistory() {
-        try {
-            return JSON.parse(localStorage.getItem(this._getLocalGameHistoryKey()) || '[]');
-        } catch (e) {
-            return [];
+        const keys = [this._getLocalGameHistoryKey()];
+        const numUid = Number(this.uid);
+        if (this.rawUserId && String(this.rawUserId) !== String(this.uid)) {
+            keys.push(`asg_game_history_${this.rawUserId}`);
         }
+        if (Number.isFinite(numUid) && numUid >= 100000) {
+            keys.push(`asg_game_history_${numUid - 100000}`);
+        }
+        keys.push('asg_game_history_849204', 'asg_game_history_guest');
+
+        const byId = new Map();
+        for (const k of Array.from(new Set(keys))) {
+            try {
+                const arr = JSON.parse(localStorage.getItem(k) || '[]');
+                if (Array.isArray(arr)) {
+                    for (const item of arr) {
+                        if (!item || !item.id) continue;
+                        const prev = byId.get(String(item.id));
+                        if (!prev || (prev.status === 'Pending' && item.status !== 'Pending')) {
+                            byId.set(String(item.id), item);
+                        }
+                    }
+                }
+            } catch (e) {}
+        }
+        return Array.from(byId.values()).sort((a, b) =>
+            String(b.created_at || '').localeCompare(String(a.created_at || ''))
+        );
     }
 
     recordGameHistory(entry) {
@@ -239,7 +262,7 @@ class StateManager {
         };
 
         const list = this.getLocalGameHistory();
-        const idx = list.findIndex(x => x.id === item.id);
+        const idx = list.findIndex(x => String(x.id) === item.id);
         if (idx >= 0) {
             list[idx] = Object.assign({}, list[idx], item);
         } else {
@@ -257,6 +280,11 @@ class StateManager {
                 },
                 body: JSON.stringify(item)
             }).catch(() => {});
+        }
+        // Live refresh modal if currently open
+        const modal = document.getElementById('game-history-modal');
+        if (modal && !modal.classList.contains('hidden') && typeof loadUnifiedGameHistory === 'function') {
+            loadUnifiedGameHistory();
         }
         return item.id;
     }
@@ -2439,18 +2467,41 @@ async function loadUnifiedGameHistory() {
     const sm = window.stateManager;
     const localList = sm ? sm.getLocalGameHistory() : [];
     const byId = new Map();
-    localList.forEach(h => byId.set(h.id, h));
+    localList.forEach(h => byId.set(String(h.id), h));
+
+    // Render cached/local records immediately so UI is never blank
+    _ghCache = Array.from(byId.values()).sort((a, b) =>
+        String(b.created_at || '').localeCompare(String(a.created_at || ''))
+    );
+    renderUnifiedGameHistory();
 
     if (sm && sm.token) {
         try {
             const res = await fetch('/api/game/my-history', {
-                headers: { 'Authorization': `Bearer ${sm.token}` }
+                headers: { 'Authorization': `Bearer ${sm.token}` },
+                cache: 'no-store'
             });
             const d = await res.json();
             if (d.success && Array.isArray(d.history)) {
+                const serverIds = new Set();
                 d.history.forEach(h => {
-                    if (!byId.has(h.id) || byId.get(h.id).status === 'Pending') {
-                        byId.set(h.id, h);
+                    const hid = String(h.id);
+                    serverIds.add(hid);
+                    if (!byId.has(hid) || byId.get(hid).status === 'Pending') {
+                        byId.set(hid, h);
+                    }
+                });
+                // Backfill any local records missing from server (e.g. after server restart)
+                localList.slice(0, 20).forEach(lh => {
+                    if (lh && lh.id && !serverIds.has(String(lh.id))) {
+                        fetch('/api/game/log-history', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Authorization': `Bearer ${sm.token}`
+                            },
+                            body: JSON.stringify(lh)
+                        }).catch(() => {});
                     }
                 });
             }
@@ -2460,6 +2511,11 @@ async function loadUnifiedGameHistory() {
     _ghCache = Array.from(byId.values()).sort((a, b) =>
         String(b.created_at || '').localeCompare(String(a.created_at || ''))
     );
+    if (sm && _ghCache.length > 0) {
+        try {
+            localStorage.setItem(sm._getLocalGameHistoryKey(), JSON.stringify(_ghCache.slice(0, 100)));
+        } catch (e) {}
+    }
     renderUnifiedGameHistory();
 }
 

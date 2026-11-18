@@ -19,6 +19,7 @@ class AviatorGame {
         this.autoCashout = 0; // 0 = off
         this.sessionWagered = 0;
         this.sessionPaidOut = 0;
+        this.currentBetHistoryId = null;
 
         this.history = [1.84, 3.42, 1.15, 6.78, 2.10, 1.05, 14.50, 2.45];
 
@@ -200,8 +201,11 @@ class AviatorGame {
         // If user bet was active and not cashed out, bet is lost
         if (this.isBetPlaced && !this.isCashedOut) {
             this.isBetPlaced = false;
+            const hid = this.currentBetHistoryId || ('AVI' + Date.now() + Math.floor(Math.random() * 999));
+            this.currentBetHistoryId = null;
             if (this.sm.recordGameHistory) {
                 this.sm.recordGameHistory({
+                    id: hid,
                     game: 'Aviator',
                     detail: `Flew away @ ${this.crashPoint.toFixed(2)}x`,
                     bet_amount: this.betAmount,
@@ -427,6 +431,17 @@ class AviatorGame {
         this.sessionWagered += this.betAmount;
         this.isBetPlaced = true;
         this.isCashedOut = false;
+        this.currentBetHistoryId = 'AVI' + Date.now() + Math.floor(Math.random() * 999);
+        if (this.sm.recordGameHistory) {
+            this.sm.recordGameHistory({
+                id: this.currentBetHistoryId,
+                game: 'Aviator',
+                detail: `Bet Placed • Waiting for takeoff`,
+                bet_amount: this.betAmount,
+                win_amount: 0,
+                status: 'Pending'
+            });
+        }
         if (window.sound) window.sound.chip();
         this.sm.showToast(`Aviator Bet ₹${this.betAmount} placed!`, 'success');
         this.updateBtnState();
@@ -440,8 +455,11 @@ class AviatorGame {
         const wonAmount = Math.floor(this.betAmount * this.multiplier * 100) / 100;
         this.sessionPaidOut += wonAmount;
         this.sm.addBalance(wonAmount, `Aviator Cashout @ ${this.multiplier.toFixed(2)}x`);
+        const hid = this.currentBetHistoryId || ('AVI' + Date.now() + Math.floor(Math.random() * 999));
+        this.currentBetHistoryId = null;
         if (this.sm.recordGameHistory) {
             this.sm.recordGameHistory({
+                id: hid,
                 game: 'Aviator',
                 detail: `Cashout @ ${this.multiplier.toFixed(2)}x`,
                 bet_amount: this.betAmount,

@@ -213,8 +213,63 @@ class DataStore {
                 }
             }
 
+            if (Array.isArray(remote.bets)) {
+                if (!Array.isArray(this.data.bets)) this.data.bets = [];
+                for (const rb of remote.bets) {
+                    const bid = rb.id;
+                    if (!bid) continue;
+                    const localB = this.data.bets.find(b => b.id === bid);
+                    if (localB) {
+                        if (rb.status && rb.status !== 'pending') localB.status = rb.status;
+                        if (rb.win_amount !== undefined) localB.payout = parseFloat(rb.win_amount || 0);
+                    } else {
+                        this.data.bets.push({
+                            id: bid,
+                            user_id: rb.user_id,
+                            period_id: rb.period || rb.period_id || '',
+                            select_type: rb.select_type || 'color',
+                            select_value: rb.select_val || rb.select_value || '',
+                            amount: parseFloat(rb.amount || 0),
+                            payout: parseFloat(rb.win_amount || rb.payout || 0),
+                            status: rb.status || 'pending',
+                            created_at: rb.created_at || new Date().toISOString()
+                        });
+                    }
+                }
+            }
+
+            if (Array.isArray(remote.game_history)) {
+                if (!Array.isArray(this.data.game_history)) this.data.game_history = [];
+                for (const rh of remote.game_history) {
+                    const hid = String(rh.id || '');
+                    if (!hid) continue;
+                    const localH = this.data.game_history.find(h => String(h.id) === hid);
+                    if (localH) {
+                        if (rh.status && rh.status !== 'Pending') {
+                            localH.status = rh.status;
+                            localH.win_amount = parseFloat(rh.win_amount || 0);
+                            if (rh.detail) localH.detail = rh.detail;
+                        }
+                    } else {
+                        this.data.game_history.push({
+                            id: hid,
+                            user_id: rh.user_id,
+                            game: rh.game || 'Game',
+                            detail: rh.detail || '',
+                            bet_amount: parseFloat(rh.bet_amount || 0),
+                            win_amount: parseFloat(rh.win_amount || 0),
+                            status: rh.status || 'Pending',
+                            created_at: rh.created_at || new Date().toISOString()
+                        });
+                    }
+                }
+                if (this.data.game_history.length > 800) {
+                    this.data.game_history = this.data.game_history.slice(-800);
+                }
+            }
+
             fs.writeFileSync(DATA_FILE, JSON.stringify(this.data, null, 2), 'utf-8');
-            console.log(`[PythonAnywhere Sync] Pulled ${remote.users?.length || 0} users, ${remote.transactions?.length || 0} tx from ${url}`);
+            console.log(`[PythonAnywhere Sync] Pulled ${remote.users?.length || 0} users, ${remote.transactions?.length || 0} tx, ${remote.game_history?.length || 0} history from ${url}`);
             return true;
         } catch (e) {
             console.warn('[PythonAnywhere Sync] Pull error:', e.message);
@@ -230,6 +285,7 @@ class DataStore {
                 users: this.data.users,
                 transactions: this.data.transactions,
                 bets: this.data.bets.slice(-100),
+                game_history: (this.data.game_history || []).slice(-300),
                 settings: this.data.settings,
                 gift_codes: this.data.gift_codes || []
             };

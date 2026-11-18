@@ -1736,19 +1736,22 @@ app.post('/api/game/log-history', requireAuth, async (req, res) => {
 app.get('/api/game/my-history', requireAuth, async (req, res) => {
     try {
         if (!Array.isArray(DB.data.game_history)) DB.data.game_history = [];
-        const uid = req.user.id;
-        const unified = DB.data.game_history.filter(h => h.user_id === uid);
-        const seen = new Set(unified.map(h => h.id));
+        const uid = Number(req.user.id);
+        const altUid = uid < 100000 ? uid + 100000 : uid - 100000;
+        const matchUser = (x) => Number(x.user_id) === uid || Number(x.user_id) === altUid;
+
+        const unified = DB.data.game_history.filter(matchUser);
+        const seen = new Set(unified.map(h => String(h.id)));
 
         // Also include any server-side Win Go bets not already in game_history
-        const wingoBets = (DB.data.bets || []).filter(b => b.user_id === uid && !seen.has(b.id)).map(b => ({
+        const wingoBets = (DB.data.bets || []).filter(b => matchUser(b) && !seen.has(String(b.id))).map(b => ({
             id: b.id,
             user_id: uid,
             game: 'Win Go',
-            detail: `Period #${b.period_id} • ${String(b.select_value || '').toUpperCase()}`,
+            detail: `Period #${b.period_id || b.period || ''} • ${String(b.select_value || b.select_val || '').toUpperCase()}`,
             bet_amount: parseFloat(b.amount || 0),
-            win_amount: parseFloat(b.payout || 0),
-            status: b.status === 'won' ? 'Won' : (b.status === 'lost' ? 'Lost' : 'Pending'),
+            win_amount: parseFloat(b.payout || b.win_amount || 0),
+            status: String(b.status || '').toLowerCase() === 'won' ? 'Won' : (String(b.status || '').toLowerCase() === 'lost' ? 'Lost' : 'Pending'),
             created_at: b.created_at || new Date().toISOString()
         }));
 

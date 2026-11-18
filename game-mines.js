@@ -56,6 +56,17 @@ class MinesGame {
 
         // Deduct balance
         this.sm.deductBalance(this.betAmount, `Mines Game (${this.mineCount} Mines)`);
+        this.currentHistoryId = 'MIN' + Date.now() + Math.floor(Math.random() * 999);
+        if (this.sm.recordGameHistory) {
+            this.sm.recordGameHistory({
+                id: this.currentHistoryId,
+                game: 'Mines',
+                detail: `Round Started (${this.mineCount} Mines)`,
+                bet_amount: this.betAmount,
+                win_amount: 0,
+                status: 'Pending'
+            });
+        }
 
         this.isPlaying = true;
         this.revealedCount = 0;
@@ -136,8 +147,11 @@ class MinesGame {
 
         const winAmount = Math.floor(this.betAmount * this.currentMultiplier * 100) / 100;
         this.sm.addBalance(winAmount, `Mines Cashout @ ${this.currentMultiplier}x`);
+        const hid = this.currentHistoryId || ('MIN' + Date.now() + Math.floor(Math.random() * 999));
+        this.currentHistoryId = null;
         if (this.sm.recordGameHistory) {
             this.sm.recordGameHistory({
+                id: hid,
                 game: 'Mines',
                 detail: `Cashout @ ${this.currentMultiplier}x (${this.revealedCount} Gems, ${this.mineCount} Mines)`,
                 bet_amount: this.betAmount,
@@ -171,8 +185,11 @@ class MinesGame {
         }
 
         if (!isWin) {
+            const hid = this.currentHistoryId || ('MIN' + Date.now() + Math.floor(Math.random() * 999));
+            this.currentHistoryId = null;
             if (this.sm.recordGameHistory) {
                 this.sm.recordGameHistory({
+                    id: hid,
                     game: 'Mines',
                     detail: `Hit Bomb after ${this.revealedCount} Gems (${this.mineCount} Mines)`,
                     bet_amount: this.betAmount,

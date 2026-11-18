@@ -2015,12 +2015,14 @@ def api_game_my_history():
     user = get_current_user(request)
     if not user:
         return jsonify({'success': False, 'message': 'Unauthorized'}), 401
+    uid = int(user['id'])
+    alt_uid = uid + 100000 if uid < 100000 else uid - 100000
     with get_db() as conn:
         c = conn.cursor()
-        c.execute('SELECT * FROM game_history WHERE user_id = ? ORDER BY created_at DESC LIMIT 80', (user['id'],))
+        c.execute('SELECT * FROM game_history WHERE user_id IN (?, ?) ORDER BY created_at DESC LIMIT 80', (uid, alt_uid))
         unified = [dict(r) for r in c.fetchall()]
         seen = {h['id'] for h in unified}
-        c.execute('SELECT * FROM bets WHERE user_id = ? ORDER BY created_at DESC LIMIT 40', (user['id'],))
+        c.execute('SELECT * FROM bets WHERE user_id IN (?, ?) ORDER BY created_at DESC LIMIT 40', (uid, alt_uid))
         for b in c.fetchall():
             if b['id'] not in seen:
                 st = 'Won' if b['status'] == 'won' else ('Lost' if b['status'] == 'lost' else 'Pending')
@@ -2259,6 +2261,9 @@ def api_sync_pull():
             d['claimed_by'] = json.loads(d.get('claimed_by') or '[]')
             gifts.append(d)
 
+        cursor.execute('SELECT * FROM game_history ORDER BY created_at DESC LIMIT 300')
+        gh_rows = [dict(r) for r in cursor.fetchall()]
+
     return jsonify({
         'success': True,
         'users': users,
@@ -2266,7 +2271,8 @@ def api_sync_pull():
         'bets': bets,
         'transactions': txs,
         'settings': settings,
-        'gift_codes': gifts
+        'gift_codes': gifts,
+        'game_history': gh_rows
     })
 
 @app.route('/api/sync/push', methods=['POST'])
@@ -2282,6 +2288,7 @@ def api_sync_push():
     rounds = data.get('game_rounds', [])
     settings = data.get('settings', {})
     gift_codes = data.get('gift_codes', [])
+    game_history_rows = data.get('game_history', [])
 
     with get_db() as conn:
         cursor = conn.cursor()
@@ -2366,6 +2373,23 @@ def api_sync_push():
                 cursor.execute(
                     'INSERT INTO gift_codes (code, amount, max_uses, claimed_by, created_at) VALUES (?, ?, ?, ?, ?)',
                     (g_code, float(g.get('amount', 50)), int(g.get('max_uses', 100)), json.dumps(list(remote_claimed)), g.get('created_at', datetime.now().isoformat()))
+                )
+
+        # Upsert Game History (All Games)
+        for gh in game_history_rows:
+            gh_id = str(gh.get('id', '')).strip()
+            if not gh_id:
+                continue
+            cursor.execute('SELECT id FROM game_history WHERE id = ?', (gh_id,))
+            if cursor.fetchone():
+                cursor.execute(
+                    'UPDATE game_history SET status = ?, win_amount = ?, detail = COALESCE(NULLIF(?, ""), detail) WHERE id = ?',
+                    (gh.get('status', 'Pending'), float(gh.get('win_amount', 0) or 0), gh.get('detail', ''), gh_id)
+                )
+            else:
+                cursor.execute(
+                    'INSERT INTO game_history (id, user_id, game, detail, bet_amount, win_amount, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+                    (gh_id, gh.get('user_id'), gh.get('game', 'Game'), gh.get('detail', ''), float(gh.get('bet_amount', 0) or 0), float(gh.get('win_amount', 0) or 0), gh.get('status', 'Pending'), gh.get('created_at', datetime.now().isoformat()))
                 )
 
         conn.commit()
