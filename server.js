@@ -1180,8 +1180,8 @@ app.all(['/api/webhook/macrodroid', '/api/webhook/macrodroi'], async (req, res) 
 
         const { utr, amount, sender, rawText } = parseMacroDroidMessage(inputData);
 
-        // Check if MacroDroid's test button was clicked (sends placeholder [not_text])
-        if (rawText && (rawText.trim() === '[not_text]' || rawText.includes('[not_text]'))) {
+        // Check if MacroDroid's test button was clicked without UTR (sends placeholder [not_text])
+        if (!utr && rawText && (rawText.trim() === '[not_text]' || rawText.includes('[not_text]'))) {
             DB.data.macrodroid_logs.unshift({
                 time: new Date().toISOString(),
                 utr: 'TEST_CONNECTED',

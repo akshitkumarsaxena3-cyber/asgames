@@ -438,18 +438,22 @@
 
                     <!-- MacroDroid Mobile Setup Guide (Accordion / Compact Box) -->
                     <div style="background:#0b1329; border:1px solid rgba(16,185,129,0.3); border-radius:8px; padding:12px; margin-bottom:14px;">
-                        <div style="font-size:12.5px; font-weight:800; color:#a7f3d0; margin-bottom:8px;">📱 Mobile Me MacroDroid Setup Kaise Karein (3 Simple Steps):</div>
+                        <div style="font-size:12.5px; font-weight:800; color:#a7f3d0; margin-bottom:8px;">📱 Mobile Me MacroDroid Setup (Bank SMS + Notifications Dono Ke Liye):</div>
                         <ol style="font-size:11.5px; color:#cbd5e1; margin:0 0 0 18px; padding:0; line-height:1.7;">
-                            <li><strong>Trigger (शुरुआत):</strong> MacroDroid me <code>+</code> dabayein &rarr; <strong>Device Events &rarr; Notification Received</strong> chunein &rarr; <em>Applications</em> me apna Bank App (<strong>BoB World / Bank of Baroda</strong>, <strong>Paytm</strong>, <strong>PhonePe</strong>, <strong>GPay</strong>) ya <strong>SMS Received</strong> select karein.</li>
+                            <li><strong>Trigger 1 (Bank SMS ke liye):</strong> MacroDroid me <code>+</code> dabayein &rarr; <strong>Messages &rarr; SMS Received</strong> &rarr; <em>Select: Any Number, Any Content</em>.</li>
+                            <li><strong>Trigger 2 (Paytm/PhonePe App Alerts ke liye):</strong> Isi Macro me ek aur Trigger <code>+</code> dabayein &rarr; <strong>Device Events &rarr; Notification Received</strong> &rarr; <em>Applications</em> me Bank apps select karein.</li>
                             <li><strong>Action (काम):</strong> <code>+</code> dabayein &rarr; <strong>Connectivity &rarr; HTTP Request (Web Request)</strong>:
                                 <ul style="margin:4px 0 4px 14px; padding:0; color:#93c5fd;">
                                     <li>Method: <code>POST</code></li>
                                     <li>URL: <code>https://asgame.ascollab.in/api/webhook/macrodroid</code></li>
                                     <li>Content-Type: <code>application/json</code></li>
-                                    <li>Body: <code>{"secret": "spp213201pty", "message": "[not_text]"}</code> <button type="button" class="btn-action" style="padding:2px 6px; font-size:10px; background:#334155; color:#fff;" onclick="copyRawText('{&quot;secret&quot;: &quot;spp213201pty&quot;, &quot;message&quot;: &quot;[not_text]&quot;}')">Copy Body</button></li>
+                                    <li>Universal Body (SMS &amp; App Notifications dono capture karega):<br>
+                                        <code style="background:#020617; padding:2px 6px; border-radius:4px; color:#fae59f;">{"secret": "spp213201pty", "message": "[sms_message] [not_text]"}</code> 
+                                        <button type="button" class="btn-action" style="padding:2px 6px; font-size:10px; background:#334155; color:#fff;" onclick="copyRawText('{&quot;secret&quot;: &quot;spp213201pty&quot;, &quot;message&quot;: &quot;[sms_message] [not_text]&quot;}')">Copy Body</button>
+                                    </li>
                                 </ul>
                             </li>
-                            <li><strong>Done!</strong> Macro ko ON rakhein. Ab jab bhi koi player UPI se pay karega, bank notification aate hi deposit automatically verify ho jayega!</li>
+                            <li><strong>Pro Tip:</strong> Agar Bank of Baroda se SMS aata hai to body me <code>[sms_message]</code> hona zaroori hai! Isi tarah app notification ke liye <code>[not_text]</code>. Dono daal dene se dono cases auto-handle ho jaate hain.</li>
                         </ol>
                     </div>
 

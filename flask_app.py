@@ -1462,8 +1462,8 @@ def api_webhook_macrodroid():
     utr, amount, sender, raw_text = parse_macrodroid_message(input_data)
     now_iso = datetime.now().isoformat()
 
-    # Check if MacroDroid's test button was clicked (sends placeholder [not_text])
-    if raw_text and ('[not_text]' in raw_text):
+    # Check if MacroDroid's test button was clicked without UTR (sends placeholder [not_text])
+    if not utr and raw_text and ('[not_text]' in raw_text):
         with get_db() as conn:
             c = conn.cursor()
             c.execute(
