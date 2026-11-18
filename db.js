@@ -165,6 +165,8 @@ class DataStore {
                         if (ru.email) localUser.email = ru.email;
                         if (ru.password) localUser.password = ru.password;
                         if (typeof ru.balance === 'number') localUser.balance = ru.balance;
+                        if (typeof ru.deposit_balance === 'number') localUser.deposit_balance = ru.deposit_balance;
+                        if (typeof ru.winning_balance === 'number') localUser.winning_balance = ru.winning_balance;
                         if (ru.is_banned !== undefined) localUser.is_banned = ru.is_banned;
                     } else {
                         const newId = ru.id || this.data.nextUserId++;
@@ -560,12 +562,41 @@ class DataStore {
             return { changes: 1 };
         }
 
-        // 4. Update User Balance (+ or -)
+        // 4. Update User Balance (+ or -) with 2-Wallet Architecture
+        const applyUserWallet = (user, delta, isDeposit = false, isWithdraw = false) => {
+            if (!user) return;
+            if (typeof user.deposit_balance !== 'number' || typeof user.winning_balance !== 'number') {
+                user.deposit_balance = 0;
+                user.winning_balance = Math.max(0, parseFloat(user.balance || 0));
+            }
+            const d = parseFloat(delta);
+            if (d > 0) {
+                if (isDeposit) {
+                    user.deposit_balance = Math.round((user.deposit_balance + d) * 100) / 100;
+                } else {
+                    user.winning_balance = Math.round((user.winning_balance + d) * 100) / 100;
+                }
+            } else if (d < 0) {
+                const deduct = Math.abs(d);
+                if (isWithdraw) {
+                    user.winning_balance = Math.max(0, Math.round((user.winning_balance - deduct) * 100) / 100);
+                } else {
+                    // Bet: deduct from deposit_balance first, then winning_balance!
+                    const fromDep = Math.min(user.deposit_balance, deduct);
+                    const fromWin = Math.max(0, deduct - fromDep);
+                    user.deposit_balance = Math.max(0, Math.round((user.deposit_balance - fromDep) * 100) / 100);
+                    user.winning_balance = Math.max(0, Math.round((user.winning_balance - fromWin) * 100) / 100);
+                }
+            }
+            user.balance = Math.round((user.deposit_balance + user.winning_balance) * 100) / 100;
+        };
+
         if (sql.includes('UPDATE users SET balance = balance + ? WHERE id = ?')) {
             const [amt, id] = params;
             const user = this.data.users.find(u => u.id === parseInt(id));
             if (user) {
-                user.balance += parseFloat(amt);
+                const isDep = sql.includes('deposit') || (params.length > 2 && params[2] === 'deposit');
+                applyUserWallet(user, amt, isDep, false);
                 this.save();
             }
             return { changes: 1 };
@@ -574,7 +605,8 @@ class DataStore {
             const [amt, id] = params;
             const user = this.data.users.find(u => u.id === parseInt(id));
             if (user) {
-                user.balance = Math.max(0, user.balance - parseFloat(amt));
+                const isWd = (params.length > 2 && params[2] === 'withdraw');
+                applyUserWallet(user, -amt, false, isWd);
                 this.save();
             }
             return { changes: 1 };
@@ -583,7 +615,8 @@ class DataStore {
             const [amt, id] = params;
             const user = this.data.users.find(u => u.id === parseInt(id));
             if (user) {
-                user.balance = Math.max(0, user.balance + parseFloat(amt));
+                // Game delta (bet if amt < 0, win if amt > 0)
+                applyUserWallet(user, amt, false, false);
                 this.save();
             }
             return { changes: 1 };

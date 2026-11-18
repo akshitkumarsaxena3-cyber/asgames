@@ -163,6 +163,22 @@ class StateManager {
                 el.classList.add(flashDir === 'up' ? 'balance-flash-up' : 'balance-flash-down');
             }
         });
+
+        const depBal = (this.user && typeof this.user.deposit_balance === 'number')
+            ? this.user.deposit_balance
+            : (window._currentTurnoverInfo && typeof window._currentTurnoverInfo.deposit_balance === 'number' ? window._currentTurnoverInfo.deposit_balance : 0);
+        const winBal = (this.user && typeof this.user.winning_balance === 'number')
+            ? this.user.winning_balance
+            : (window._currentTurnoverInfo && typeof window._currentTurnoverInfo.winning_balance === 'number' ? window._currentTurnoverInfo.winning_balance : this.balance);
+
+        const depEl = document.getElementById('wd-deposit-bal-val');
+        const winEl = document.getElementById('wd-winning-bal-val');
+        const walDepEl = document.getElementById('wal-deposit-amt');
+        const walWinEl = document.getElementById('wal-winning-amt');
+        if (depEl) depEl.textContent = `₹${Number(depBal || 0).toFixed(2)}`;
+        if (winEl) winEl.textContent = `₹${Number(winBal || 0).toFixed(2)}`;
+        if (walDepEl) walDepEl.textContent = `₹${Number(depBal || 0).toFixed(2)}`;
+        if (walWinEl) walWinEl.textContent = `₹${Number(winBal || 0).toFixed(2)}`;
     }
 
     async syncGameDelta(delta) {
@@ -486,14 +502,15 @@ class StateManager {
                     return;
                 }
 
-                // 2. Turnover / Wagering Requirement Check
-                if (window._currentTurnoverInfo && typeof window._currentTurnoverInfo.withdrawableBalance === 'number') {
-                    if (amt > window._currentTurnoverInfo.withdrawableBalance) {
-                        const remBet = Number(window._currentTurnoverInfo.remainingTurnover || 0).toFixed(2);
-                        const maxWd = Number(window._currentTurnoverInfo.withdrawableBalance || 0).toFixed(2);
-                        this.showToast(`Deposit amount must be played first! Need to bet ₹${remBet} more. Withdrawable balance: ₹${maxWd}`, 'warning');
-                        return;
-                    }
+                // 2. Strict Winning Wallet Requirement Check
+                const winBal = window._currentTurnoverInfo && typeof window._currentTurnoverInfo.winning_balance === 'number'
+                    ? window._currentTurnoverInfo.winning_balance
+                    : (this.user && typeof this.user.winning_balance === 'number' ? this.user.winning_balance : this.balance);
+
+                if (amt > winBal) {
+                    const maxWd = Number(winBal || 0).toFixed(2);
+                    this.showToast(`Withdrawal sirf Winning Wallet se ho sakta hai! Aapka Winning balance ₹${maxWd} hai. Deposit wallet ka amount sirf bet lagane ke liye hai.`, 'warning');
+                    return;
                 }
 
                 if (!account) {
@@ -2284,24 +2301,25 @@ function updateWithdrawSummary() {
 
     const wBalEl = document.getElementById('wd-withdrawable-val');
     const recvEl = document.getElementById('wd-received-val');
-    const needBetEl = document.getElementById('wd-need-bet-val');
     const timeEl = document.getElementById('wd-time-val');
+    const depEl = document.getElementById('wd-deposit-bal-val');
+    const winEl = document.getElementById('wd-winning-bal-val');
     const btn = document.getElementById('btn-submit-withdraw');
 
-    let withdrawable = bal;
-    let remainingBet = 0;
+    let depositBal = 0;
+    let winningBal = bal;
     if (window._currentTurnoverInfo) {
-        if (typeof window._currentTurnoverInfo.withdrawableBalance === 'number') {
-            withdrawable = window._currentTurnoverInfo.withdrawableBalance;
-        }
-        if (typeof window._currentTurnoverInfo.remainingTurnover === 'number') {
-            remainingBet = window._currentTurnoverInfo.remainingTurnover;
-        }
+        depositBal = typeof window._currentTurnoverInfo.deposit_balance === 'number' ? window._currentTurnoverInfo.deposit_balance : 0;
+        winningBal = typeof window._currentTurnoverInfo.winning_balance === 'number' ? window._currentTurnoverInfo.winning_balance : (window._currentTurnoverInfo.withdrawable_balance ?? bal);
+    } else if (sm && sm.user) {
+        depositBal = typeof sm.user.deposit_balance === 'number' ? sm.user.deposit_balance : 0;
+        winningBal = typeof sm.user.winning_balance === 'number' ? sm.user.winning_balance : bal;
     }
 
-    if (wBalEl) wBalEl.textContent = `₹${withdrawable.toFixed(2)}`;
+    if (depEl) depEl.textContent = `₹${depositBal.toFixed(2)}`;
+    if (winEl) winEl.textContent = `₹${winningBal.toFixed(2)}`;
+    if (wBalEl) wBalEl.textContent = `₹${winningBal.toFixed(2)}`;
     if (recvEl) recvEl.textContent = `₹${amt.toFixed(2)}`;
-    if (needBetEl) needBetEl.textContent = `₹${remainingBet.toFixed(2)}`;
 
     // Check IST time: 10:00 AM to 08:00 PM IST
     const now = new Date();
@@ -2317,22 +2335,26 @@ function updateWithdrawSummary() {
     }
 
     if (btn) {
-        if (amt >= 110 && amt <= withdrawable && acc && isOpen) btn.classList.add('ready');
+        if (amt >= 110 && amt <= winningBal && acc && isOpen) btn.classList.add('ready');
         else btn.classList.remove('ready');
     }
 }
 
 function fillAllWithdrawBalance() {
     const sm = window.stateManager;
-    let withdrawable = sm ? Math.floor(Number(sm.balance || 0)) : 0;
-    if (window._currentTurnoverInfo && typeof window._currentTurnoverInfo.withdrawableBalance === 'number') {
-        withdrawable = Math.floor(window._currentTurnoverInfo.withdrawableBalance);
+    const bal = sm ? Number(sm.balance || 0) : 0;
+    let winningBal = bal;
+    if (window._currentTurnoverInfo && typeof window._currentTurnoverInfo.winning_balance === 'number') {
+        winningBal = window._currentTurnoverInfo.winning_balance;
+    } else if (sm && sm.user && typeof sm.user.winning_balance === 'number') {
+        winningBal = sm.user.winning_balance;
     }
+
+    const withdrawable = Math.floor(winningBal);
     const inp = document.getElementById('withdraw-amount-input');
     if (inp) inp.value = withdrawable > 0 ? String(withdrawable) : '';
     if (withdrawable <= 0 && sm) {
-        const remaining = window._currentTurnoverInfo ? window._currentTurnoverInfo.remainingTurnover : 0;
-        sm.showToast(`Deposit amount must be played in games first! Need to bet ₹${remaining.toFixed(2)} more.`, 'warning');
+        sm.showToast('Withdrawal sirf Winning Wallet se ho sakta hai! Game khel kar jeetein aur winning amount withdraw karein.', 'warning');
     }
     updateWithdrawSummary();
 }

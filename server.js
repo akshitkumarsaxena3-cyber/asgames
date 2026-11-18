@@ -500,6 +500,12 @@ function resolveUserByPublicUid(rawUid) {
 }
 
 app.get('/api/auth/me', requireAuth, async (req, res) => {
+    // Ensure 2-wallet structure (deposit_balance & winning_balance)
+    if (typeof req.user.deposit_balance !== 'number' || typeof req.user.winning_balance !== 'number') {
+        req.user.deposit_balance = 0;
+        req.user.winning_balance = Math.max(0, parseFloat(req.user.balance || 0));
+        req.user.balance = req.user.winning_balance;
+    }
     res.json({
         success: true,
         user: {
@@ -508,6 +514,9 @@ app.get('/api/auth/me', requireAuth, async (req, res) => {
             phone: req.user.phone,
             email: req.user.email || '',
             balance: req.user.balance,
+            deposit_balance: req.user.deposit_balance || 0,
+            winning_balance: req.user.winning_balance || 0,
+            withdrawable_balance: req.user.winning_balance || 0,
             invite_code: req.user.invite_code,
             referred_by: req.user.referred_by,
             vip_level: req.user.vip_level
@@ -715,7 +724,7 @@ app.post('/api/wallet/deposit', requireAuth, async (req, res) => {
             const creditAmt = prePayment.amount > 0 ? prePayment.amount : depositAmt;
             await DB.run(`INSERT INTO transactions (id, user_id, type, amount, status, details) VALUES (?, ?, ?, ?, ?, ?)`,
                 [txId, req.user.id, 'deposit', creditAmt, 'approved', `Channel: ${channel || 'UPI'} | UTR: ${cleanUtr} | Auto-verified via MacroDroid`]);
-            await DB.run('UPDATE users SET balance = balance + ? WHERE id = ?', [creditAmt, req.user.id]);
+            await DB.run('UPDATE users SET balance = balance + ? WHERE id = ?', [creditAmt, req.user.id, 'deposit']);
 
             if (!Array.isArray(DB.data.macrodroid_logs)) DB.data.macrodroid_logs = [];
             DB.data.macrodroid_logs.unshift({
@@ -760,59 +769,33 @@ function isWithdrawalTimeOpen() {
     return true;
 }
 
-async function getUserTurnoverInfo(userId) {
-    const uid = Number(userId);
-    const altUid = uid < 100000 ? uid + 100000 : uid - 100000;
-    const matchUser = (x) => Number(x.user_id) === uid || Number(x.user_id) === altUid;
-
-    // 1. Total Approved Deposits
-    let totalDeposits = 0;
-    if (Array.isArray(DB.data.transactions)) {
-        totalDeposits = DB.data.transactions
-            .filter(t => (Number(t.user_id) === uid || Number(t.user_id) === altUid) &&
-                         t.type === 'deposit' &&
-                         (t.status === 'approved' || t.status === 'completed'))
-            .reduce((sum, t) => sum + (parseFloat(t.amount || 0) || 0), 0);
+function applyUserWalletDelta(user, delta, type = null) {
+    if (!user) return;
+    if (typeof user.deposit_balance !== 'number' || typeof user.winning_balance !== 'number') {
+        user.deposit_balance = 0;
+        user.winning_balance = Math.max(0, parseFloat(user.balance || 0));
     }
-
-    // 2. Total Bets / Turnover played across all games
-    let totalBets = 0;
-    if (Array.isArray(DB.data.game_history)) {
-        totalBets += DB.data.game_history
-            .filter(matchUser)
-            .reduce((sum, h) => sum + (parseFloat(h.bet_amount || 0) || 0), 0);
+    const d = parseFloat(delta);
+    if (d > 0) {
+        if (type === 'deposit') {
+            user.deposit_balance = Math.round((user.deposit_balance + d) * 100) / 100;
+        } else {
+            user.winning_balance = Math.round((user.winning_balance + d) * 100) / 100;
+        }
+    } else if (d < 0) {
+        const deduct = Math.abs(d);
+        if (type === 'withdraw') {
+            user.winning_balance = Math.max(0, Math.round((user.winning_balance - deduct) * 100) / 100);
+        } else {
+            // Bet: deduct from deposit_balance first, then winning_balance!
+            const fromDep = Math.min(user.deposit_balance, deduct);
+            const fromWin = Math.max(0, deduct - fromDep);
+            user.deposit_balance = Math.max(0, Math.round((user.deposit_balance - fromDep) * 100) / 100);
+            user.winning_balance = Math.max(0, Math.round((user.winning_balance - fromWin) * 100) / 100);
+        }
     }
-    if (Array.isArray(DB.data.bets)) {
-        const wgBets = DB.data.bets
-            .filter(matchUser)
-            .reduce((sum, b) => sum + (parseFloat(b.amount || 0) || 0), 0);
-        totalBets = Math.max(totalBets, wgBets);
-    }
-    if (Array.isArray(DB.data.king_bets)) {
-        const kgBets = DB.data.king_bets
-            .filter(matchUser)
-            .reduce((sum, b) => sum + (parseFloat(b.amount || 0) || 0), 0);
-        totalBets += kgBets;
-    }
-
-    const user = (DB.data.users || []).find(u => Number(u.id) === uid || Number(u.id) === altUid);
-    const userBal = user ? parseFloat(user.balance || 0) : 0;
-
-    // Required turnover = total deposits (1x)
-    const requiredTurnover = totalDeposits;
-    const completedTurnover = totalBets;
-    const remainingTurnover = Math.max(0, Math.round((requiredTurnover - completedTurnover) * 100) / 100);
-    const withdrawableBalance = Math.max(0, Math.round((userBal - remainingTurnover) * 100) / 100);
-
-    return {
-        totalDeposits,
-        requiredTurnover,
-        completedTurnover,
-        remainingTurnover,
-        withdrawableBalance,
-        balance: userBal,
-        isTimeOpen: isWithdrawalTimeOpen()
-    };
+    user.balance = Math.round((user.deposit_balance + user.winning_balance) * 100) / 100;
+    return user;
 }
 
 app.post('/api/wallet/withdraw', requireAuth, async (req, res) => {
@@ -831,36 +814,42 @@ app.post('/api/wallet/withdraw', requireAuth, async (req, res) => {
             return res.json({ success: false, message: 'Minimum withdrawal amount is ₹110' });
         }
         if (req.user.balance < withdrawAmt) {
-            return res.json({ success: false, message: 'Insufficient balance' });
+            return res.json({ success: false, message: 'Insufficient wallet balance!' });
         }
 
-        // 2. Turnover / Wagering Requirement (1x game play on deposits)
-        const turnoverInfo = await getUserTurnoverInfo(req.user.id);
-        if (turnoverInfo.remainingTurnover > 0 && withdrawAmt > turnoverInfo.withdrawableBalance) {
+        // 2. Strict Winning Wallet Rule:
+        if (typeof req.user.deposit_balance !== 'number' || typeof req.user.winning_balance !== 'number') {
+            req.user.deposit_balance = 0;
+            req.user.winning_balance = Math.max(0, parseFloat(req.user.balance || 0));
+        }
+
+        const winBal = parseFloat(req.user.winning_balance || 0);
+        if (withdrawAmt > winBal) {
             return res.json({
                 success: false,
-                remaining_turnover: turnoverInfo.remainingTurnover,
-                withdrawable_balance: turnoverInfo.withdrawableBalance,
-                message: `Deposit amount must be played in games before withdrawal! Need to bet ₹${turnoverInfo.remainingTurnover.toFixed(2)} more. Withdrawable balance is ₹${turnoverInfo.withdrawableBalance.toFixed(2)}.`
+                deposit_balance: req.user.deposit_balance,
+                winning_balance: winBal,
+                withdrawable_balance: winBal,
+                message: `Withdrawal sirf Winning Wallet se ho sakta hai! Aapka Winning Balance ₹${winBal.toFixed(2)} hai. Deposit Wallet (₹${(req.user.deposit_balance || 0).toFixed(2)}) se sirf games me bet lagayi ja sakti hai.`
             });
         }
 
-        // Deduct & Hold balance immediately
-        await DB.run('UPDATE users SET balance = balance - ? WHERE id = ?', [withdrawAmt, req.user.id]);
+        // Deduct strictly from Winning Wallet
+        applyUserWalletDelta(req.user, -withdrawAmt, 'withdraw');
+        DB.save();
 
         const txId = 'WTH' + Date.now();
         await DB.run(`INSERT INTO transactions (id, user_id, type, amount, status, details) VALUES (?, ?, ?, ?, ?, ?)`,
             [txId, req.user.id, 'withdraw', withdrawAmt, 'pending', bank_info || 'UPI / Bank Transfer']);
-
-        const updatedUser = await DB.get('SELECT balance FROM users WHERE id = ?', [req.user.id]);
-        const finalBal = updatedUser ? Math.round(updatedUser.balance * 100) / 100 : 0;
 
         // Immediately sync deduction to PythonAnywhere so pull cannot revert it
         DB.syncPushToPythonAnywhere().catch(() => {});
 
         res.json({
             success: true,
-            balance: finalBal,
+            balance: req.user.balance,
+            winning_balance: req.user.winning_balance,
+            deposit_balance: req.user.deposit_balance,
             tx_id: txId,
             message: 'Withdrawal requested! Processing within working hours (10:00 AM - 08:00 PM).'
         });
@@ -871,8 +860,19 @@ app.post('/api/wallet/withdraw', requireAuth, async (req, res) => {
 
 app.get('/api/wallet/turnover-status', requireAuth, async (req, res) => {
     try {
-        const info = await getUserTurnoverInfo(req.user.id);
-        res.json({ success: true, ...info });
+        if (typeof req.user.deposit_balance !== 'number' || typeof req.user.winning_balance !== 'number') {
+            req.user.deposit_balance = 0;
+            req.user.winning_balance = Math.max(0, parseFloat(req.user.balance || 0));
+        }
+        res.json({
+            success: true,
+            balance: req.user.balance,
+            deposit_balance: req.user.deposit_balance || 0,
+            winning_balance: req.user.winning_balance || 0,
+            withdrawable_balance: req.user.winning_balance || 0,
+            withdrawableBalance: req.user.winning_balance || 0,
+            isTimeOpen: isWithdrawalTimeOpen()
+        });
     } catch (e) {
         res.status(500).json({ success: false, message: e.message });
     }
@@ -1063,7 +1063,7 @@ app.post('/api/admin/approve-deposit', requireAdmin, async (req, res) => {
         if (!tx || tx.status !== 'pending') return res.json({ success: false, message: 'Transaction not found or already processed' });
 
         await DB.run("UPDATE transactions SET status = 'approved' WHERE id = ?", [tx_id]);
-        await DB.run('UPDATE users SET balance = balance + ? WHERE id = ?', [tx.amount, tx.user_id]);
+        await DB.run('UPDATE users SET balance = balance + ? WHERE id = ?', [tx.amount, tx.user_id, 'deposit']);
 
         res.json({ success: true, message: `Deposit of ₹${tx.amount} approved! Balance credited.` });
     } catch (e) {
@@ -1431,7 +1431,7 @@ app.all(['/api/webhook/macrodroid', '/api/webhook/macrodroi'], async (req, res) 
             const user = (DB.data.users || []).find(u => u.id === pendingTx.user_id);
             const creditedAmt = pendingTx.amount || amount;
             if (user) {
-                user.balance = Math.round((Number(user.balance || 0) + Number(creditedAmt)) * 100) / 100;
+                applyUserWalletDelta(user, creditedAmt, 'deposit');
             }
 
             DB.data.macrodroid_payments.push({
@@ -1697,7 +1697,7 @@ function ludoFinishOnlineRoom(room, winnerColor) {
         room.paid_out = true;
         const u = DB.data.users.find(x => x.id === winner.uid);
         if (u) {
-            u.balance = Math.round((u.balance + pot) * 100) / 100;
+            applyUserWalletDelta(u, pot);
             DB.data.transactions.push({
                 id: 'LDO' + Date.now(),
                 user_id: winner.uid,
@@ -2300,7 +2300,7 @@ function settleKingMarketBets(marketKey, resultNumStr) {
                 totalPayout += winAmt;
 
                 const u = DB.data.users.find(x => x.id === bet.user_id);
-                if (u) u.balance = Math.round((u.balance + winAmt) * 100) / 100;
+                if (u) applyUserWalletDelta(u, winAmt);
 
                 DB.data.transactions.push({
                     id: 'KNG' + Date.now() + Math.floor(Math.random() * 999),

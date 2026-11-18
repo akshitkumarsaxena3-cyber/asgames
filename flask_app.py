@@ -331,6 +331,16 @@ def init_db():
             cursor.execute('INSERT OR IGNORE INTO king_markets (key, name, time, is_local, old_num, new_num) VALUES (?, ?, ?, ?, ?, ?)',
                            (k, n, tm, loc, oldn, newn))
 
+        # Ensure 2-Wallet Architecture columns exist in users table
+        try:
+            cursor.execute('ALTER TABLE users ADD COLUMN deposit_balance REAL DEFAULT 0.0')
+        except Exception:
+            pass
+        try:
+            cursor.execute('ALTER TABLE users ADD COLUMN winning_balance REAL DEFAULT 0.0')
+        except Exception:
+            pass
+
         # Ensure all new users automatically receive at least a 6-digit UID (>= 101001)
         cursor.execute('SELECT MAX(id) FROM users')
         max_uid_row = cursor.fetchone()
@@ -344,6 +354,40 @@ def init_db():
         conn.commit()
 
 init_db()
+
+def apply_user_wallet_delta(conn, user_id, delta, tx_type=None):
+    c = conn.cursor()
+    c.execute('SELECT balance, deposit_balance, winning_balance FROM users WHERE id = ?', (user_id,))
+    u = c.fetchone()
+    if not u:
+        return 0.0, 0.0, 0.0
+    bal = float(u['balance'] or 0)
+    dep_bal = float(u['deposit_balance'] or 0)
+    win_bal = float(u['winning_balance'] or 0)
+
+    # Initialize if zero and bal > 0
+    if dep_bal == 0 and win_bal == 0 and bal > 0:
+        win_bal = bal
+
+    d = float(delta)
+    if d > 0:
+        if tx_type == 'deposit':
+            dep_bal = round(dep_bal + d, 2)
+        else:
+            win_bal = round(win_bal + d, 2)
+    elif d < 0:
+        deduct = abs(d)
+        if tx_type == 'withdraw':
+            win_bal = max(0.0, round(win_bal - deduct, 2))
+        else:
+            from_dep = min(dep_bal, deduct)
+            from_win = max(0.0, deduct - from_dep)
+            dep_bal = max(0.0, round(dep_bal - from_dep, 2))
+            win_bal = max(0.0, round(win_bal - from_win, 2))
+
+    bal = round(dep_bal + win_bal, 2)
+    c.execute('UPDATE users SET balance = ?, deposit_balance = ?, winning_balance = ? WHERE id = ?', (bal, dep_bal, win_bal, user_id))
+    return bal, dep_bal, win_bal
 
 
 # ========================================================
@@ -439,7 +483,7 @@ def draw_round_if_needed(period):
             new_status = 'won' if won else 'lost'
             cursor.execute('UPDATE bets SET win_amount = ?, status = ? WHERE id = ?', (win_amt, new_status, b_id))
             if won and win_amt > 0:
-                cursor.execute('UPDATE users SET balance = balance + ? WHERE id = ?', (win_amt, u_id))
+                apply_user_wallet_delta(conn, u_id, win_amt, 'win')
                 cursor.execute(
                     'INSERT INTO transactions (id, user_id, type, amount, status, details, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
                     (f"WIN_{int(time.time()*1000)}_{random.randint(100,999)}", u_id, 'win', win_amt, 'completed', f'Win Go Prize #{period}', now_iso)
@@ -639,6 +683,14 @@ def api_me():
     if not user:
         return jsonify({'success': False, 'message': 'Unauthorized'}), 401
     user['uid'] = to_public_uid(user['id'])
+    dep = float(user.get('deposit_balance') or 0)
+    win = float(user.get('winning_balance') or 0)
+    bal = float(user.get('balance') or 0)
+    if dep == 0 and win == 0 and bal > 0:
+        win = bal
+    user['deposit_balance'] = dep
+    user['winning_balance'] = win
+    user['withdrawable_balance'] = win
     return jsonify({'success': True, 'user': user})
 
 @app.route('/api/auth/forgot-password', methods=['POST'])
@@ -717,7 +769,7 @@ def api_recharge():
                 'INSERT INTO transactions (id, user_id, type, amount, status, details, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
                 (tx_id, user['id'], 'deposit', credit_amt, 'completed', f"Channel: {channel} | UTR: {clean_utr} | Auto-verified via MacroDroid", now_iso)
             )
-            cursor.execute('UPDATE users SET balance = balance + ? WHERE id = ?', (credit_amt, user['id']))
+            apply_user_wallet_delta(conn, user['id'], credit_amt, 'deposit')
             cursor.execute(
                 'INSERT INTO macrodroid_logs (utr, amount, action, user_id, details, raw) VALUES (?, ?, ?, ?, ?, ?)',
                 (clean_utr, credit_amt, 'INSTANT_AUTO_CREDITED', user['id'], f"Player submitted UTR {clean_utr}. Matched existing bank payment! Credited ₹{credit_amt} instantly.", f"TxID: {tx_id}")
@@ -753,50 +805,31 @@ def is_withdrawal_time_open():
         return False
     return True
 
-def get_user_turnover_info(user_id):
-    with get_db() as conn:
-        c = conn.cursor()
-        c.execute('SELECT balance FROM users WHERE id = ?', (user_id,))
-        u = c.fetchone()
-        user_bal = float(u['balance']) if u else 0.0
-
-        # Total approved deposits
-        c.execute('SELECT COALESCE(SUM(amount), 0) as total_dep FROM transactions WHERE user_id = ? AND type = "deposit" AND (status = "approved" OR status = "completed")', (user_id,))
-        dep_row = c.fetchone()
-        total_deposits = float(dep_row['total_dep']) if dep_row else 0.0
-
-        # Total bets from game_history
-        c.execute('SELECT COALESCE(SUM(bet_amount), 0) as total_bet FROM game_history WHERE user_id = ?', (user_id,))
-        gh_row = c.fetchone()
-        gh_bets = float(gh_row['total_bet']) if gh_row else 0.0
-
-        # Total bets from bets table (Win Go)
-        c.execute('SELECT COALESCE(SUM(amount), 0) as total_bet FROM bets WHERE user_id = ?', (user_id,))
-        wg_row = c.fetchone()
-        wg_bets = float(wg_row['total_bet']) if wg_row else 0.0
-
-        total_bets = max(gh_bets, wg_bets)
-        required_turnover = total_deposits
-        remaining_turnover = max(0.0, round(required_turnover - total_bets, 2))
-        withdrawable_balance = max(0.0, round(user_bal - remaining_turnover, 2))
-
-        return {
-            'total_deposits': total_deposits,
-            'required_turnover': required_turnover,
-            'completed_turnover': total_bets,
-            'remaining_turnover': remaining_turnover,
-            'withdrawable_balance': withdrawable_balance,
-            'balance': user_bal,
-            'is_time_open': is_withdrawal_time_open()
-        }
-
 @app.route('/api/wallet/turnover-status', methods=['GET'])
 def api_turnover_status():
     user = get_current_user(request)
     if not user:
         return jsonify({'success': False, 'message': 'Unauthorized'}), 401
-    info = get_user_turnover_info(user['id'])
-    return jsonify({'success': True, **info})
+
+    with get_db() as conn:
+        c = conn.cursor()
+        c.execute('SELECT balance, deposit_balance, winning_balance FROM users WHERE id = ?', (user['id'],))
+        row = c.fetchone()
+        bal = float(row['balance'] or 0) if row else 0.0
+        dep_bal = float(row['deposit_balance'] or 0) if row else 0.0
+        win_bal = float(row['winning_balance'] or 0) if row else 0.0
+        if dep_bal == 0 and win_bal == 0 and bal > 0:
+            win_bal = bal
+
+    return jsonify({
+        'success': True,
+        'balance': bal,
+        'deposit_balance': dep_bal,
+        'winning_balance': win_bal,
+        'withdrawable_balance': win_bal,
+        'withdrawableBalance': win_bal,
+        'is_time_open': is_withdrawal_time_open()
+    })
 
 @app.route('/api/wallet/withdraw', methods=['POST'])
 def api_withdraw():
@@ -817,38 +850,41 @@ def api_withdraw():
     if amount < 110:
         return jsonify({'success': False, 'message': 'Minimum withdrawal is ₹110'}), 400
 
-    turnover_info = get_user_turnover_info(user['id'])
-    if turnover_info['remaining_turnover'] > 0 and amount > turnover_info['withdrawable_balance']:
-        return jsonify({
-            'success': False,
-            'remaining_turnover': turnover_info['remaining_turnover'],
-            'withdrawable_balance': turnover_info['withdrawable_balance'],
-            'message': f"Deposit amount must be played in games before withdrawal! Need to bet ₹{turnover_info['remaining_turnover']:.2f} more. Max withdrawable: ₹{turnover_info['withdrawable_balance']:.2f}."
-        }), 400
-
     with get_db() as conn:
         cursor = conn.cursor()
-        cursor.execute('SELECT balance FROM users WHERE id = ?', (user['id'],))
+        cursor.execute('SELECT balance, deposit_balance, winning_balance FROM users WHERE id = ?', (user['id'],))
         row = cursor.fetchone()
-        current_bal = float(row['balance']) if row else 0.0
+        if not row:
+            return jsonify({'success': False, 'message': 'User not found'}), 404
+
+        current_bal = float(row['balance'] or 0)
+        dep_bal = float(row['deposit_balance'] or 0)
+        win_bal = float(row['winning_balance'] or 0)
+        if dep_bal == 0 and win_bal == 0 and current_bal > 0:
+            win_bal = current_bal
 
         if current_bal < amount:
-            return jsonify({'success': False, 'message': f'Insufficient balance! You have ₹{current_bal:.2f}'}), 400
+            return jsonify({'success': False, 'message': f'Insufficient wallet balance! You have ₹{current_bal:.2f}'}), 400
 
-        # Deduct balance immediately upon request
-        cursor.execute('UPDATE users SET balance = MAX(0, balance - ?) WHERE id = ?', (amount, user['id']))
+        if amount > win_bal:
+            return jsonify({
+                'success': False,
+                'deposit_balance': dep_bal,
+                'winning_balance': win_bal,
+                'withdrawable_balance': win_bal,
+                'message': f"Withdrawal sirf Winning Wallet se ho sakta hai! Aapka Winning Balance ₹{win_bal:.2f} hai. Deposit Wallet (₹{dep_bal:.2f}) se sirf games me bet lagayi ja sakti hai."
+            }), 400
+
+        new_bal, new_dep, new_win = apply_user_wallet_delta(conn, user['id'], -amount, 'withdraw')
         tx_id = f"WTH{int(time.time()*1000)}"
         now_iso = datetime.now().isoformat()
         cursor.execute(
             'INSERT INTO transactions (id, user_id, type, amount, status, details, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
             (tx_id, user['id'], 'withdraw', amount, 'pending', details, now_iso)
         )
-        cursor.execute('SELECT balance FROM users WHERE id = ?', (user['id'],))
-        new_row = cursor.fetchone()
-        new_bal = round(float(new_row['balance']), 2) if new_row else 0.0
         conn.commit()
 
-    return jsonify({'success': True, 'balance': new_bal, 'message': 'Withdrawal submitted! Admin will approve & payout within working hours (10:00 AM - 08:00 PM).', 'tx_id': tx_id})
+    return jsonify({'success': True, 'balance': new_bal, 'winning_balance': new_win, 'deposit_balance': new_dep, 'message': 'Withdrawal submitted! Admin will approve & payout within working hours (10:00 AM - 08:00 PM).', 'tx_id': tx_id})
 
 @app.route('/api/wallet/transactions', methods=['GET'])
 def api_my_transactions():
@@ -877,14 +913,10 @@ def api_sync_game_delta():
         return jsonify({'success': True, 'balance': user['balance']})
 
     with get_db() as conn:
-        cursor = conn.cursor()
-        cursor.execute('UPDATE users SET balance = MAX(0, balance + ?) WHERE id = ?', (delta, user['id']))
-        cursor.execute('SELECT balance FROM users WHERE id = ?', (user['id'],))
-        row = cursor.fetchone()
+        new_bal, new_dep, new_win = apply_user_wallet_delta(conn, user['id'], delta, 'game')
         conn.commit()
-        new_bal = float(row['balance']) if row else user['balance']
 
-    return jsonify({'success': True, 'balance': new_bal})
+    return jsonify({'success': True, 'balance': new_bal, 'deposit_balance': new_dep, 'winning_balance': new_win})
 
 @app.route('/api/referral/stats', methods=['GET'])
 def api_referral_stats():
@@ -956,14 +988,13 @@ def api_game_bet():
         if balance < amount:
             return jsonify({'success': False, 'message': 'Insufficient balance! Please deposit.'}), 400
 
-        cursor.execute('UPDATE users SET balance = balance - ? WHERE id = ?', (amount, user['id']))
+        new_bal, new_dep, new_win = apply_user_wallet_delta(conn, user['id'], -amount, 'bet')
         bet_id = f"BET_{int(time.time()*1000)}_{random.randint(100, 999)}"
         now_iso = datetime.now().isoformat()
         cursor.execute(
             'INSERT INTO bets (id, user_id, period, select_type, select_val, amount, win_amount, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
             (bet_id, user['id'], effective_period, select_type, select_val, amount, 0.0, 'pending', now_iso)
         )
-        new_bal = round(max(0.0, balance - amount), 2)
         conn.commit()
 
     return jsonify({'success': True, 'message': 'Bet placed successfully!', 'balance': new_bal, 'newBalance': new_bal, 'new_balance': new_bal, 'period_id': effective_period, 'serverSettled': (game_mode == '30s')})
@@ -1163,8 +1194,7 @@ def api_admin_adjust_balance():
     amt = float(data.get('amount', 0))
 
     with get_db() as conn:
-        cursor = conn.cursor()
-        cursor.execute('UPDATE users SET balance = balance + ? WHERE id = ?', (amt, u_id))
+        apply_user_wallet_delta(conn, u_id, amt, 'deposit' if amt >= 0 else 'bet')
         conn.commit()
 
     return jsonify({'success': True, 'message': 'Balance adjusted successfully!'})
@@ -1206,7 +1236,7 @@ def api_admin_approve_deposit():
 
         amt = float(tx['amount'])
         u_id = tx['user_id']
-        cursor.execute('UPDATE users SET balance = balance + ? WHERE id = ?', (amt, u_id))
+        apply_user_wallet_delta(conn, u_id, amt, 'deposit')
         cursor.execute('UPDATE transactions SET status = "completed" WHERE id = ?', (tx_id,))
         conn.commit()
 
@@ -1281,8 +1311,8 @@ def api_admin_reject_withdrawal():
 
         amt = float(tx['amount'])
         u_id = tx['user_id']
-        # Refund back to user balance
-        cursor.execute('UPDATE users SET balance = balance + ? WHERE id = ?', (amt, u_id))
+        # Refund back to user winning balance
+        apply_user_wallet_delta(conn, u_id, amt, 'refund')
         cursor.execute('UPDATE transactions SET status = "rejected" WHERE id = ?', (tx_id,))
         conn.commit()
 
@@ -1645,7 +1675,7 @@ def api_webhook_macrodroid():
             credited_amt = float(pending_tx['amount']) if float(pending_tx['amount'] or 0) > 0 else amount
             new_details = (pending_tx['details'] or '') + ' | Auto-approved by MacroDroid Webhook'
             c.execute('UPDATE transactions SET status = "completed", details = ? WHERE id = ?', (new_details, pending_tx['id']))
-            c.execute('UPDATE users SET balance = balance + ? WHERE id = ?', (credited_amt, pending_tx['user_id']))
+            apply_user_wallet_delta(conn, pending_tx['user_id'], credited_amt, 'deposit')
             md_id = f"MD{int(time.time()*1000)}"
             c.execute(
                 'INSERT INTO macrodroid_payments (id, utr, amount, sender, raw_message, status, matched_user_id, matched_tx_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
@@ -1753,7 +1783,7 @@ def api_gift_redeem():
         claimed.append(user['id'])
         amt = float(g['amount'])
         c.execute('UPDATE gift_codes SET claimed_by = ? WHERE code = ?', (json.dumps(claimed), g['code']))
-        c.execute('UPDATE users SET balance = balance + ? WHERE id = ?', (amt, user['id']))
+        apply_user_wallet_delta(conn, user['id'], amt, 'deposit')
         c.execute(
             'INSERT INTO transactions (id, user_id, type, amount, status, details, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
             (f"GFT{int(time.time()*1000)}", user['id'], 'deposit', amt, 'approved', f"Gift Code: {g['code']}", datetime.now().isoformat())
@@ -1847,7 +1877,7 @@ def _ludo_finish_room(conn, room, winner_color):
     if winner and pot > 0 and not room.get('paid_out'):
         room['paid_out'] = True
         c = conn.cursor()
-        c.execute('UPDATE users SET balance = balance + ? WHERE id = ?', (pot, winner['uid']))
+        apply_user_wallet_delta(conn, winner['uid'], pot, 'win')
         c.execute(
             'INSERT INTO transactions (id, user_id, type, amount, status, details, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
             (f"LDO{int(time.time()*1000)}", winner['uid'], 'win', pot, 'approved', f"Ludo Online Room #{room['code']} Win", datetime.now().isoformat())
@@ -2076,8 +2106,7 @@ def api_ludo_room_create():
         if entry_fee > 0 and cur_bal < entry_fee:
             return jsonify({'success': False, 'message': f'Insufficient balance! Need ₹{entry_fee:.0f} to create this room.'})
         if entry_fee > 0:
-            c.execute('UPDATE users SET balance = MAX(0, balance - ?) WHERE id=?', (entry_fee, user['id']))
-            cur_bal = round(max(0.0, cur_bal - entry_fee), 2)
+            cur_bal, _, _ = apply_user_wallet_delta(conn, user['id'], -entry_fee, 'bet')
         room = {
             'code': code,
             'host_uid': user['id'],
@@ -2155,8 +2184,7 @@ def api_ludo_room_join():
         if fee > 0 and cur_bal < fee:
             return jsonify({'success': False, 'message': f'Need ₹{fee:.0f} balance to join this room!'})
         if fee > 0:
-            c.execute('UPDATE users SET balance = MAX(0, balance - ?) WHERE id=?', (fee, user['id']))
-            cur_bal = round(max(0.0, cur_bal - fee), 2)
+            cur_bal, _, _ = apply_user_wallet_delta(conn, user['id'], -fee, 'bet')
         palette = ['red', 'yellow'] if room['max_players'] == 2 else ['red', 'green', 'yellow', 'blue']
         color = palette[len(room['players'])]
         room['players'].append({'uid': user['id'], 'phone': _mask_phone_short(user['phone']), 'color': color})
@@ -2504,7 +2532,7 @@ def _settle_king_market_bets(conn, market_key, num2):
                   ('Won' if is_win else 'Lost', win_amt, f"{market_key.upper()} • {bt.upper()} {num} (Result: {num2})", b['id'], b['user_id']))
         if is_win:
             total_pay += win_amt
-            c.execute('UPDATE users SET balance = balance + ? WHERE id = ?', (win_amt, b['user_id']))
+            apply_user_wallet_delta(conn, b['user_id'], win_amt, 'win')
             c.execute('INSERT INTO transactions (id, user_id, type, amount, status, details, created_at) VALUES (?, ?, "win", ?, "approved", ?, ?)',
                       (f"KNG{int(time.time()*1000)}{random.randint(10,99)}", b['user_id'], win_amt, f"AS King ({market_key.upper()} #{num2}) Win", datetime.now().isoformat()))
     return settled, total_pay
@@ -2597,8 +2625,7 @@ def api_king_bet():
         cur_bal = float(c.fetchone()['balance'])
         if cur_bal < amount:
             return jsonify({'success': False, 'message': 'Insufficient balance! Please deposit.'}), 400
-        c.execute('UPDATE users SET balance = MAX(0, balance - ?) WHERE id=?', (amount, user['id']))
-        new_bal = round(max(0.0, cur_bal - amount), 2)
+        new_bal, _, _ = apply_user_wallet_delta(conn, user['id'], -amount, 'bet')
         c.execute('''INSERT INTO king_bets (id, user_id, phone, market, bet_type, number, amount, multiplier, win_amount, result_num, status, created_at)
                      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, "", "pending", ?)''',
                   (bet_id, user['id'], user['phone'], market, bet_type, clean_num, amount, mult, now_iso))
@@ -2748,13 +2775,13 @@ def api_sync_push():
             existing = cursor.fetchone()
             if existing:
                 cursor.execute(
-                    'UPDATE users SET email = COALESCE(NULLIF(?, ""), email), password = ?, balance = ?, invite_code = ?, referred_by = ?, vip_level = ?, is_banned = ? WHERE phone = ?',
-                    (u.get('email', ''), u.get('password'), u.get('balance', 0), u.get('invite_code'), u.get('referred_by'), u.get('vip_level', 1), u.get('is_banned', 0), phone)
+                    'UPDATE users SET email = COALESCE(NULLIF(?, ""), email), password = ?, balance = ?, deposit_balance = ?, winning_balance = ?, invite_code = ?, referred_by = ?, vip_level = ?, is_banned = ? WHERE phone = ?',
+                    (u.get('email', ''), u.get('password'), u.get('balance', 0), u.get('deposit_balance', 0), u.get('winning_balance', 0), u.get('invite_code'), u.get('referred_by'), u.get('vip_level', 1), u.get('is_banned', 0), phone)
                 )
             else:
                 cursor.execute(
-                    'INSERT INTO users (phone, email, email_verified, password, balance, invite_code, referred_by, vip_level, is_banned, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-                    (phone, u.get('email', ''), 1, u.get('password'), u.get('balance', 0), u.get('invite_code'), u.get('referred_by'), u.get('vip_level', 1), u.get('is_banned', 0), u.get('created_at', datetime.now().isoformat()))
+                    'INSERT INTO users (phone, email, email_verified, password, balance, deposit_balance, winning_balance, invite_code, referred_by, vip_level, is_banned, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                    (phone, u.get('email', ''), 1, u.get('password'), u.get('balance', 0), u.get('deposit_balance', 0), u.get('winning_balance', 0), u.get('invite_code'), u.get('referred_by'), u.get('vip_level', 1), u.get('is_banned', 0), u.get('created_at', datetime.now().isoformat()))
                 )
 
         # Upsert Transactions

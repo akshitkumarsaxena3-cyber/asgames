@@ -860,8 +860,21 @@
                                 <input type="number" id="withdraw-amount-input" class="wd-amt-input" placeholder="Please enter the amount" oninput="updateWithdrawSummary()">
                             </div>
 
+                            <!-- 2-Wallet Breakdown Card -->
+                            <div style="display:flex; justify-content:space-between; align-items:center; background:rgba(0,0,0,0.45); border:1px solid rgba(255,255,255,0.08); border-radius:10px; padding:10px 14px; margin:12px 0;">
+                                <div>
+                                    <div style="font-size:11px; color:#94a3b8;">Deposit Wallet <span style="font-size:9.5px; color:#60a5fa; background:rgba(96,165,250,0.15); padding:1px 6px; border-radius:4px; font-weight:700;">Bet Only</span></div>
+                                    <div id="wd-deposit-bal-val" style="color:#60a5fa; font-weight:800; font-size:15px; margin-top:2px;">₹0.00</div>
+                                </div>
+                                <div style="width:1px; height:28px; background:rgba(255,255,255,0.1);"></div>
+                                <div style="text-align:right;">
+                                    <div style="font-size:11px; color:#94a3b8;">Winning Wallet <span style="font-size:9.5px; color:#10b981; background:rgba(16,185,129,0.15); padding:1px 6px; border-radius:4px; font-weight:700;">Withdrawable</span></div>
+                                    <div id="wd-winning-bal-val" style="color:#10b981; font-weight:800; font-size:15px; margin-top:2px;">₹0.00</div>
+                                </div>
+                            </div>
+
                             <div class="wd-bal-row">
-                                <span>Withdrawable balance <strong id="wd-withdrawable-val" style="color:#d9ac4f;">₹0.00</strong></span>
+                                <span>Withdrawable balance (Winning Wallet) <strong id="wd-withdrawable-val" style="color:#10b981;">₹0.00</strong></span>
                                 <button type="button" class="wd-all-btn" onclick="fillAllWithdrawBalance()">All</button>
                             </div>
 
@@ -874,11 +887,11 @@
 
                             <!-- Exact 6 Diamond Rules Box (Screenshots 3 & 4) -->
                             <div class="rg-notes-box" style="margin-top:18px;">
-                                <div class="rg-note-row"><span class="rg-diamond">◆</span><span>Need to bet <strong id="wd-need-bet-val" style="color:#ef4444;">₹0.00</strong> to be able to withdraw</span></div>
+                                <div class="rg-note-row"><span class="rg-diamond">◆</span><span>Withdrawal <strong style="color:#10b981;">sirf Winning Wallet</strong> se hoga (Game jeeta hua amount).</span></div>
+                                <div class="rg-note-row"><span class="rg-diamond">◆</span><span>Deposit Wallet ka amount <strong style="color:#60a5fa;">sirf games me bet lagane</strong> ke liye use hoga (Not Withdrawable).</span></div>
                                 <div class="rg-note-row"><span class="rg-diamond">◆</span><span>Withdraw time <strong id="wd-time-val" style="color:#ef4444;">10:00 - 20:00 (10:00 AM - 08:00 PM IST)</strong></span></div>
                                 <div class="rg-note-row"><span class="rg-diamond">◆</span><span>Inday Remaining Withdrawal Times <strong style="color:#ef4444;">3</strong></span></div>
                                 <div class="rg-note-row"><span class="rg-diamond">◆</span><span>Withdrawal amount range <strong style="color:#ef4444;">₹110.00 - ₹50,000.00</strong></span></div>
-                                <div class="rg-note-row"><span class="rg-diamond">◆</span><span>Deposit kiye huye amount ka 1x games me turnover khel kar withdrawable balance banayein.</span></div>
                                 <div class="rg-note-row"><span class="rg-diamond">◆</span><span>Please check your registered bank/UPI information again before making a withdrawal.</span></div>
                             </div>
                         </div>
@@ -2184,16 +2197,16 @@
                             <div id="wal-main-ring" class="bdg-wal-ring">
                                 <div class="bdg-wal-ring-inner"><span id="wal-main-pct">0%</span></div>
                             </div>
-                            <div class="bdg-wal-g-amt user-balance-val">₹0.00</div>
-                            <div class="bdg-wal-g-lbl">Main wallet</div>
+                            <div class="bdg-wal-g-amt" id="wal-deposit-amt" style="color:#60a5fa;">₹0.00</div>
+                            <div class="bdg-wal-g-lbl">Deposit (Bet Only)</div>
                         </div>
 
                         <div class="bdg-wal-gauge-item">
                             <div id="wal-3rd-ring" class="bdg-wal-ring">
-                                <div class="bdg-wal-ring-inner"><span>0%</span></div>
+                                <div class="bdg-wal-ring-inner"><span id="wal-3rd-pct">0%</span></div>
                             </div>
-                            <div class="bdg-wal-g-amt">₹0.00</div>
-                            <div class="bdg-wal-g-lbl">3rd party wallet</div>
+                            <div class="bdg-wal-g-amt" id="wal-winning-amt" style="color:#10b981;">₹0.00</div>
+                            <div class="bdg-wal-g-lbl">Winning (Withdrawable)</div>
                         </div>
                     </div>
 
