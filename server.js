@@ -1133,8 +1133,8 @@ function parseMacroDroidMessage(input) {
         if (input.sender || input.from || input.app) sender = String(input.sender || input.from || input.app);
 
         const textParts = [
-            input.message, input.text, input.sms, input.notification,
-            input.body, input.content, input.title, input.subText, input.not_text
+            input.message, input.msg, input.text, input.sms, input.sms_message, input.notification,
+            input.body, input.rawBody, input.content, input.title, input.subText, input.not_text
         ].filter(Boolean);
         if (textParts.length > 0) rawText = textParts.join(' ');
         else if (!rawText) rawText = typeof input === 'string' ? input : JSON.stringify(input);
@@ -1166,9 +1166,12 @@ app.all(['/api/webhook/macrodroid', '/api/webhook/macrodroi'], async (req, res) 
         if (!Array.isArray(DB.data.macrodroid_payments)) DB.data.macrodroid_payments = [];
         if (!Array.isArray(DB.data.macrodroid_logs)) DB.data.macrodroid_logs = [];
 
-        let inputData = req.body;
-        if (!inputData || (typeof inputData === 'object' && Object.keys(inputData).length === 0)) {
-            inputData = req.query;
+        let inputData = {};
+        if (req.query && typeof req.query === 'object') Object.assign(inputData, req.query);
+        if (req.body && typeof req.body === 'object') Object.assign(inputData, req.body);
+        else if (typeof req.body === 'string' && req.body.trim()) {
+            try { Object.assign(inputData, JSON.parse(req.body)); }
+            catch (e) { inputData.rawBody = req.body.trim(); }
         }
 
         const secret = (req.query && (req.query.secret || req.query.key)) ||

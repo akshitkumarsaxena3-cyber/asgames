@@ -1403,7 +1403,7 @@ def parse_macrodroid_message(input_data):
 
         text_parts = [
             str(v) for k, v in input_data.items()
-            if k in ('message', 'text', 'sms', 'notification', 'body', 'content', 'title', 'subText', 'not_text') and v
+            if k in ('message', 'msg', 'text', 'sms', 'sms_message', 'notification', 'body', 'content', 'title', 'subText', 'not_text') and v
         ]
         if text_parts:
             raw_text = ' '.join(text_parts)
@@ -1435,17 +1435,22 @@ def parse_macrodroid_message(input_data):
 @app.route('/api/webhook/macrodroi', methods=['GET', 'POST'])
 def api_webhook_macrodroid():
     input_data = {}
+    if request.args:
+        input_data.update(request.args.to_dict())
     if request.method == 'POST':
-        input_data = request.get_json(silent=True)
-        if not input_data:
-            if request.form:
-                input_data = request.form.to_dict()
-            else:
-                raw_bytes = request.get_data()
-                if raw_bytes:
-                    input_data = raw_bytes.decode('utf-8', errors='ignore')
-    if not input_data:
-        input_data = request.args.to_dict()
+        json_data = request.get_json(silent=True)
+        if isinstance(json_data, dict):
+            input_data.update(json_data)
+        elif request.form:
+            input_data.update(request.form.to_dict())
+        else:
+            raw_bytes = request.get_data()
+            if raw_bytes:
+                raw_str = raw_bytes.decode('utf-8', errors='ignore')
+                try:
+                    input_data.update(json.loads(raw_str))
+                except Exception:
+                    input_data['raw_body'] = raw_str
 
     secret = request.args.get('secret') or request.args.get('key') or request.headers.get('x-admin-key') or ''
     if isinstance(input_data, dict) and not secret:
