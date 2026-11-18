@@ -596,6 +596,12 @@
 
     <script>
         let adminKey = localStorage.getItem('asg_admin_key') || '';
+        const isSecretUnlocked = sessionStorage.getItem('asg_admin_unlocked') === '1';
+
+        // Hidden Admin Gate: redirect outsiders back to Home unless unlocked via 8-tap ASGames logo
+        if (!adminKey && !isSecretUnlocked) {
+            window.location.replace('/');
+        }
 
         if (adminKey) {
             showDashboard();
@@ -620,7 +626,8 @@
 
         function logoutAdmin() {
             localStorage.removeItem('asg_admin_key');
-            location.reload();
+            sessionStorage.removeItem('asg_admin_unlocked');
+            window.location.replace('/');
         }
 
         let currentAdminTab = 'control';

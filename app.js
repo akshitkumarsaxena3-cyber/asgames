@@ -2920,6 +2920,80 @@ function joinLudoFromFriendsHub(roomCode) {
     }, 150);
 }
 
+// ========================================================
+// SECRET 8-TAP ASGAMES LOGO -> HIDDEN ADMIN PASSWORD GATE
+// ========================================================
+let _secretLogoTaps = 0;
+let _secretLogoTimer = null;
+
+function handleSecretLogoTap() {
+    _secretLogoTaps++;
+    if (_secretLogoTimer) clearTimeout(_secretLogoTimer);
+    _secretLogoTimer = setTimeout(() => {
+        _secretLogoTaps = 0;
+    }, 3500);
+
+    if (_secretLogoTaps >= 8) {
+        _secretLogoTaps = 0;
+        if (_secretLogoTimer) clearTimeout(_secretLogoTimer);
+        openSecretAdminModal();
+    }
+}
+
+function openSecretAdminModal() {
+    const modal = document.getElementById('secret-admin-modal');
+    const inp = document.getElementById('secret-admin-password');
+    const err = document.getElementById('secret-admin-err');
+    if (err) err.textContent = '';
+    if (inp) inp.value = '';
+    if (modal) modal.classList.remove('hidden');
+    setTimeout(() => { if (inp) inp.focus(); }, 80);
+}
+
+function closeSecretAdminModal() {
+    const modal = document.getElementById('secret-admin-modal');
+    const inp = document.getElementById('secret-admin-password');
+    if (inp) inp.value = '';
+    if (modal) modal.classList.add('hidden');
+}
+
+async function submitSecretAdminUnlock() {
+    const inp = document.getElementById('secret-admin-password');
+    const err = document.getElementById('secret-admin-err');
+    const btn = document.getElementById('secret-admin-unlock-btn');
+    const password = (inp ? inp.value : '').trim();
+
+    if (!password) {
+        if (err) err.textContent = 'Please enter password.';
+        return;
+    }
+
+    if (btn) { btn.disabled = true; btn.textContent = 'Checking...'; }
+    if (err) err.textContent = '';
+
+    try {
+        const res = await fetch('/api/admin/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ password })
+        });
+        const d = await res.json();
+        if (d.success && d.adminKey) {
+            localStorage.setItem('asg_admin_key', d.adminKey);
+            sessionStorage.setItem('asg_admin_unlocked', '1');
+            closeSecretAdminModal();
+            window.location.href = '/admin';
+            return;
+        }
+        if (err) err.textContent = d.message || 'Invalid password!';
+        if (inp) { inp.value = ''; inp.focus(); }
+    } catch (e) {
+        if (err) err.textContent = 'Connection error. Please try again.';
+    } finally {
+        if (btn) { btn.disabled = false; btn.textContent = 'Unlock'; }
+    }
+}
+
 // Global initialization
 window.addEventListener('DOMContentLoaded', () => {
     window.stateManager = new StateManager();

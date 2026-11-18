@@ -47,7 +47,7 @@
                 <!-- Top Bar -->
                 <div class="bdg-auth-topbar">
                     <button id="auth-modal-close" class="bdg-back-btn" title="Back">&#8249;</button>
-                    <div class="bdg-auth-logo">
+                    <div class="bdg-auth-logo" onclick="handleSecretLogoTap()" style="cursor:pointer; user-select:none; -webkit-tap-highlight-color:transparent;">
                         <span class="bdg-logo-crown">👑</span>
                         <span>ASGames</span>
                     </div>
@@ -940,7 +940,7 @@
         <!-- Top Header -->
         <header class="app-header">
             <div class="header-top-row">
-                <div class="brand-box">
+                <div class="brand-box" id="asg-secret-logo-trigger" onclick="handleSecretLogoTap()" style="cursor:pointer; user-select:none; -webkit-tap-highlight-color:transparent;">
                     <img src="assets/avatar-vip.jpg" alt="ASGames VIP" class="brand-logo-img">
                     <span class="brand-title">ASGames</span>
                     <span class="brand-badge">VIP</span>
@@ -2387,7 +2387,7 @@
                             <span class="bdg-svc-ico">📖</span>
                             <span>Beginner's Guide</span>
                         </div>
-                        <div class="bdg-svc-item" onclick="window.location.href='/admin'">
+                        <div class="bdg-svc-item" onclick="alert('👑 ASGames VIP — India\'s Premier Color Prediction, Crash, Lottery & Skill Gaming Platform. 24/7 Instant UPI Support!')">
                             <span class="bdg-svc-ico">📦</span>
                             <span>About us</span>
                         </div>
@@ -2428,6 +2428,27 @@
             </div>
         </nav>
 
+    </div>
+
+    <!-- Hidden Secret Admin Unlock Modal (Opens ONLY on 8 rapid taps on ASGames Logo) -->
+    <div id="secret-admin-modal" class="dep-checkout-overlay hidden" style="z-index:999999;">
+        <div class="dep-checkout-card" style="max-width:340px; border:1px solid rgba(217,172,79,0.55);">
+            <div class="dep-checkout-hdr">
+                <span style="color:#fae59f; font-weight:800; font-size:15px;">🔐 Admin Verification</span>
+                <button type="button" class="btn-drawer-close" onclick="closeSecretAdminModal()">&times;</button>
+            </div>
+            <p style="font-size:12px; color:#a1a1aa; margin:10px 0 12px; line-height:1.4;">
+                Enter Super Admin Password to unlock control panel.
+            </p>
+            <div class="input-group" style="margin:0;">
+                <input type="password" id="secret-admin-password" class="rg-input" placeholder="Enter Admin Password" autocomplete="off" onkeydown="if(event.key==='Enter') submitSecretAdminUnlock()">
+            </div>
+            <div id="secret-admin-err" style="color:#ef4444; font-size:12px; font-weight:600; min-height:18px; margin-top:8px;"></div>
+            <div style="display:flex; gap:8px; margin-top:10px;">
+                <button type="button" onclick="closeSecretAdminModal()" style="flex:1; padding:11px; border-radius:10px; border:1px solid rgba(255,255,255,0.14); background:#18181b; color:#e4e4e7; font-weight:700; cursor:pointer;">Cancel</button>
+                <button type="button" id="secret-admin-unlock-btn" class="bdg-btn-gold" style="flex:1.4; margin:0; padding:11px;" onclick="submitSecretAdminUnlock()">Unlock</button>
+            </div>
+        </div>
     </div>
 
     <!-- Scripts -->
