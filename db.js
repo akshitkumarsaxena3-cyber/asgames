@@ -21,6 +21,14 @@ class DataStore {
             ludo_rooms: [],
             support_messages: [],
             game_history: [],
+            king_markets: {
+                asgames:   { key: 'asgames',   name: 'AS GAMES',  time: 'Live 24/7', is_local: true,  old_num: '47', new_num: '83', updated_at: '' },
+                faridabad: { key: 'faridabad', name: 'FARIDABAD', time: '06:15 PM',  is_local: false, old_num: '62', new_num: '--', updated_at: '' },
+                gaziabad:  { key: 'gaziabad',  name: 'GAZIABAD',  time: '08:40 PM',  is_local: false, old_num: '19', new_num: '--', updated_at: '' },
+                gali:      { key: 'gali',      name: 'GALI',      time: '11:30 PM',  is_local: false, old_num: '74', new_num: '--', updated_at: '' },
+                disawar:   { key: 'disawar',   name: 'DISAWAR',   time: '05:10 AM',  is_local: false, old_num: '35', new_num: '--', updated_at: '' }
+            },
+            king_bets: [],
             settings: {
                 admin_password: 'spp213201pty',
                 game_mode: 'random',
@@ -62,6 +70,16 @@ class DataStore {
                 if (!Array.isArray(this.data.ludo_rooms)) this.data.ludo_rooms = [];
                 if (!Array.isArray(this.data.support_messages)) this.data.support_messages = [];
                 if (!Array.isArray(this.data.game_history)) this.data.game_history = [];
+                if (!this.data.king_markets || typeof this.data.king_markets !== 'object') {
+                    this.data.king_markets = {
+                        asgames:   { key: 'asgames',   name: 'AS GAMES',  time: 'Live 24/7', is_local: true,  old_num: '47', new_num: '83', updated_at: '' },
+                        faridabad: { key: 'faridabad', name: 'FARIDABAD', time: '06:15 PM',  is_local: false, old_num: '62', new_num: '--', updated_at: '' },
+                        gaziabad:  { key: 'gaziabad',  name: 'GAZIABAD',  time: '08:40 PM',  is_local: false, old_num: '19', new_num: '--', updated_at: '' },
+                        gali:      { key: 'gali',      name: 'GALI',      time: '11:30 PM',  is_local: false, old_num: '74', new_num: '--', updated_at: '' },
+                        disawar:   { key: 'disawar',   name: 'DISAWAR',   time: '05:10 AM',  is_local: false, old_num: '35', new_num: '--', updated_at: '' }
+                    };
+                }
+                if (!Array.isArray(this.data.king_bets)) this.data.king_bets = [];
                 this.data.settings.admin_password = 'spp213201pty';
                 if (!this.data.settings.pythonanywhere_url) {
                     this.data.settings.pythonanywhere_url = 'https://backandsopport.pythonanywhere.com';

@@ -299,6 +299,30 @@
                     </div>
                     <p id="ludo-status" style="font-size:12px; color:#fbbf24; margin-top:8px;"></p>
                 </div>
+
+                <!-- AS KING / MATKA RESULT DECLARATION CARD (FBD / GZB / GALI / DSW + LOCAL AS GAMES) -->
+                <div class="card" style="border:1px solid #f59e0b;">
+                    <div class="card-title" style="display:flex; justify-content:space-between; align-items:center;">
+                        <span style="color:#fae59f;">🔥 AS King Live Results (Faridabad / Gaziabad / Gali / Disawar + Local AS GAMES)</span>
+                        <button class="btn-action" style="background:#0ea5e9; color:#fff;" onclick="fetchAdminKingNet()">🌐 Fetch Live Net Results</button>
+                    </div>
+                    <p style="font-size:12px; color:#cbd5e1; margin:6px 0 12px;">
+                        Local <strong>AS GAMES</strong> ya kisi bhi market ka 2-digit number (00–99) declare karein — sabhi pending <strong>1 ka 9 (9x)</strong> aur <strong>Jodi (90x)</strong> bets automatically settle hokar winners ko credit ho jayenge!
+                    </p>
+                    <div id="admin-king-markets-row" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(145px, 1fr)); gap:8px; margin-bottom:12px;"></div>
+                    <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
+                        <select id="admin-king-market" class="input-text" style="width:auto; min-width:170px; margin:0;">
+                            <option value="asgames">👑 AS GAMES (Local)</option>
+                            <option value="faridabad">🏙️ FARIDABAD</option>
+                            <option value="gaziabad">⚡ GAZIABAD</option>
+                            <option value="gali">🌙 GALI</option>
+                            <option value="disawar">🌅 DISAWAR</option>
+                        </select>
+                        <input type="text" id="admin-king-num" maxlength="2" class="input-text" style="width:120px; margin:0; text-align:center; font-weight:800;" placeholder="00 - 99">
+                        <button class="btn-primary" style="width:auto; padding:9px 18px; font-size:13px; background:linear-gradient(90deg,#fae59f,#c4933f); color:#2b1704; font-weight:800;" onclick="declareAdminKingResult()">🎯 Declare &amp; Settle (9x / 90x)</button>
+                    </div>
+                    <p id="admin-king-status" style="font-size:12px; font-weight:600; margin-top:8px;"></p>
+                </div>
             </div>
 
             <!-- TAB 2: USERS -->
@@ -601,6 +625,7 @@
                 loadAdminChats(currentAdminTab !== 'chats');
             }, 4000);
             loadAdminChats(true);
+            loadAdminKingMarkets();
         }
 
         function switchTab(tab) {
@@ -1217,6 +1242,66 @@
                 const d = await res.json();
                 if (d.success) loadAdminChats(false);
             } catch (e) {}
+        }
+
+        // ========================================================
+        // AS KING / MATKA LIVE RESULT CONTROL (ADMIN)
+        // ========================================================
+        async function loadAdminKingMarkets() {
+            try {
+                const res = await fetch('/api/king/markets');
+                const d = await res.json();
+                if (!d.success) return;
+                renderAdminKingMarkets(d.markets || []);
+            } catch (e) {}
+        }
+
+        function renderAdminKingMarkets(markets) {
+            const box = document.getElementById('admin-king-markets-row');
+            if (!box) return;
+            box.innerHTML = (markets || []).map(m => `
+                <div style="background:#0f172a; border:1px solid ${m.is_local ? '#f59e0b' : '#334155'}; border-radius:8px; padding:8px 10px; text-align:center;">
+                    <div style="font-size:11px; font-weight:800; color:#fae59f;">${m.name}</div>
+                    <div style="font-size:16px; font-weight:900; color:#fff; margin-top:4px;">${m.old_num || '--'} ➜ <span style="color:#fde047;">${m.new_num || '--'}</span></div>
+                </div>
+            `).join('');
+        }
+
+        async function fetchAdminKingNet() {
+            const st = document.getElementById('admin-king-status');
+            if (st) { st.style.color = '#38bdf8'; st.textContent = '🌐 Fetching live Faridabad / Gaziabad / Gali / Disawar numbers...'; }
+            try {
+                const res = await fetch('/api/admin/king/fetch-net', { method: 'POST', headers: { 'x-admin-key': adminKey } });
+                const d = await res.json();
+                if (st) { st.style.color = d.fetched ? '#10b981' : '#f59e0b'; st.textContent = d.message; }
+                if (d.markets) renderAdminKingMarkets(d.markets);
+            } catch (e) {
+                if (st) { st.style.color = '#ef4444'; st.textContent = '✗ Fetch failed.'; }
+            }
+        }
+
+        async function declareAdminKingResult() {
+            const market = document.getElementById('admin-king-market')?.value || 'asgames';
+            const num = (document.getElementById('admin-king-num')?.value || '').trim();
+            const st = document.getElementById('admin-king-status');
+            if (!/^\d{1,2}$/.test(num)) {
+                if (st) { st.style.color = '#ef4444'; st.textContent = '✗ Enter a valid 2-digit number (00 - 99).'; }
+                return;
+            }
+            if (st) { st.style.color = '#38bdf8'; st.textContent = 'Declaring result & settling bets...'; }
+            try {
+                const res = await fetch('/api/admin/king/declare', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'x-admin-key': adminKey },
+                    body: JSON.stringify({ market, result_num: num })
+                });
+                const d = await res.json();
+                if (st) { st.style.color = d.success ? '#10b981' : '#ef4444'; st.textContent = (d.success ? '✓ ' : '✗ ') + d.message; }
+                if (d.markets) renderAdminKingMarkets(d.markets);
+                refreshOverview();
+            } catch (e) {
+                if (st) { st.style.color = '#ef4444'; st.textContent = '✗ Error declaring result.'; }
+            }
         }
 
         async function loadGmailSettings() {

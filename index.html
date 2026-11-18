@@ -271,6 +271,7 @@
                         <button type="button" class="gh-filter-pill" data-gh="Mines" onclick="filterGameHistory('Mines', this)">💎 Mines</button>
                         <button type="button" class="gh-filter-pill" data-gh="K3 Lottery" onclick="filterGameHistory('K3 Lottery', this)">🎲 K3</button>
                         <button type="button" class="gh-filter-pill" data-gh="Ludo Cash" onclick="filterGameHistory('Ludo Cash', this)">👑 Ludo</button>
+                        <button type="button" class="gh-filter-pill" data-gh="AS King" onclick="filterGameHistory('AS King', this)">🔥 AS King</button>
                     </div>
 
                     <!-- Live History List -->
@@ -954,6 +955,23 @@
 
                 <!-- Luxury 3D Artwork Game Cards Grid -->
                 <div class="games-grid">
+                    <!-- AS King Matka (Faridabad / Gaziabad / Gali / Disawar + Local AS Games — 1 ka 9!) -->
+                    <div class="game-card game-card-3d card-king" data-category="lottery original" data-open-game="king">
+                        <img src="assets/card-king.jpg" alt="AS King Matka" class="game-card-art" loading="lazy">
+                        <div class="game-card-scrim"></div>
+                        <div class="card-top">
+                            <span class="game-badge-hot">1 KA 9 🔥</span>
+                            <span class="game-tag-glass">Gali • FBD • AS</span>
+                        </div>
+                        <div class="card-bottom">
+                            <div>
+                                <div class="game-title">AS King</div>
+                                <div class="game-sub">9x &amp; 90x Live</div>
+                            </div>
+                            <span class="btn-play-mini">PLAY</span>
+                        </div>
+                    </div>
+
                     <!-- Win Go -->
                     <div class="game-card game-card-3d card-wingo" data-category="lottery" data-open-game="wingo">
                         <img src="assets/card-wingo.jpg" alt="Win Go" class="game-card-art" loading="lazy">
@@ -1111,6 +1129,74 @@
                         </div>
                     </div>
                 </section>
+            </div>
+
+            <!-- ============================================== -->
+            <!-- SUB-SCREEN: AS KING MATKA (FBD / GZB / GALI / DSW + LOCAL AS) -->
+            <!-- ============================================== -->
+            <div id="game-view-king" class="game-view hidden">
+                <div class="game-subnav">
+                    <button class="btn-back-home">‹ Back</button>
+                    <span class="game-header-title">👑 AS King Live (1 ka 9)</span>
+                    <span class="game-wallet-mini user-balance-val">₹0.00</span>
+                </div>
+
+                <div style="padding:12px 14px 32px; display:flex; flex-direction:column; gap:12px;">
+                    <!-- Live Net + Local Result Board -->
+                    <div class="dep-section-card" style="padding:12px;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                            <span style="color:#fae59f; font-size:13.5px; font-weight:800;">📊 Live Markets (Tap to Play)</span>
+                            <button type="button" class="ludo-mini-gold-btn" onclick="window.kingGame.fetchMarkets()">↻ Live Update</button>
+                        </div>
+                        <div id="king-markets-board" class="king-markets-grid">
+                            <!-- Populated dynamically -->
+                        </div>
+                    </div>
+
+                    <!-- Bet Panel -->
+                    <div class="dep-section-card" style="padding:14px;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                            <span style="font-size:12px; color:#cbd5e1;">Selected Market: <strong id="king-selected-mk-lbl" style="color:#fae59f;">AS GAMES</strong></span>
+                            <span style="font-size:11px; color:#10b981; font-weight:700;">1 ka 9 (9x) / Jodi 90x</span>
+                        </div>
+
+                        <!-- Bet Type Selector -->
+                        <div class="ludo-toggle-3col" style="margin-bottom:12px;">
+                            <button type="button" class="ludo-mode-pill king-type-pill active" data-ktype="bahar" onclick="window.kingGame.setBetType('bahar')">Bahar (9x)</button>
+                            <button type="button" class="ludo-mode-pill king-type-pill" data-ktype="andar" onclick="window.kingGame.setBetType('andar')">Andar (9x)</button>
+                            <button type="button" class="ludo-mode-pill king-type-pill" data-ktype="jodi" onclick="window.kingGame.setBetType('jodi')">Jodi (90x)</button>
+                        </div>
+
+                        <!-- Dynamic 0-9 or 00-99 Number Picker -->
+                        <div id="king-picker-area" style="margin-bottom:14px;"></div>
+
+                        <!-- Bet Amount Pills + Input -->
+                        <div style="font-size:11.5px; color:#94a3b8; margin-bottom:6px; font-weight:600;">Bet Amount (Min ₹10):</div>
+                        <div class="ludo-fee-grid" style="margin-bottom:10px;">
+                            <button type="button" class="ludo-fee-pill king-amt-pill" data-kamt="10" onclick="window.kingGame.setBetAmount(10)">₹10</button>
+                            <button type="button" class="ludo-fee-pill king-amt-pill active" data-kamt="50" onclick="window.kingGame.setBetAmount(50)">₹50</button>
+                            <button type="button" class="ludo-fee-pill king-amt-pill" data-kamt="100" onclick="window.kingGame.setBetAmount(100)">₹100</button>
+                            <button type="button" class="ludo-fee-pill king-amt-pill" data-kamt="500" onclick="window.kingGame.setBetAmount(500)">₹500</button>
+                            <button type="button" class="ludo-fee-pill king-amt-pill" data-kamt="1000" onclick="window.kingGame.setBetAmount(1000)">₹1K</button>
+                        </div>
+
+                        <div style="display:flex; gap:10px; align-items:center; margin-bottom:12px;">
+                            <input type="number" id="king-amount-input" class="rg-input" style="flex:1;" value="50" min="10" oninput="window.kingGame.updatePayoutPreview()">
+                            <div style="text-align:right; min-width:130px;">
+                                <div style="font-size:10px; color:#94a3b8;">Win Return</div>
+                                <div id="king-potential-win" style="font-size:13px; font-weight:800; color:#10b981;">₹450 (9x)</div>
+                            </div>
+                        </div>
+
+                        <button type="button" class="bdg-btn-gold" style="margin:0;" onclick="window.kingGame.placeBet()">🎯 PLACE BET NOW</button>
+                    </div>
+
+                    <!-- My AS King Bets History -->
+                    <div class="dep-section-card" style="padding:14px;">
+                        <div class="dep-sec-hdr"><span class="bdg-gold-ico">📜</span> <span>My AS King Bets</span></div>
+                        <div id="king-mybets-list"></div>
+                    </div>
+                </div>
             </div>
 
             <!-- ============================================== -->
@@ -2266,6 +2352,7 @@
     <script src="game-mines.js"></script>
     <script src="game-k3.js"></script>
     <script src="game-ludo.js"></script>
+    <script src="game-king.js"></script>
     <script src="game-wheel.js"></script>
     <script src="app.js"></script>
 </body>

@@ -590,7 +590,8 @@ class StateManager {
             aviator: 'Connecting Aviator Flight Radar...',
             mines: 'Preparing 5x5 Diamond Vault...',
             k3: 'Warming Up K3 Dice Table...',
-            ludo: 'Loading Ludo Supreme Cash Board...'
+            ludo: 'Loading Ludo Supreme Cash Board...',
+            king: 'Loading AS King Live Result Board...'
         };
         this.showSplashLoader(labels[gameName] || 'Loading Game Engine...', 420);
 
@@ -618,6 +619,9 @@ class StateManager {
         }
         if (gameName === 'wheel' && window.wheelGame) {
             setTimeout(() => window.wheelGame.resizeCanvas(), 80);
+        }
+        if (gameName === 'king' && window.kingGame) {
+            window.kingGame.fetchMarkets();
         }
     }
 
@@ -2486,7 +2490,8 @@ function renderUnifiedGameHistory() {
         'Aviator': '✈️',
         'Mines': '💎',
         'K3 Lottery': '🎲',
-        'Ludo Cash': '👑'
+        'Ludo Cash': '👑',
+        'AS King': '🔥'
     };
 
     listEl.innerHTML = filtered.slice(0, 60).map(h => {

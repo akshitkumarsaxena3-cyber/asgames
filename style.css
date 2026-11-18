@@ -6440,6 +6440,126 @@ body {
     color: #fbbf24;
 }
 
+/* ======================================================== */
+/* AS KING / MATKA LIVE NUMBER BOARD & PICKER               */
+/* ======================================================== */
+.king-markets-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+}
+
+.king-mk-card {
+    background: #1f1f26;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 10px;
+    padding: 10px;
+    cursor: pointer;
+    transition: all 0.18s;
+}
+
+.king-mk-card:first-child {
+    grid-column: span 2;
+    background: linear-gradient(135deg, #2d2312 0%, #1e1c24 100%);
+    border-color: rgba(245, 196, 67, 0.4);
+}
+
+.king-mk-card.active {
+    border-color: #fae59f !important;
+    box-shadow: 0 0 0 1.5px #fae59f, 0 6px 18px rgba(217, 172, 79, 0.35);
+}
+
+.king-mk-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 8px;
+}
+
+.king-mk-name {
+    color: #fae59f;
+    font-size: 13px;
+    font-weight: 800;
+    letter-spacing: 0.4px;
+}
+
+.king-mk-time {
+    color: #94a3b8;
+    font-size: 10px;
+}
+
+.king-local-tag {
+    background: linear-gradient(90deg, #fae59f, #d99d3b);
+    color: #2b1704;
+    font-size: 9px;
+    font-weight: 800;
+    padding: 2px 6px;
+    border-radius: 6px;
+}
+
+.king-net-tag {
+    background: rgba(16, 185, 129, 0.18);
+    color: #34d399;
+    font-size: 9px;
+    font-weight: 700;
+    padding: 2px 6px;
+    border-radius: 6px;
+}
+
+.king-mk-nums {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    background: rgba(0, 0, 0, 0.28);
+    border-radius: 8px;
+    padding: 6px 8px;
+}
+
+.king-num-old {
+    color: #a1a1aa;
+    font-size: 15px;
+    font-weight: 700;
+}
+
+.king-num-arrow {
+    color: #d9ac4f;
+    font-size: 12px;
+}
+
+.king-num-new {
+    color: #fde047;
+    font-size: 20px;
+    font-weight: 900;
+    text-shadow: 0 0 10px rgba(253, 224, 71, 0.45);
+}
+
+.king-digits-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 8px;
+}
+
+.king-digit-btn {
+    height: 44px;
+    border-radius: 10px;
+    background: #1d1d24;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: #ffffff;
+    font-size: 18px;
+    font-weight: 800;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.king-digit-btn.active {
+    background: linear-gradient(135deg, #fae59f 0%, #c6913a 100%);
+    color: #2b1704;
+    border-color: #fff0b8;
+    transform: scale(1.04);
+    box-shadow: 0 4px 12px rgba(217, 172, 79, 0.45);
+}
+
 .ludo-pcount-pill,
 .ludo-mode-pill {
     background: #23232a;

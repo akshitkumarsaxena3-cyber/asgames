@@ -1683,6 +1683,282 @@ app.get('/api/game/my-history', requireAuth, async (req, res) => {
     }
 });
 
+// ========================================================
+// AS KING / MATKA NUMBER GAME (FARIDABAD, GAZIABAD, GALI, DISAWAR + LOCAL AS GAMES)
+// Payouts: Single Digit / Haruf (Andar/Bahar) = 1 ka 9 (9x), Jodi (00-99) = 1 ka 90 (90x)
+// ========================================================
+let _lastKingNetFetchTs = 0;
+
+function ensureKingStore() {
+    if (!DB.data.king_markets) {
+        DB.data.king_markets = {
+            asgames:   { key: 'asgames',   name: 'AS GAMES',  time: 'Live 24/7', is_local: true,  old_num: '47', new_num: '83', updated_at: '' },
+            faridabad: { key: 'faridabad', name: 'FARIDABAD', time: '06:15 PM',  is_local: false, old_num: '62', new_num: '--', updated_at: '' },
+            gaziabad:  { key: 'gaziabad',  name: 'GAZIABAD',  time: '08:40 PM',  is_local: false, old_num: '19', new_num: '--', updated_at: '' },
+            gali:      { key: 'gali',      name: 'GALI',      time: '11:30 PM',  is_local: false, old_num: '74', new_num: '--', updated_at: '' },
+            disawar:   { key: 'disawar',   name: 'DISAWAR',   time: '05:10 AM',  is_local: false, old_num: '35', new_num: '--', updated_at: '' }
+        };
+    }
+    if (!Array.isArray(DB.data.king_bets)) DB.data.king_bets = [];
+    if (!Array.isArray(DB.data.game_history)) DB.data.game_history = [];
+}
+
+function settleKingMarketBets(marketKey, resultNumStr) {
+    ensureKingStore();
+    const num2 = String(resultNumStr).padStart(2, '0').slice(-2);
+    const andarDigit = num2[0];
+    const baharDigit = num2[1];
+
+    let settledCount = 0;
+    let totalPayout = 0;
+
+    for (const bet of DB.data.king_bets) {
+        if (bet.market === marketKey && bet.status === 'pending') {
+            let isWin = false;
+            let mult = 9;
+            if (bet.bet_type === 'andar') {
+                isWin = (String(bet.number) === andarDigit);
+                mult = 9;
+            } else if (bet.bet_type === 'bahar') {
+                isWin = (String(bet.number) === baharDigit);
+                mult = 9;
+            } else if (bet.bet_type === 'jodi') {
+                isWin = (String(bet.number).padStart(2, '0') === num2);
+                mult = 90;
+            }
+
+            settledCount++;
+            if (isWin) {
+                const winAmt = Math.round(bet.amount * mult * 100) / 100;
+                bet.status = 'won';
+                bet.win_amount = winAmt;
+                bet.result_num = num2;
+                totalPayout += winAmt;
+
+                const u = DB.data.users.find(x => x.id === bet.user_id);
+                if (u) u.balance = Math.round((u.balance + winAmt) * 100) / 100;
+
+                DB.data.transactions.push({
+                    id: 'KNG' + Date.now() + Math.floor(Math.random() * 999),
+                    user_id: bet.user_id,
+                    type: 'win',
+                    amount: winAmt,
+                    status: 'approved',
+                    details: `AS King (${marketKey.toUpperCase()} #${num2}) Win`,
+                    created_at: new Date().toISOString()
+                });
+            } else {
+                bet.status = 'lost';
+                bet.win_amount = 0;
+                bet.result_num = num2;
+            }
+
+            const gh = DB.data.game_history.find(h => h.id === bet.id && h.user_id === bet.user_id);
+            if (gh) {
+                gh.status = isWin ? 'Won' : 'Lost';
+                gh.win_amount = bet.win_amount;
+                gh.detail = `${marketKey.toUpperCase()} • ${bet.bet_type.toUpperCase()} ${bet.number} (Result: ${num2})`;
+            }
+        }
+    }
+    return { settledCount, totalPayout };
+}
+
+async function fetchLiveKingResultsFromNet(force = false) {
+    ensureKingStore();
+    if (!force && Date.now() - _lastKingNetFetchTs < 10 * 60 * 1000) {
+        return { fetched: false, updated: [] };
+    }
+    _lastKingNetFetchTs = Date.now();
+    const sources = [
+        'https://satta-king-fast.com/',
+        'https://sattaking-up.com/'
+    ];
+    const updated = [];
+    for (const url of sources) {
+        try {
+            const ctrl = new AbortController();
+            const timer = setTimeout(() => ctrl.abort(), 4500);
+            const resp = await fetch(url, {
+                signal: ctrl.signal,
+                headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' }
+            });
+            clearTimeout(timer);
+            if (!resp.ok) continue;
+            const html = await resp.text();
+            const text = html.replace(/<script[\s\S]*?<\/script>/gi, ' ')
+                             .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+                             .replace(/<[^>]+>/g, ' ')
+                             .replace(/\s+/g, ' ');
+
+            const patterns = [
+                { key: 'faridabad', re: /FARIDABAD[\s\S]{0,120}?(\b\d{2}\b)[\s\S]{0,40}?(\b\d{2}\b|--|XX)/i },
+                { key: 'gaziabad',  re: /GHA?ZIABAD[\s\S]{0,120}?(\b\d{2}\b)[\s\S]{0,40}?(\b\d{2}\b|--|XX)/i },
+                { key: 'gali',      re: /\bGALI\b[\s\S]{0,120}?(\b\d{2}\b)[\s\S]{0,40}?(\b\d{2}\b|--|XX)/i },
+                { key: 'disawar',   re: /D[EI]SAWAR[\s\S]{0,120}?(\b\d{2}\b)[\s\S]{0,40}?(\b\d{2}\b|--|XX)/i }
+            ];
+
+            for (const p of patterns) {
+                const m = text.match(p.re);
+                if (m) {
+                    const oldN = m[1];
+                    const newN = /^\d{2}$/.test(m[2]) ? m[2] : '--';
+                    const mk = DB.data.king_markets[p.key];
+                    if (mk) {
+                        const prevNew = mk.new_num;
+                        if (/^\d{2}$/.test(oldN)) mk.old_num = oldN;
+                        mk.new_num = newN;
+                        mk.updated_at = new Date().toISOString();
+                        updated.push(`${p.key.toUpperCase()}:${oldN}->${newN}`);
+                        if (/^\d{2}$/.test(newN) && newN !== prevNew) {
+                            settleKingMarketBets(p.key, newN);
+                        }
+                    }
+                }
+            }
+            if (updated.length > 0) {
+                DB.save();
+                return { fetched: true, source: url, updated };
+            }
+        } catch (e) {}
+    }
+    return { fetched: false, updated };
+}
+
+app.get('/api/king/markets', async (req, res) => {
+    ensureKingStore();
+    // Non-blocking background refresh if stale
+    fetchLiveKingResultsFromNet(false).catch(() => {});
+    const user = await getUserFromToken(req);
+    const myBets = user
+        ? DB.data.king_bets.filter(b => b.user_id === user.id).slice(-40).reverse()
+        : [];
+    res.json({
+        success: true,
+        markets: Object.values(DB.data.king_markets),
+        my_bets: myBets
+    });
+});
+
+app.post('/api/king/bet', requireAuth, async (req, res) => {
+    try {
+        ensureKingStore();
+        const market = String(req.body.market || 'asgames').toLowerCase();
+        const bet_type = String(req.body.bet_type || 'bahar').toLowerCase(); // 'andar' | 'bahar' | 'jodi'
+        const rawNum = String(req.body.number ?? '').trim();
+        const amount = parseFloat(req.body.amount || 0);
+
+        if (!DB.data.king_markets[market]) {
+            return res.json({ success: false, message: 'Invalid market selected.' });
+        }
+        if (!['andar', 'bahar', 'jodi'].includes(bet_type)) {
+            return res.json({ success: false, message: 'Invalid bet type.' });
+        }
+        if (!amount || amount < 10) {
+            return res.json({ success: false, message: 'Minimum bet amount is ₹10.' });
+        }
+        const cleanNum = bet_type === 'jodi'
+            ? rawNum.padStart(2, '0')
+            : rawNum;
+        if (bet_type === 'jodi' && !/^\d{2}$/.test(cleanNum)) {
+            return res.json({ success: false, message: 'Enter a valid 2-digit Jodi number (00 to 99).' });
+        }
+        if ((bet_type === 'andar' || bet_type === 'bahar') && !/^\d$/.test(cleanNum)) {
+            return res.json({ success: false, message: 'Select a valid single digit (0 to 9).' });
+        }
+        if (req.user.balance < amount) {
+            return res.json({ success: false, message: 'Insufficient balance! Please deposit.' });
+        }
+
+        await DB.run('UPDATE users SET balance = balance - ? WHERE id = ?', [amount, req.user.id]);
+        const updated = await DB.get('SELECT balance FROM users WHERE id = ?', [req.user.id]);
+        const finalBal = updated ? updated.balance : 0;
+
+        const betId = 'KB' + Date.now() + Math.floor(Math.random() * 999);
+        const nowIso = new Date().toISOString();
+        const mult = bet_type === 'jodi' ? 90 : 9;
+        const betObj = {
+            id: betId,
+            user_id: req.user.id,
+            phone: req.user.phone,
+            market,
+            bet_type,
+            number: cleanNum,
+            amount,
+            multiplier: mult,
+            win_amount: 0,
+            result_num: '',
+            status: 'pending',
+            created_at: nowIso
+        };
+        DB.data.king_bets.push(betObj);
+        if (DB.data.king_bets.length > 500) DB.data.king_bets = DB.data.king_bets.slice(-500);
+
+        DB.data.game_history.push({
+            id: betId,
+            user_id: req.user.id,
+            game: 'AS King',
+            detail: `${market.toUpperCase()} • ${bet_type.toUpperCase()} ${cleanNum} (${mult}x)`,
+            bet_amount: amount,
+            win_amount: 0,
+            status: 'Pending',
+            created_at: nowIso
+        });
+        DB.save();
+
+        res.json({
+            success: true,
+            balance: finalBal,
+            bet: betObj,
+            message: `🎯 Bet ₹${amount} placed on ${market.toUpperCase()} (${bet_type.toUpperCase()} ${cleanNum}) — Win ₹${amount * mult}!`
+        });
+    } catch (e) {
+        res.status(500).json({ success: false, message: e.message });
+    }
+});
+
+app.post('/api/admin/king/declare', requireAdmin, async (req, res) => {
+    try {
+        ensureKingStore();
+        const market = String(req.body.market || 'asgames').toLowerCase();
+        const raw = String(req.body.result_num ?? '').trim();
+        if (!DB.data.king_markets[market]) {
+            return res.json({ success: false, message: 'Invalid market.' });
+        }
+        if (!/^\d{1,2}$/.test(raw)) {
+            return res.json({ success: false, message: 'Enter a valid 2-digit result number (00 - 99).' });
+        }
+        const num2 = raw.padStart(2, '0');
+        const mk = DB.data.king_markets[market];
+        if (/^\d{2}$/.test(mk.new_num)) mk.old_num = mk.new_num;
+        mk.new_num = num2;
+        mk.updated_at = new Date().toISOString();
+
+        const { settledCount, totalPayout } = settleKingMarketBets(market, num2);
+        DB.save();
+
+        res.json({
+            success: true,
+            markets: Object.values(DB.data.king_markets),
+            message: `👑 ${mk.name} Result Declared: ${num2}! Settled ${settledCount} bets (Total Payout: ₹${totalPayout.toFixed(2)}).`
+        });
+    } catch (e) {
+        res.status(500).json({ success: false, message: e.message });
+    }
+});
+
+app.post('/api/admin/king/fetch-net', requireAdmin, async (req, res) => {
+    const r = await fetchLiveKingResultsFromNet(true);
+    res.json({
+        success: true,
+        fetched: r.fetched,
+        markets: Object.values(DB.data.king_markets),
+        message: r.fetched
+            ? `🌐 Live Net Results Synced: ${r.updated.join(', ')}`
+            : 'Live net feed busy — showing latest cached results. You can also declare any number manually below!'
+    });
+});
+
 // PythonAnywhere Central Sync Management APIs
 app.get('/api/admin/sync-status', requireAdmin, async (req, res) => {
     try {

@@ -254,6 +254,42 @@ def init_db():
                 created_at TEXT DEFAULT CURRENT_TIMESTAMP
             )
         ''')
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS king_markets (
+                key TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                time TEXT DEFAULT '',
+                is_local INTEGER DEFAULT 0,
+                old_num TEXT DEFAULT '--',
+                new_num TEXT DEFAULT '--',
+                updated_at TEXT DEFAULT ''
+            )
+        ''')
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS king_bets (
+                id TEXT PRIMARY KEY,
+                user_id INTEGER NOT NULL,
+                phone TEXT DEFAULT '',
+                market TEXT NOT NULL,
+                bet_type TEXT NOT NULL,
+                number TEXT NOT NULL,
+                amount REAL DEFAULT 0,
+                multiplier REAL DEFAULT 9,
+                win_amount REAL DEFAULT 0,
+                result_num TEXT DEFAULT '',
+                status TEXT DEFAULT 'pending',
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        for k, n, tm, loc, oldn, newn in [
+            ('asgames', 'AS GAMES', 'Live 24/7', 1, '47', '83'),
+            ('faridabad', 'FARIDABAD', '06:15 PM', 0, '62', '--'),
+            ('gaziabad', 'GAZIABAD', '08:40 PM', 0, '19', '--'),
+            ('gali', 'GALI', '11:30 PM', 0, '74', '--'),
+            ('disawar', 'DISAWAR', '05:10 AM', 0, '35', '--'),
+        ]:
+            cursor.execute('INSERT OR IGNORE INTO king_markets (key, name, time, is_local, old_num, new_num) VALUES (?, ?, ?, ?, ?, ?)',
+                           (k, n, tm, loc, oldn, newn))
         conn.commit()
 
 init_db()
@@ -1897,6 +1933,193 @@ def api_game_my_history():
                 })
     unified.sort(key=lambda x: str(x.get('created_at', '')), reverse=True)
     return jsonify({'success': True, 'history': unified[:80]})
+
+
+# ========================================================
+# AS KING / MATKA NUMBER GAME (FARIDABAD, GAZIABAD, GALI, DISAWAR + LOCAL AS GAMES)
+# ========================================================
+
+import re as _re
+_LAST_KING_FETCH = 0.0
+
+def _settle_king_market_bets(conn, market_key, num2):
+    c = conn.cursor()
+    num2 = str(num2).zfill(2)[-2:]
+    andar_d, bahar_d = num2[0], num2[1]
+    c.execute('SELECT * FROM king_bets WHERE market = ? AND status = "pending"', (market_key,))
+    rows = c.fetchall()
+    settled, total_pay = 0, 0.0
+    for b in rows:
+        bt = b['bet_type']
+        num = str(b['number'])
+        is_win, mult = False, 9
+        if bt == 'andar':
+            is_win = (num == andar_d)
+            mult = 9
+        elif bt == 'bahar':
+            is_win = (num == bahar_d)
+            mult = 9
+        elif bt == 'jodi':
+            is_win = (num.zfill(2) == num2)
+            mult = 90
+        settled += 1
+        win_amt = round(float(b['amount']) * mult, 2) if is_win else 0.0
+        st = 'won' if is_win else 'lost'
+        c.execute('UPDATE king_bets SET status=?, win_amount=?, result_num=? WHERE id=?', (st, win_amt, num2, b['id']))
+        c.execute('UPDATE game_history SET status=?, win_amount=?, detail=? WHERE id=? AND user_id=?',
+                  ('Won' if is_win else 'Lost', win_amt, f"{market_key.upper()} • {bt.upper()} {num} (Result: {num2})", b['id'], b['user_id']))
+        if is_win:
+            total_pay += win_amt
+            c.execute('UPDATE users SET balance = balance + ? WHERE id = ?', (win_amt, b['user_id']))
+            c.execute('INSERT INTO transactions (id, user_id, type, amount, status, details, created_at) VALUES (?, ?, "win", ?, "approved", ?, ?)',
+                      (f"KNG{int(time.time()*1000)}{random.randint(10,99)}", b['user_id'], win_amt, f"AS King ({market_key.upper()} #{num2}) Win", datetime.now().isoformat()))
+    return settled, total_pay
+
+def _fetch_king_net(force=False):
+    global _LAST_KING_FETCH
+    if not force and (time.time() - _LAST_KING_FETCH < 600):
+        return False, []
+    _LAST_KING_FETCH = time.time()
+    updated = []
+    for url in ('https://satta-king-fast.com/', 'https://sattaking-up.com/'):
+        try:
+            req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+            with urllib.request.urlopen(req, timeout=4) as resp:
+                html = resp.read().decode('utf-8', errors='ignore')
+            txt = _re.sub(r'<script[\s\S]*?</script>', ' ', html, flags=_re.I)
+            txt = _re.sub(r'<style[\s\S]*?</style>', ' ', txt, flags=_re.I)
+            txt = _re.sub(r'<[^>]+>', ' ', txt)
+            txt = _re.sub(r'\s+', ' ', txt)
+            pats = [
+                ('faridabad', r'FARIDABAD[\s\S]{0,120}?(\b\d{2}\b)[\s\S]{0,40}?(\b\d{2}\b|--|XX)'),
+                ('gaziabad',  r'GHA?ZIABAD[\s\S]{0,120}?(\b\d{2}\b)[\s\S]{0,40}?(\b\d{2}\b|--|XX)'),
+                ('gali',      r'\bGALI\b[\s\S]{0,120}?(\b\d{2}\b)[\s\S]{0,40}?(\b\d{2}\b|--|XX)'),
+                ('disawar',   r'D[EI]SAWAR[\s\S]{0,120}?(\b\d{2}\b)[\s\S]{0,40}?(\b\d{2}\b|--|XX)'),
+            ]
+            with get_db() as conn:
+                c = conn.cursor()
+                for key, pat in pats:
+                    m = _re.search(pat, txt, flags=_re.I)
+                    if m:
+                        old_n, raw_new = m.group(1), m.group(2)
+                        new_n = raw_new if _re.fullmatch(r'\d{2}', raw_new) else '--'
+                        c.execute('SELECT new_num FROM king_markets WHERE key=?', (key,))
+                        row = c.fetchone()
+                        prev_new = row['new_num'] if row else '--'
+                        c.execute('UPDATE king_markets SET old_num=?, new_num=?, updated_at=? WHERE key=?',
+                                  (old_n, new_n, datetime.now().isoformat(), key))
+                        updated.append(f"{key.upper()}:{old_n}->{new_n}")
+                        if _re.fullmatch(r'\d{2}', new_n) and new_n != prev_new:
+                            _settle_king_market_bets(conn, key, new_n)
+                conn.commit()
+            if updated:
+                return True, updated
+        except Exception:
+            pass
+    return False, updated
+
+@app.route('/api/king/markets', methods=['GET'])
+def api_king_markets():
+    user = get_current_user(request)
+    with get_db() as conn:
+        c = conn.cursor()
+        c.execute('SELECT * FROM king_markets')
+        markets = [dict(r) for r in c.fetchall()]
+        order = {'asgames': 0, 'faridabad': 1, 'gaziabad': 2, 'gali': 3, 'disawar': 4}
+        markets.sort(key=lambda m: order.get(m['key'], 9))
+        my_bets = []
+        if user:
+            c.execute('SELECT * FROM king_bets WHERE user_id = ? ORDER BY created_at DESC LIMIT 40', (user['id'],))
+            my_bets = [dict(r) for r in c.fetchall()]
+    return jsonify({'success': True, 'markets': markets, 'my_bets': my_bets})
+
+@app.route('/api/king/bet', methods=['POST'])
+def api_king_bet():
+    user = get_current_user(request)
+    if not user:
+        return jsonify({'success': False, 'message': 'Unauthorized'}), 401
+    data = request.get_json(silent=True) or {}
+    market = str(data.get('market', 'asgames')).lower().strip()
+    bet_type = str(data.get('bet_type', 'bahar')).lower().strip()
+    raw_num = str(data.get('number', '')).strip()
+    amount = float(data.get('amount', 0) or 0)
+    if market not in ('asgames', 'faridabad', 'gaziabad', 'gali', 'disawar'):
+        return jsonify({'success': False, 'message': 'Invalid market.'}), 400
+    if bet_type not in ('andar', 'bahar', 'jodi'):
+        return jsonify({'success': False, 'message': 'Invalid bet type.'}), 400
+    if amount < 10:
+        return jsonify({'success': False, 'message': 'Minimum bet amount is ₹10.'}), 400
+    clean_num = raw_num.zfill(2) if bet_type == 'jodi' else raw_num
+    if bet_type == 'jodi' and not _re.fullmatch(r'\d{2}', clean_num):
+        return jsonify({'success': False, 'message': 'Enter a valid 2-digit Jodi (00-99).'}), 400
+    if bet_type in ('andar', 'bahar') and not _re.fullmatch(r'\d', clean_num):
+        return jsonify({'success': False, 'message': 'Select a valid single digit (0-9).'}), 400
+    mult = 90 if bet_type == 'jodi' else 9
+    bet_id = f"KB{int(time.time()*1000)}{random.randint(10,99)}"
+    now_iso = datetime.now().isoformat()
+    with get_db() as conn:
+        c = conn.cursor()
+        c.execute('SELECT balance FROM users WHERE id=?', (user['id'],))
+        cur_bal = float(c.fetchone()['balance'])
+        if cur_bal < amount:
+            return jsonify({'success': False, 'message': 'Insufficient balance! Please deposit.'}), 400
+        c.execute('UPDATE users SET balance = MAX(0, balance - ?) WHERE id=?', (amount, user['id']))
+        new_bal = round(max(0.0, cur_bal - amount), 2)
+        c.execute('''INSERT INTO king_bets (id, user_id, phone, market, bet_type, number, amount, multiplier, win_amount, result_num, status, created_at)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, "", "pending", ?)''',
+                  (bet_id, user['id'], user['phone'], market, bet_type, clean_num, amount, mult, now_iso))
+        c.execute('''INSERT INTO game_history (id, user_id, game, detail, bet_amount, win_amount, status, created_at)
+                     VALUES (?, ?, "AS King", ?, ?, 0, "Pending", ?)''',
+                  (bet_id, user['id'], f"{market.upper()} • {bet_type.upper()} {clean_num} ({mult}x)", amount, now_iso))
+        conn.commit()
+    return jsonify({
+        'success': True,
+        'balance': new_bal,
+        'message': f"🎯 Bet ₹{amount:.0f} placed on {market.upper()} ({bet_type.upper()} {clean_num}) — Win ₹{amount*mult:.0f}!"
+    })
+
+@app.route('/api/admin/king/declare', methods=['POST'])
+def api_admin_king_declare():
+    ok, _ = verify_admin(request)
+    if not ok:
+        return jsonify({'success': False, 'message': 'Unauthorized'}), 403
+    data = request.get_json(silent=True) or {}
+    market = str(data.get('market', 'asgames')).lower().strip()
+    raw = str(data.get('result_num', '')).strip()
+    if market not in ('asgames', 'faridabad', 'gaziabad', 'gali', 'disawar') or not _re.fullmatch(r'\d{1,2}', raw):
+        return jsonify({'success': False, 'message': 'Valid market & 2-digit number (00-99) required.'}), 400
+    num2 = raw.zfill(2)
+    with get_db() as conn:
+        c = conn.cursor()
+        c.execute('SELECT name, new_num FROM king_markets WHERE key=?', (market,))
+        row = c.fetchone()
+        prev_new = row['new_num'] if row else '--'
+        if _re.fullmatch(r'\d{2}', str(prev_new)):
+            c.execute('UPDATE king_markets SET old_num=?, new_num=?, updated_at=? WHERE key=?', (prev_new, num2, datetime.now().isoformat(), market))
+        else:
+            c.execute('UPDATE king_markets SET new_num=?, updated_at=? WHERE key=?', (num2, datetime.now().isoformat(), market))
+        settled, total_pay = _settle_king_market_bets(conn, market, num2)
+        conn.commit()
+        c.execute('SELECT * FROM king_markets')
+        markets = [dict(r) for r in c.fetchall()]
+    return jsonify({'success': True, 'markets': markets, 'message': f"👑 {market.upper()} Result Declared: {num2}! Settled {settled} bets (Payout: ₹{total_pay:.2f})."})
+
+@app.route('/api/admin/king/fetch-net', methods=['POST'])
+def api_admin_king_fetch_net():
+    ok, _ = verify_admin(request)
+    if not ok:
+        return jsonify({'success': False, 'message': 'Unauthorized'}), 403
+    fetched, upd = _fetch_king_net(True)
+    with get_db() as conn:
+        c = conn.cursor()
+        c.execute('SELECT * FROM king_markets')
+        markets = [dict(r) for r in c.fetchall()]
+    return jsonify({
+        'success': True,
+        'fetched': fetched,
+        'markets': markets,
+        'message': f"🌐 Live Net Results Synced: {', '.join(upd)}" if fetched else 'Live net feed busy — showing latest cached results. You can also declare any number manually!'
+    })
 
 
 # ========================================================
