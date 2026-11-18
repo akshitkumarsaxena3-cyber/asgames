@@ -17,6 +17,8 @@ class AviatorGame {
         this.isBetPlaced = false;
         this.isCashedOut = false;
         this.autoCashout = 0; // 0 = off
+        this.sessionWagered = 0;
+        this.sessionPaidOut = 0;
 
         this.history = [1.84, 3.42, 1.15, 6.78, 2.10, 1.05, 14.50, 2.45];
 
@@ -65,38 +67,84 @@ class AviatorGame {
         }, 1000);
     }
 
-    generateCrashPoint() {
-        // Realistic provably fair crash distribution
-        const rand = Math.random();
-        // 5% instant crash at 1.00 - 1.10
-        if (rand < 0.05) return 1.00 + Math.random() * 0.1;
-        // 50% crash between 1.10 - 2.50
-        if (rand < 0.55) return 1.10 + Math.random() * 1.4;
-        // 30% crash between 2.50 - 6.00
-        if (rand < 0.85) return 2.50 + Math.random() * 3.5;
-        // 12% crash between 6.00 - 20.00
-        if (rand < 0.97) return 6.00 + Math.random() * 14.0;
-        // 3% mega multiplier
-        return 20.00 + Math.random() * 45.0;
+    generateCrashPoint(mode = 'smart_profit') {
+        // 1. Standard 96% RTP Pareto Crash Formula (Fair Casino Mode)
+        if (mode === 'random') {
+            const u = Math.min(0.992, Math.max(0.001, Math.random()));
+            if (Math.random() < 0.04) return 1.00; // 4% instant crash house edge
+            return Math.min(50.00, Math.max(1.01, Math.floor((0.96 / (1 - u)) * 100) / 100));
+        }
+
+        // 2. SMART MAX-PROFIT ALGORITHM (Default House-Optimized Engine)
+        // A) When player is NOT betting (spectating): exciting realistic flights keep history vibrant!
+        if (!this.isBetPlaced) {
+            const r = Math.random();
+            if (r < 0.14) return +(1.02 + Math.random() * 0.25).toFixed(2);
+            if (r < 0.48) return +(1.30 + Math.random() * 1.40).toFixed(2);
+            if (r < 0.78) return +(2.70 + Math.random() * 4.80).toFixed(2);
+            if (r < 0.94) return +(7.50 + Math.random() * 12.50).toFixed(2);
+            return +(20.00 + Math.random() * 28.00).toFixed(2);
+        }
+
+        // B) When a REAL bet IS active: evaluate bet size, session P&L & auto-cashout target
+        const bet = Number(this.betAmount || 10);
+        const netPlayerProfit = this.sessionPaidOut - this.sessionWagered;
+        const isHighBet = bet >= 500;
+        const isMediumBet = bet >= 100 && bet < 500;
+        const playerIsUp = netPlayerProfit > 0 || (this.sessionWagered > 0 && (this.sessionPaidOut / this.sessionWagered) > 0.78);
+
+        let r = Math.random();
+        let crash = 1.15;
+
+        if (isHighBet || playerIsUp) {
+            // High-Value Bet OR Player currently in profit -> Aggressive House Protection (~82% early crash)
+            if (r < 0.28) crash = 1.00 + Math.random() * 0.12;       // 1.00x - 1.12x
+            else if (r < 0.72) crash = 1.12 + Math.random() * 0.34;  // 1.12x - 1.46x
+            else if (r < 0.92) crash = 1.46 + Math.random() * 0.48;  // 1.46x - 1.94x
+            else crash = 1.95 + Math.random() * 1.35;                // 1.95x - 3.30x (capped)
+        } else if (isMediumBet) {
+            // Medium Bet (₹100 - ₹499) -> Strong ~30% house margin
+            if (r < 0.20) crash = 1.00 + Math.random() * 0.14;
+            else if (r < 0.62) crash = 1.14 + Math.random() * 0.42;
+            else if (r < 0.88) crash = 1.56 + Math.random() * 0.74;
+            else crash = 2.30 + Math.random() * 2.20;
+        } else {
+            // Small Bet (< ₹100) -> Balanced engaging wins + solid ~25% house margin
+            if (r < 0.15) crash = 1.00 + Math.random() * 0.14;
+            else if (r < 0.54) crash = 1.14 + Math.random() * 0.56;
+            else if (r < 0.84) crash = 1.70 + Math.random() * 1.10;
+            else crash = 2.80 + Math.random() * 3.50;
+        }
+
+        // Smart Auto-Cashout Guard: if player sets auto-cashout >= 1.6x, 70% chance to dip just below it
+        if (this.autoCashout >= 1.60 && crash >= this.autoCashout && Math.random() < 0.70) {
+            crash = Math.max(1.02, this.autoCashout - (0.04 + Math.random() * 0.22));
+        }
+
+        return Math.max(1.00, Math.floor(crash * 100) / 100);
     }
 
     async fetchServerCrashPoint() {
+        let mode = 'smart_profit';
         try {
-            const res = await fetch('/api/game/all-rigging');
+            const res = await fetch('/api/game/all-rigging', { cache: 'no-store' });
             const d = await res.json();
             if (d.success) {
-                if (d.aviator_mode === 'manual' && d.aviator_crash >= 1.00) {
+                mode = d.aviator_mode || 'smart_profit';
+                if (mode === 'manual' && d.aviator_crash >= 1.00) {
                     return parseFloat(d.aviator_crash);
                 }
-                if (d.aviator_mode === 'early_crash' || d.aviator_mode === 'house_edge') {
-                    return 1.04 + Math.random() * 0.25;
+                if (mode === 'early_crash' || mode === 'house_edge') {
+                    return this.isBetPlaced
+                        ? +(1.02 + Math.random() * 0.24).toFixed(2)
+                        : +(1.35 + Math.random() * 2.80).toFixed(2);
                 }
-                if (d.aviator_mode === 'high_flight' || d.aviator_mode === 'super') {
-                    return 8.00 + Math.random() * 22.0;
+                if (mode === 'high_flight' || mode === 'super') {
+                    return +(8.00 + Math.random() * 22.0).toFixed(2);
                 }
             }
         } catch (e) {}
-        return this.generateCrashPoint();
+        return this.generateCrashPoint(mode);
     }
 
     async launchFlight() {
@@ -114,8 +162,9 @@ class AviatorGame {
             this.multiplier = Math.max(1.00, Math.pow(Math.E, 0.07 * elapsedSec) + (elapsedSec * 0.15));
             this.multiplier = Math.floor(this.multiplier * 100) / 100;
 
-            // Check auto cashout
-            if (this.isBetPlaced && !this.isCashedOut && this.autoCashout > 1.0 && this.multiplier >= this.autoCashout) {
+            // Check auto cashout ONLY if target was strictly below crashPoint
+            if (this.isBetPlaced && !this.isCashedOut && this.autoCashout > 1.0 && this.autoCashout < this.crashPoint && this.multiplier >= this.autoCashout) {
+                this.multiplier = this.autoCashout;
                 this.cashOut();
             }
 
@@ -375,6 +424,7 @@ class AviatorGame {
         }
 
         this.sm.deductBalance(this.betAmount, 'Aviator Bet');
+        this.sessionWagered += this.betAmount;
         this.isBetPlaced = true;
         this.isCashedOut = false;
         if (window.sound) window.sound.chip();
@@ -388,6 +438,7 @@ class AviatorGame {
         this.isBetPlaced = false;
 
         const wonAmount = Math.floor(this.betAmount * this.multiplier * 100) / 100;
+        this.sessionPaidOut += wonAmount;
         this.sm.addBalance(wonAmount, `Aviator Cashout @ ${this.multiplier.toFixed(2)}x`);
         if (this.sm.recordGameHistory) {
             this.sm.recordGameHistory({

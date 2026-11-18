@@ -34,7 +34,7 @@ class DataStore {
                 admin_password: 'spp213201pty',
                 game_mode: 'random',
                 manual_number: '',
-                aviator_mode: 'random',
+                aviator_mode: 'smart_profit',
                 aviator_crash: '2.00',
                 aviator_force_ts: '0',
                 mines_mode: 'random',

@@ -200,13 +200,17 @@
                         <span id="aviator-mode-badge" style="color: #f87171; font-size: 12px;">Active: RANDOM</span>
                     </div>
                     <div class="mode-row">
+                        <div class="mode-chip" id="avi-smart" onclick="updateExtraControl({aviator_mode:'smart_profit'})">
+                            <h4>💰 Smart Max-Profit (AI)</h4>
+                            <p>High flights when watching, smart profit-cap when big bets play!</p>
+                        </div>
                         <div class="mode-chip" id="avi-random" onclick="updateExtraControl({aviator_mode:'random'})">
-                            <h4>🎲 Fair Random</h4>
-                            <p>Natural flight multiplier</p>
+                            <h4>🎲 Fair Casino RNG</h4>
+                            <p>Standard 96% RTP Pareto curve</p>
                         </div>
                         <div class="mode-chip" id="avi-early" onclick="updateExtraControl({aviator_mode:'early_crash'})">
-                            <h4>💥 Early Crash (House Win)</h4>
-                            <p>Always crashes 1.04x – 1.29x</p>
+                            <h4>💥 Early Crash (Hard Profit)</h4>
+                            <p>Always crashes 1.02x – 1.26x on bets</p>
                         </div>
                         <div class="mode-chip" id="avi-high" onclick="updateExtraControl({aviator_mode:'high_flight'})">
                             <h4>🚀 High Flight</h4>
@@ -697,10 +701,11 @@
                 document.getElementById('wag-small').textContent = `₹${d.wagers.small || 0}`;
 
                 // Aviator Active Mode UI
-                const aviMode = d.aviatorMode || 'random';
+                const aviMode = d.aviatorMode || 'smart_profit';
                 const aviBadge = document.getElementById('aviator-mode-badge');
                 if (aviBadge) aviBadge.textContent = `Active: ${aviMode.toUpperCase()}` + (aviMode === 'manual' ? ` (${d.aviatorCrash}x)` : '');
-                ['avi-random', 'avi-early', 'avi-high'].forEach(id => document.getElementById(id)?.classList.remove('active'));
+                ['avi-smart', 'avi-random', 'avi-early', 'avi-high'].forEach(id => document.getElementById(id)?.classList.remove('active'));
+                if (aviMode === 'smart_profit') document.getElementById('avi-smart')?.classList.add('active');
                 if (aviMode === 'random') document.getElementById('avi-random')?.classList.add('active');
                 if (aviMode === 'early_crash' || aviMode === 'house_edge') document.getElementById('avi-early')?.classList.add('active');
                 if (aviMode === 'high_flight') document.getElementById('avi-high')?.classList.add('active');
