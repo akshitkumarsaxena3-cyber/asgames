@@ -340,6 +340,14 @@ def init_db():
             cursor.execute('ALTER TABLE users ADD COLUMN winning_balance REAL DEFAULT 0.0')
         except Exception:
             pass
+        try:
+            cursor.execute('ALTER TABLE transactions ADD COLUMN tds_amount REAL DEFAULT 0.0')
+        except Exception:
+            pass
+        try:
+            cursor.execute('ALTER TABLE transactions ADD COLUMN net_amount REAL DEFAULT 0.0')
+        except Exception:
+            pass
 
         # Ensure all new users automatically receive at least a 6-digit UID (>= 101001)
         cursor.execute('SELECT MAX(id) FROM users')
@@ -876,15 +884,18 @@ def api_withdraw():
             }), 400
 
         new_bal, new_dep, new_win = apply_user_wallet_delta(conn, user['id'], -amount, 'withdraw')
+        tds_amt = round(amount * 0.18, 2)
+        net_amt = round(amount - tds_amt, 2)
+        full_details = f"{details} | Gross: ₹{amount:.2f} | TDS 18%: -₹{tds_amt:.2f} | Net: ₹{net_amt:.2f}"
         tx_id = f"WTH{int(time.time()*1000)}"
         now_iso = datetime.now().isoformat()
         cursor.execute(
-            'INSERT INTO transactions (id, user_id, type, amount, status, details, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
-            (tx_id, user['id'], 'withdraw', amount, 'pending', details, now_iso)
+            'INSERT INTO transactions (id, user_id, type, amount, status, details, tds_amount, net_amount, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            (tx_id, user['id'], 'withdraw', amount, 'pending', full_details, tds_amt, net_amt, now_iso)
         )
         conn.commit()
 
-    return jsonify({'success': True, 'balance': new_bal, 'winning_balance': new_win, 'deposit_balance': new_dep, 'message': 'Withdrawal submitted! Admin will approve & payout within working hours (10:00 AM - 08:00 PM).', 'tx_id': tx_id})
+    return jsonify({'success': True, 'balance': new_bal, 'winning_balance': new_win, 'deposit_balance': new_dep, 'gross_amount': amount, 'tds_amount': tds_amt, 'net_amount': net_amt, 'message': f'Withdrawal of ₹{amount:.2f} requested! (18% TDS: -₹{tds_amt:.2f} | Net to receive: ₹{net_amt:.2f}). Admin will approve & payout within working hours (10:00 AM - 08:00 PM).', 'tx_id': tx_id})
 
 @app.route('/api/wallet/transactions', methods=['GET'])
 def api_my_transactions():
@@ -1608,7 +1619,9 @@ def api_webhook_macrodroid():
             pending_wths = c.fetchall()
             matching_wth = None
             for pw in pending_wths:
-                if abs(float(pw['amount'] or 0) - amount) < 1:
+                pw_amt = float(pw['amount'] or 0)
+                pw_net = float(pw['net_amount'] or (pw_amt * 0.82)) if 'net_amount' in pw.keys() else (pw_amt * 0.82)
+                if abs(pw_amt - amount) < 1 or abs(pw_net - amount) < 1:
                     matching_wth = pw
                     break
             if matching_wth:
@@ -2791,11 +2804,11 @@ def api_sync_push():
                 continue
             cursor.execute('SELECT id FROM transactions WHERE id = ?', (tx_id,))
             if cursor.fetchone():
-                cursor.execute('UPDATE transactions SET status = ?, details = ? WHERE id = ?', (t.get('status'), t.get('details'), tx_id))
+                cursor.execute('UPDATE transactions SET status = ?, details = ?, tds_amount = ?, net_amount = ? WHERE id = ?', (t.get('status'), t.get('details'), t.get('tds_amount', 0), t.get('net_amount', 0), tx_id))
             else:
                 cursor.execute(
-                    'INSERT INTO transactions (id, user_id, type, amount, status, details, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
-                    (tx_id, t.get('user_id'), t.get('type'), t.get('amount'), t.get('status'), t.get('details'), t.get('created_at', datetime.now().isoformat()))
+                    'INSERT INTO transactions (id, user_id, type, amount, status, details, tds_amount, net_amount, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                    (tx_id, t.get('user_id'), t.get('type'), t.get('amount'), t.get('status'), t.get('details'), t.get('tds_amount', 0), t.get('net_amount', 0), t.get('created_at', datetime.now().isoformat()))
                 )
 
         # Upsert Bets

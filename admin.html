@@ -1199,19 +1199,22 @@
 
         let activePayoutModalTxId = null;
 
-        function showPayoutQR(txId, upiId, amount, phone) {
+        function showPayoutQR(txId, upiId, amount, phone, grossAmount, tdsAmount) {
             activePayoutModalTxId = txId;
+            const net = parseFloat(amount);
+            const gross = grossAmount ? parseFloat(grossAmount) : Math.round(net / 0.82 * 100) / 100;
+            const tds = tdsAmount ? parseFloat(tdsAmount) : Math.round((gross - net) * 100) / 100;
             const upiUrl = 'upi://pay?pa=' + encodeURIComponent(upiId) +
                 '&pn=' + encodeURIComponent('Player_' + (phone || 'ASGames')) +
-                '&am=' + parseFloat(amount).toFixed(2) +
-                '&cu=INR&tn=' + encodeURIComponent('ASGames Withdrawal ' + txId);
+                '&am=' + net.toFixed(2) +
+                '&cu=INR&tn=' + encodeURIComponent('ASGames Payout ' + txId);
 
             const amtEl = document.getElementById('payout-modal-amount');
             const upiEl = document.getElementById('payout-modal-upi');
             const phEl = document.getElementById('payout-modal-phone');
             const qrImg = document.getElementById('payout-modal-qr-img');
 
-            if (amtEl) amtEl.textContent = '₹' + parseFloat(amount).toFixed(2);
+            if (amtEl) amtEl.innerHTML = `₹${net.toFixed(2)} <span style="font-size:11px; color:#94a3b8; font-weight:normal; display:block; margin-top:2px;">Gross: ₹${gross.toFixed(2)} • 18% TDS: -₹${tds.toFixed(2)}</span>`;
             if (upiEl) upiEl.textContent = upiId;
             if (phEl) phEl.textContent = phone || '--';
             if (qrImg) qrImg.src = 'https://api.qrserver.com/v1/create-qr-code/?size=250x250&margin=8&data=' + encodeURIComponent(upiUrl);
@@ -1347,11 +1350,15 @@
                 let destHtml = '';
                 let fastPayHtml = '';
 
+                const gross = parseFloat(t.amount || 0);
+                const tds = t.tds_amount ? parseFloat(t.tds_amount) : Math.round(gross * 0.18 * 100) / 100;
+                const netPay = t.net_amount ? parseFloat(t.net_amount) : Math.round((gross - tds) * 100) / 100;
+
                 if (parsed.upiId) {
                     const upiUrl = 'upi://pay?pa=' + encodeURIComponent(parsed.upiId) +
                         '&pn=' + encodeURIComponent('Player_' + (t.phone || 'ASGames')) +
-                        '&am=' + parseFloat(t.amount).toFixed(2) +
-                        '&cu=INR&tn=' + encodeURIComponent('ASGames Withdrawal ' + t.id);
+                        '&am=' + netPay.toFixed(2) +
+                        '&cu=INR&tn=' + encodeURIComponent('ASGames Net Payout ' + t.id);
 
                     destHtml = `
                         <div>
@@ -1363,8 +1370,8 @@
 
                     fastPayHtml = `
                         <div style="display:flex; flex-direction:column; gap:6px;">
-                            <a href="${upiUrl}" class="btn-quick-upi" target="_blank" title="PhonePe / GPay / Paytm opens with amount pre-filled">⚡ Pay via UPI</a>
-                            <button type="button" class="btn-quick-qr" onclick="showPayoutQR('${t.id}', '${parsed.upiId}', ${t.amount}, '${t.phone}')">📷 Scan QR</button>
+                            <a href="${upiUrl}" class="btn-quick-upi" target="_blank" title="PhonePe / GPay / Paytm opens with net amount pre-filled">⚡ Pay ₹${netPay.toFixed(2)} via UPI</a>
+                            <button type="button" class="btn-quick-qr" onclick="showPayoutQR('${t.id}', '${parsed.upiId}', ${netPay}, '${t.phone}', ${gross}, ${tds})">📷 Scan QR</button>
                         </div>
                     `;
                 } else if (parsed.type === 'BANK') {
@@ -1388,7 +1395,7 @@
                     fastPayHtml = `
                         <div style="font-size:11px; color:#94a3b8; line-height:1.4;">
                             <div>1. 📋 Copy A/C &amp; IFSC</div>
-                            <div>2. Pay from Bank App</div>
+                            <div>2. Pay from Bank App: <strong style="color:#34d399;">₹${netPay.toFixed(2)}</strong></div>
                             <div style="color:#34d399; margin-top:3px; font-weight:700;">IMPS / NEFT</div>
                         </div>
                     `;
@@ -1400,19 +1407,24 @@
                             <button type="button" class="btn-copy-chip" onclick="copyAdminText('${parsed.usdt}', 'USDT Address Copied!')">📋 Copy Address</button>
                         </div>
                     `;
-                    fastPayHtml = `<span style="font-size:11px; color:#eab308; font-weight:600;">Crypto Transfer</span>`;
+                    fastPayHtml = `<span style="font-size:11px; color:#eab308; font-weight:600;">Crypto Transfer (₹${netPay.toFixed(2)})</span>`;
                 } else {
                     destHtml = `
                         <div style="font-size:12px; color:#cbd5e1;">${t.details || 'N/A'}</div>
                     `;
-                    fastPayHtml = `<span style="font-size:11px; color:#94a3b8;">Manual Transfer</span>`;
+                    fastPayHtml = `<span style="font-size:11px; color:#94a3b8;">Manual Transfer (₹${netPay.toFixed(2)})</span>`;
                 }
 
                 return `
                     <tr>
                         <td><span style="font-family:monospace; font-size:11px; color:#94a3b8;">${t.id}</span></td>
                         <td><strong style="color:#fff;">${t.phone}</strong></td>
-                        <td><span style="color:#ef4444; font-weight:800; font-size:14px;">₹${parseFloat(t.amount).toFixed(2)}</span></td>
+                        <td>
+                            <div style="color:#10b981; font-weight:800; font-size:15px;">₹${netPay.toFixed(2)} <span style="font-size:10px; color:#10b981; background:rgba(16,185,129,0.15); padding:1px 5px; border-radius:3px;">Net</span></div>
+                            <div style="font-size:10.5px; color:#94a3b8; margin-top:2px;">
+                                Gross: <span style="color:#f87171;">₹${gross.toFixed(2)}</span> • TDS (18%): <span style="color:#ef4444;">-₹${tds.toFixed(2)}</span>
+                            </div>
+                        </td>
                         <td>${destHtml}</td>
                         <td>${fastPayHtml}</td>
                         <td><span style="font-size:11px; color:#71717a;">${(t.created_at || '').replace('T', ' ').slice(0, 19)}</span></td>

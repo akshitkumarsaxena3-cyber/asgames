@@ -535,7 +535,9 @@ class StateManager {
                             ? d.balance
                             : Math.max(0, this.balance - amt);
                         this.setLocalBalance(updatedBal, 'down');
-                        this.showToast(`Withdrawal ₹${amt} submitted! Balance updated.`, 'success');
+                        const tds = Math.round(amt * 0.18 * 100) / 100;
+                        const net = Math.max(0, Math.round((amt - tds) * 100) / 100);
+                        this.showToast(`Withdrawal ₹${amt.toFixed(2)} requested! (18% TDS: -₹${tds.toFixed(2)} | Net Received: ₹${net.toFixed(2)})`, 'success');
                         if (amtInput) amtInput.value = '';
                         if (typeof updateWithdrawSummary === 'function') updateWithdrawSummary();
                         if (typeof loadWithdrawPageHistory === 'function') loadWithdrawPageHistory();
@@ -2316,10 +2318,15 @@ function updateWithdrawSummary() {
         winningBal = typeof sm.user.winning_balance === 'number' ? sm.user.winning_balance : bal;
     }
 
+    const tds = Math.round(amt * 0.18 * 100) / 100;
+    const net = Math.max(0, Math.round((amt - tds) * 100) / 100);
+    const tdsEl = document.getElementById('wd-tds-val');
+
     if (depEl) depEl.textContent = `₹${depositBal.toFixed(2)}`;
     if (winEl) winEl.textContent = `₹${winningBal.toFixed(2)}`;
     if (wBalEl) wBalEl.textContent = `₹${winningBal.toFixed(2)}`;
-    if (recvEl) recvEl.textContent = `₹${amt.toFixed(2)}`;
+    if (tdsEl) tdsEl.textContent = `-₹${tds.toFixed(2)}`;
+    if (recvEl) recvEl.textContent = `₹${net.toFixed(2)}`;
 
     // Check IST time: 10:00 AM to 08:00 PM IST
     const now = new Date();

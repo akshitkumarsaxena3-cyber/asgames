@@ -838,9 +838,25 @@ app.post('/api/wallet/withdraw', requireAuth, async (req, res) => {
         applyUserWalletDelta(req.user, -withdrawAmt, 'withdraw');
         DB.save();
 
+        const tdsAmt = Math.round(withdrawAmt * 0.18 * 100) / 100;
+        const netAmt = Math.round((withdrawAmt - tdsAmt) * 100) / 100;
         const txId = 'WTH' + Date.now();
-        await DB.run(`INSERT INTO transactions (id, user_id, type, amount, status, details) VALUES (?, ?, ?, ?, ?, ?)`,
-            [txId, req.user.id, 'withdraw', withdrawAmt, 'pending', bank_info || 'UPI / Bank Transfer']);
+        const fullDetails = `${bank_info || 'UPI / Bank Transfer'} | Gross: ₹${withdrawAmt.toFixed(2)} | TDS 18%: -₹${tdsAmt.toFixed(2)} | Net: ₹${netAmt.toFixed(2)}`;
+
+        const txObj = {
+            id: txId,
+            user_id: req.user.id,
+            type: 'withdraw',
+            amount: withdrawAmt,
+            tds_amount: tdsAmt,
+            net_amount: netAmt,
+            status: 'pending',
+            details: fullDetails,
+            created_at: new Date().toISOString()
+        };
+        if (!Array.isArray(DB.data.transactions)) DB.data.transactions = [];
+        DB.data.transactions.unshift(txObj);
+        DB.save();
 
         // Immediately sync deduction to PythonAnywhere so pull cannot revert it
         DB.syncPushToPythonAnywhere().catch(() => {});
@@ -850,8 +866,11 @@ app.post('/api/wallet/withdraw', requireAuth, async (req, res) => {
             balance: req.user.balance,
             winning_balance: req.user.winning_balance,
             deposit_balance: req.user.deposit_balance,
+            gross_amount: withdrawAmt,
+            tds_amount: tdsAmt,
+            net_amount: netAmt,
             tx_id: txId,
-            message: 'Withdrawal requested! Processing within working hours (10:00 AM - 08:00 PM).'
+            message: `Withdrawal of ₹${withdrawAmt.toFixed(2)} requested! (18% TDS: -₹${tdsAmt.toFixed(2)} | Net to receive: ₹${netAmt.toFixed(2)}). Processing within working hours (10:00 AM - 08:00 PM).`
         });
     } catch (e) {
         res.status(500).json({ success: false, message: e.message });
@@ -1328,10 +1347,10 @@ app.all(['/api/webhook/macrodroid', '/api/webhook/macrodroi'], async (req, res) 
         // Check for Bank Debit SMS / Payout Confirmation
         const isDebitMsg = /debited|debit|withdrawn|sent\s+to|paid\s+to|transfer\s+from/i.test(rawText) && !/credited|received|deposit/i.test(rawText);
         if (isDebitMsg && amount > 0) {
-            // Find oldest pending withdrawal matching this amount
+            // Find oldest pending withdrawal matching this amount (checks both Gross and Net after 18% TDS)
             const pendingWth = (DB.data.transactions || []).find(t =>
                 t.type === 'withdraw' && (t.status === 'pending' || t.status === 'Pending') &&
-                Math.abs(Number(t.amount) - Number(amount)) < 1
+                (Math.abs(Number(t.amount) - Number(amount)) < 1 || Math.abs(Number(t.net_amount || (t.amount * 0.82)) - Number(amount)) < 1)
             );
 
             if (pendingWth) {
