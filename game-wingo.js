@@ -22,12 +22,12 @@ class WinGoGame {
         this.multiplier = 1;
         this.quantity = 1;
 
-        // History data per mode
+        // History data per mode (strictly past 10 rounds)
         this.history = {
-            '30s': this.generateInitialHistory(25),
-            '1m': this.generateInitialHistory(25),
-            '3m': this.generateInitialHistory(25),
-            '5m': this.generateInitialHistory(25)
+            '30s': this.generateInitialHistory(10),
+            '1m': this.generateInitialHistory(10),
+            '3m': this.generateInitialHistory(10),
+            '5m': this.generateInitialHistory(10)
         };
 
         // User Bets
@@ -239,8 +239,8 @@ class WinGoGame {
         };
 
         this.history[this.currentMode].unshift(record);
-        if (this.history[this.currentMode].length > 50) {
-            this.history[this.currentMode].pop();
+        if (this.history[this.currentMode].length > 10) {
+            this.history[this.currentMode].length = 10;
         }
 
         // Show Draw Animation popup/toast
@@ -603,7 +603,7 @@ class WinGoGame {
         if (!tbody) return;
 
         const list = this.history[this.currentMode] || [];
-        tbody.innerHTML = list.slice(0, 15).map(item => {
+        tbody.innerHTML = list.slice(0, 10).map(item => {
             let colorBalls = '';
             if (item.color === 'green') {
                 colorBalls = `<span class="dot-ball dot-green"></span>`;
@@ -634,7 +634,7 @@ class WinGoGame {
         const trendContainer = document.getElementById('wingo-trend-grid');
         if (!trendContainer) return;
 
-        const list = (this.history[this.currentMode] || []).slice(0, 20).reverse();
+        const list = (this.history[this.currentMode] || []).slice(0, 10).reverse();
         trendContainer.innerHTML = list.map(item => `
             <div class="trend-col">
                 <span class="trend-num ball-${item.color}">${item.number}</span>
@@ -647,7 +647,7 @@ class WinGoGame {
         const container = document.getElementById('wingo-mybets-list');
         if (!container) return;
 
-        const bets = this.userBets.filter(b => b.mode === this.currentMode).slice(0, 15);
+        const bets = this.userBets.filter(b => b.mode === this.currentMode).slice(0, 10);
         if (bets.length === 0) {
             container.innerHTML = `
                 <div class="empty-state">

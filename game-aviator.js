@@ -192,9 +192,9 @@ class AviatorGame {
         // Sound (ONLY when Aviator is open)
         if (window.sound) window.sound.loss('aviator');
 
-        // History
+        // History (strictly past 10 rounds)
         this.history.unshift(this.crashPoint);
-        if (this.history.length > 12) this.history.pop();
+        if (this.history.length > 10) this.history.length = 10;
         this.renderHistory();
 
         // If user bet was active and not cashed out, bet is lost
