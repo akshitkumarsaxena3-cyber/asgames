@@ -223,6 +223,17 @@ def init_db():
             )
         ''')
         cursor.execute('''
+            CREATE TABLE IF NOT EXISTS friend_messages (
+                id TEXT PRIMARY KEY,
+                pair_key TEXT NOT NULL,
+                from_uid INTEGER NOT NULL,
+                to_uid INTEGER NOT NULL,
+                text TEXT NOT NULL,
+                room_code TEXT DEFAULT '',
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        cursor.execute('''
             CREATE TABLE IF NOT EXISTS ludo_rooms (
                 code TEXT PRIMARY KEY,
                 state_json TEXT NOT NULL,
@@ -1527,6 +1538,44 @@ def api_friends_respond():
             msg = 'Friend request declined.'
         conn.commit()
     return jsonify({'success': True, 'message': msg})
+
+@app.route('/api/friends/chat/<int:friend_uid>', methods=['GET'])
+def api_friends_chat_get(friend_uid):
+    user = get_current_user(request)
+    if not user:
+        return jsonify({'success': False, 'message': 'Unauthorized'}), 401
+    me = user['id']
+    pair_key = f"{min(me, friend_uid)}_{max(me, friend_uid)}"
+    with get_db() as conn:
+        c = conn.cursor()
+        c.execute('SELECT * FROM friend_messages WHERE pair_key = ? ORDER BY created_at ASC LIMIT 60', (pair_key,))
+        rows = [dict(r) for r in c.fetchall()]
+    return jsonify({'success': True, 'my_uid': me, 'friend_uid': friend_uid, 'messages': rows})
+
+@app.route('/api/friends/chat/send', methods=['POST'])
+def api_friends_chat_send():
+    user = get_current_user(request)
+    if not user:
+        return jsonify({'success': False, 'message': 'Unauthorized'}), 401
+    me = user['id']
+    data = request.get_json(silent=True) or {}
+    friend_uid = int(data.get('friend_uid', 0) or 0)
+    text = str(data.get('message', '')).strip()[:500]
+    room_code = str(data.get('room_code', '')).strip().upper()[:12]
+    if not friend_uid or not text:
+        return jsonify({'success': False, 'message': 'Friend UID and message required.'}), 400
+    pair_key = f"{min(me, friend_uid)}_{max(me, friend_uid)}"
+    msg_id = f"FM{int(time.time()*1000)}{random.randint(10,99)}"
+    with get_db() as conn:
+        c = conn.cursor()
+        c.execute(
+            'INSERT INTO friend_messages (id, pair_key, from_uid, to_uid, text, room_code, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+            (msg_id, pair_key, me, friend_uid, text, room_code, datetime.now().isoformat())
+        )
+        conn.commit()
+        c.execute('SELECT * FROM friend_messages WHERE pair_key = ? ORDER BY created_at ASC LIMIT 60', (pair_key,))
+        rows = [dict(r) for r in c.fetchall()]
+    return jsonify({'success': True, 'messages': rows})
 
 @app.route('/api/ludo/room/create', methods=['POST'])
 def api_ludo_room_create():

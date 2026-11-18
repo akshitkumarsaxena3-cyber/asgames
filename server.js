@@ -1286,6 +1286,46 @@ app.post('/api/friends/respond', requireAuth, async (req, res) => {
     }
 });
 
+// Direct 1-on-1 Friend Chat (Talk & Invite to Ludo Together!)
+app.get('/api/friends/chat/:friendUid', requireAuth, async (req, res) => {
+    if (!Array.isArray(DB.data.friend_messages)) DB.data.friend_messages = [];
+    const me = req.user.id;
+    const friendUid = parseInt(req.params.friendUid, 10);
+    if (!friendUid) return res.json({ success: false, message: 'Invalid friend UID.' });
+    const pairKey = `${Math.min(me, friendUid)}_${Math.max(me, friendUid)}`;
+    const msgs = DB.data.friend_messages
+        .filter(m => m.pair_key === pairKey)
+        .slice(-60);
+    res.json({ success: true, my_uid: me, friend_uid: friendUid, messages: msgs });
+});
+
+app.post('/api/friends/chat/send', requireAuth, async (req, res) => {
+    if (!Array.isArray(DB.data.friend_messages)) DB.data.friend_messages = [];
+    const me = req.user.id;
+    const friendUid = parseInt(req.body.friend_uid, 10);
+    const text = String(req.body.message || '').trim().slice(0, 500);
+    const roomCode = String(req.body.room_code || '').trim().toUpperCase().slice(0, 12);
+    if (!friendUid || !text) return res.json({ success: false, message: 'Friend UID and message required.' });
+
+    const pairKey = `${Math.min(me, friendUid)}_${Math.max(me, friendUid)}`;
+    DB.data.friend_messages.push({
+        id: 'FM' + Date.now() + Math.floor(Math.random() * 999),
+        pair_key: pairKey,
+        from_uid: me,
+        to_uid: friendUid,
+        text,
+        room_code: roomCode,
+        created_at: new Date().toISOString()
+    });
+    if (DB.data.friend_messages.length > 1000) {
+        DB.data.friend_messages = DB.data.friend_messages.slice(-1000);
+    }
+    DB.save();
+
+    const msgs = DB.data.friend_messages.filter(m => m.pair_key === pairKey).slice(-60);
+    res.json({ success: true, messages: msgs });
+});
+
 app.post('/api/ludo/room/create', requireAuth, async (req, res) => {
     if (!Array.isArray(DB.data.ludo_rooms)) DB.data.ludo_rooms = [];
     const maxPlayers = parseInt(req.body.max_players, 10) === 2 ? 2 : 4;

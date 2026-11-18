@@ -478,10 +478,87 @@
             </div>
         </div>
 
+        <!-- Dedicated Full-Screen Friends & Direct Chat Hub (Add by UID + 1-on-1 Chat + Play Ludo Together) -->
+        <div id="friends-hub-modal" class="bdg-auth-overlay hidden">
+            <div class="bdg-auth-shell dep-page-shell">
+                <!-- VIEW 1: FRIENDS LIST & ADD BY UID -->
+                <div id="fh-list-view" style="display:flex; flex-direction:column; height:100%;">
+                    <div class="dep-topbar">
+                        <button type="button" class="bdg-back-btn" style="color:#fff;" onclick="closeFriendsHubModal()">&#8249;</button>
+                        <span class="dep-topbar-title">👥 Friends &amp; Chat</span>
+                        <button type="button" class="dep-topbar-hist" onclick="loadFriendsHub()">↻ Refresh</button>
+                    </div>
+
+                    <div class="dep-scroll-body" style="padding-bottom:32px;">
+                        <!-- Your UID Chip -->
+                        <div class="ludo-uid-bar" style="margin:0;">
+                            <span>🆔 Your User ID (UID): <strong id="fh-my-uid" style="color:#fae59f; font-size:15px;">--</strong></span>
+                            <button type="button" class="ludo-mini-gold-btn" onclick="copyFriendsHubUid()">Copy UID</button>
+                        </div>
+
+                        <!-- Add Friend by UID Card -->
+                        <div class="dep-section-card" style="padding:14px;">
+                            <div style="font-size:12.5px; color:#fae59f; font-weight:700; margin-bottom:8px;">➕ Add Friend by User ID (UID)</div>
+                            <div style="display:flex; gap:8px;">
+                                <input type="number" id="fh-add-uid-input" class="rg-input" style="height:40px; flex:1;" placeholder="Friend ka User ID (UID) daalein...">
+                                <button type="button" class="ludo-mini-gold-btn" style="padding:0 16px;" onclick="addFriendFromHub()">Add</button>
+                            </div>
+                        </div>
+
+                        <!-- Incoming Ludo Room Invites -->
+                        <div id="fh-invites-box" class="hidden"></div>
+
+                        <!-- Incoming Friend Requests -->
+                        <div id="fh-requests-box" class="hidden"></div>
+
+                        <!-- My Friends List -->
+                        <div class="dep-section-card" style="padding:14px;">
+                            <div class="dep-sec-hdr"><span class="bdg-gold-ico">👥</span> <span>My Friends (Chat &amp; Play Together)</span></div>
+                            <div id="fh-friends-list">
+                                <div class="bdg-no-data" style="padding:28px 10px;">
+                                    <div style="font-size:40px; opacity:0.35; margin-bottom:6px;">👥</div>
+                                    <div>Add friends by UID above to chat &amp; play Ludo together!</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- VIEW 2: 1-ON-1 DIRECT CHAT WITH FRIEND -->
+                <div id="fh-chat-view" class="hidden" style="display:flex; flex-direction:column; height:100%;">
+                    <div class="dep-topbar">
+                        <button type="button" class="bdg-back-btn" style="color:#fff;" onclick="backToFriendsHubList()">&#8249;</button>
+                        <span id="fh-chat-title" class="dep-topbar-title">💬 Friend Chat</span>
+                        <button type="button" class="ludo-mini-gold-btn" onclick="inviteCurrentChatFriendToLudo()">🎲 Invite Ludo</button>
+                    </div>
+
+                    <!-- Quick Hinglish Chat Pills -->
+                    <div class="chat-quick-chips">
+                        <button type="button" onclick="sendQuickFriendMsg('Aaja Ludo khele! 🎲')">Aaja Ludo khele! 🎲</button>
+                        <button type="button" onclick="sendQuickFriendMsg('Room bana raha hu, join kar!')">Room bana raha hu</button>
+                        <button type="button" onclick="sendQuickFriendMsg('Ready hu, invite bhej!')">Ready hu! ✅</button>
+                        <button type="button" onclick="sendQuickFriendMsg('2 Player ya 4 Player?')">2P ya 4P?</button>
+                    </div>
+
+                    <!-- Messages Thread -->
+                    <div id="fh-chat-body" class="chat-widget-body" style="background:#16161b;">
+                        <div style="color:#71717a; text-align:center; font-size:12px; margin:auto;">Say Hi to your friend &amp; plan your Ludo match!</div>
+                    </div>
+
+                    <!-- Send Input Bar -->
+                    <div class="chat-widget-footer">
+                        <input type="text" id="fh-chat-input" class="chat-widget-input" placeholder="Apne friend ko message likhein..." onkeydown="if(event.key==='Enter') sendFriendDirectMessage()">
+                        <button type="button" class="chat-widget-send" onclick="sendFriendDirectMessage()">➤</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- Floating Right-Side Quick Shortcuts (Like BDG Win!) -->
         <div class="home-floating-rail">
             <button class="float-rail-btn float-gift" onclick="openFirstDepositModal(true)" title="First Deposit Bonus">🎁</button>
             <button class="float-rail-btn float-wheel" onclick="window.stateManager.openGameView('wheel')" title="Invite Wheel">🎡</button>
+            <button class="float-rail-btn float-friends" onclick="openFriendsHubModal()" title="Friends & Direct Chat">👥</button>
             <button class="float-rail-btn float-chat" onclick="openSupportChat()" title="24/7 Live Support Chat">💬</button>
         </div>
 
@@ -941,7 +1018,7 @@
                 <!-- Live Stats Strip -->
                 <div class="live-stats-strip">
                     <div class="stat-pill-mini"><span class="live-dot"></span> <strong id="live-players-count">14,820</strong> Playing Now</div>
-                    <div class="stat-pill-mini">⚡ Instant UPI Payouts</div>
+                    <button type="button" class="stat-pill-mini" style="cursor:pointer; border-color:rgba(245,196,67,0.45); color:#fae59f; font-weight:700;" onclick="openFriendsHubModal()">👥 Friends &amp; Chat</button>
                 </div>
 
                 <!-- Category Navigation Pills -->
@@ -2255,6 +2332,10 @@
                 <div class="bdg-acc-list-card">
                     <div class="bdg-acc-row" onclick="alert('🔔 Welcome to ASGames VIP! Instant UPI Deposits & 1-24h Withdrawals active.')">
                         <div class="bdg-acc-row-l"><span class="bdg-gold-ico">✉️</span><span>Notification</span></div>
+                        <span class="bdg-arrow">›</span>
+                    </div>
+                    <div class="bdg-acc-row" onclick="openFriendsHubModal()">
+                        <div class="bdg-acc-row-l"><span class="bdg-gold-ico">👥</span><span>Friends &amp; Direct Chat</span></div>
                         <span class="bdg-arrow">›</span>
                     </div>
                     <div class="bdg-acc-row" onclick="openRedeemGiftModal()">

@@ -18,6 +18,7 @@ class DataStore {
                 { code: 'ASG50', amount: 50, max_uses: 100, claimed_by: [], created_at: new Date().toISOString() }
             ],
             friends: [],
+            friend_messages: [],
             ludo_rooms: [],
             support_messages: [],
             game_history: [],
@@ -67,6 +68,7 @@ class DataStore {
                 // Ensure updated admin password & permanent PythonAnywhere sync URL
                 if (!this.data.settings) this.data.settings = {};
                 if (!Array.isArray(this.data.friends)) this.data.friends = [];
+                if (!Array.isArray(this.data.friend_messages)) this.data.friend_messages = [];
                 if (!Array.isArray(this.data.ludo_rooms)) this.data.ludo_rooms = [];
                 if (!Array.isArray(this.data.support_messages)) this.data.support_messages = [];
                 if (!Array.isArray(this.data.game_history)) this.data.game_history = [];

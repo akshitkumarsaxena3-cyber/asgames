@@ -578,9 +578,9 @@ class StateManager {
         }, 2600);
     }
 
-    openGameView(gameName) {
-        // Require balance >= ₹1 to enter any cash game (Invite Wheel stays free-to-open)
-        if (gameName !== 'wheel' && Number(this.balance || 0) < 1) {
+    openGameView(gameName, bypassBalanceGate = false) {
+        // Require balance >= ₹1 to enter any cash game (Invite Wheel & Free Friend Rooms stay open)
+        if (!bypassBalanceGate && gameName !== 'wheel' && Number(this.balance || 0) < 1) {
             this.showError1003Toast();
             return;
         }
@@ -2521,6 +2521,315 @@ function renderUnifiedGameHistory() {
             </div>
         `;
     }).join('');
+}
+
+// ========================================================
+// DEDICATED FRIENDS & 1-ON-1 DIRECT CHAT HUB
+// ========================================================
+let _fhActiveFriendUid = null;
+let _fhActiveFriendPhone = '';
+let _fhChatPollTimer = null;
+
+function openFriendsHubModal() {
+    const sm = window.stateManager;
+    if (!sm || !sm.token) {
+        if (sm) sm.showToast('Please login first to add friends & chat!', 'warning');
+        openAuthModal('login');
+        return;
+    }
+    const modal = document.getElementById('friends-hub-modal');
+    if (modal) modal.classList.remove('hidden');
+    backToFriendsHubList();
+    loadFriendsHub();
+}
+
+function closeFriendsHubModal() {
+    const modal = document.getElementById('friends-hub-modal');
+    if (modal) modal.classList.add('hidden');
+    if (_fhChatPollTimer) {
+        clearInterval(_fhChatPollTimer);
+        _fhChatPollTimer = null;
+    }
+}
+
+function copyFriendsHubUid() {
+    const sm = window.stateManager;
+    const uid = String(sm?.uid || document.getElementById('fh-my-uid')?.textContent || '');
+    if (!uid || uid === '--') return;
+    if (navigator.clipboard) navigator.clipboard.writeText(uid).catch(() => {});
+    if (sm) sm.showToast(`📋 Your UID (${uid}) copied! Share with your friends.`, 'success');
+}
+
+async function loadFriendsHub() {
+    const sm = window.stateManager;
+    if (!sm || !sm.token) return;
+    try {
+        const res = await fetch('/api/friends/list', {
+            headers: { 'Authorization': `Bearer ${sm.token}` }
+        });
+        const d = await res.json();
+        if (!d.success) return;
+
+        const uidEl = document.getElementById('fh-my-uid');
+        if (uidEl) uidEl.textContent = d.my_uid || sm.uid || '--';
+
+        // Room Invites
+        const invBox = document.getElementById('fh-invites-box');
+        if (invBox) {
+            const invites = d.invites || [];
+            if (invites.length > 0) {
+                invBox.classList.remove('hidden');
+                invBox.innerHTML = invites.map(inv => `
+                    <div class="ludo-invite-banner">
+                        <div style="font-size:12px; color:#fff;">
+                            <strong style="color:#fae59f;">🎲 UID ${inv.host_uid} invited you to Ludo!</strong><br>
+                            <span style="color:#d4d4d8;">Room #${inv.room_code} • ${inv.joined_count}/${inv.max_players}P • ${inv.entry_fee > 0 ? '₹' + inv.entry_fee : 'Free'}</span>
+                        </div>
+                        <button type="button" class="ludo-mini-gold-btn" onclick="joinLudoFromFriendsHub('${inv.room_code}')">✅ Join Ludo</button>
+                    </div>
+                `).join('');
+            } else {
+                invBox.classList.add('hidden');
+                invBox.innerHTML = '';
+            }
+        }
+
+        // Pending Friend Requests
+        const reqBox = document.getElementById('fh-requests-box');
+        if (reqBox) {
+            const reqs = d.requests || [];
+            if (reqs.length > 0) {
+                reqBox.classList.remove('hidden');
+                reqBox.innerHTML = reqs.map(r => `
+                    <div class="ludo-invite-banner" style="border-color:#10b981; background:rgba(16,185,129,0.14);">
+                        <div style="font-size:12px; color:#fff;">
+                            <strong>👋 Friend Request: UID ${r.uid}</strong> (${r.phone})
+                        </div>
+                        <div style="display:flex; gap:6px;">
+                            <button type="button" class="ludo-mini-gold-btn" onclick="respondFriendFromHub(${r.uid}, 'accept')">Accept</button>
+                            <button type="button" class="ludo-mini-red-btn" onclick="respondFriendFromHub(${r.uid}, 'reject')">✗</button>
+                        </div>
+                    </div>
+                `).join('');
+            } else {
+                reqBox.classList.add('hidden');
+                reqBox.innerHTML = '';
+            }
+        }
+
+        // Accepted Friends List
+        const listEl = document.getElementById('fh-friends-list');
+        if (listEl) {
+            const friends = d.friends || [];
+            if (friends.length === 0) {
+                listEl.innerHTML = `<div class="bdg-no-data" style="padding:28px 10px;"><div style="font-size:40px; opacity:0.35; margin-bottom:6px;">👥</div><div>No friends yet. Enter your friend's UID above to add them!</div></div>`;
+            } else {
+                listEl.innerHTML = friends.map(f => `
+                    <div class="fh-friend-card">
+                        <div>
+                            <div style="color:#fae59f; font-weight:800; font-size:13.5px;">👤 UID ${f.uid}</div>
+                            <div style="color:#94a3b8; font-size:11px;">${f.phone} • <span style="color:#10b981;">● Friend</span></div>
+                        </div>
+                        <div style="display:flex; gap:6px;">
+                            <button type="button" class="fh-chat-btn" onclick="openDirectFriendChat(${f.uid}, '${f.phone}')">💬 Chat</button>
+                            <button type="button" class="ludo-mini-gold-btn" onclick="quickInviteFriendToLudo(${f.uid})">🎲 Play</button>
+                        </div>
+                    </div>
+                `).join('');
+            }
+        }
+    } catch (e) {}
+}
+
+async function addFriendFromHub() {
+    const sm = window.stateManager;
+    const inp = document.getElementById('fh-add-uid-input');
+    const targetUid = parseInt(inp?.value || '0', 10);
+    if (!targetUid) {
+        if (sm) sm.showToast('Please enter a valid Friend UID number!', 'warning');
+        return;
+    }
+    try {
+        const res = await fetch('/api/friends/add', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${sm.token}` },
+            body: JSON.stringify({ friend_uid: targetUid })
+        });
+        const d = await res.json();
+        if (sm) sm.showToast(d.message || 'Done', d.success ? 'success' : 'warning');
+        if (d.success && inp) inp.value = '';
+        loadFriendsHub();
+    } catch (e) {}
+}
+
+async function respondFriendFromHub(friendUid, action) {
+    const sm = window.stateManager;
+    try {
+        const res = await fetch('/api/friends/respond', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${sm.token}` },
+            body: JSON.stringify({ friend_uid: friendUid, action })
+        });
+        const d = await res.json();
+        if (sm) sm.showToast(d.message, d.success ? 'success' : 'error');
+        loadFriendsHub();
+    } catch (e) {}
+}
+
+function backToFriendsHubList() {
+    if (_fhChatPollTimer) {
+        clearInterval(_fhChatPollTimer);
+        _fhChatPollTimer = null;
+    }
+    _fhActiveFriendUid = null;
+    const listV = document.getElementById('fh-list-view');
+    const chatV = document.getElementById('fh-chat-view');
+    if (listV) { listV.classList.remove('hidden'); listV.style.display = 'flex'; }
+    if (chatV) { chatV.classList.add('hidden'); chatV.style.display = 'none'; }
+}
+
+function openDirectFriendChat(friendUid, phoneStr = '') {
+    _fhActiveFriendUid = friendUid;
+    _fhActiveFriendPhone = phoneStr;
+    const listV = document.getElementById('fh-list-view');
+    const chatV = document.getElementById('fh-chat-view');
+    const titleEl = document.getElementById('fh-chat-title');
+    if (listV) { listV.classList.add('hidden'); listV.style.display = 'none'; }
+    if (chatV) { chatV.classList.remove('hidden'); chatV.style.display = 'flex'; }
+    if (titleEl) titleEl.textContent = `💬 UID ${friendUid}`;
+
+    loadDirectFriendMessages();
+    if (_fhChatPollTimer) clearInterval(_fhChatPollTimer);
+    _fhChatPollTimer = setInterval(loadDirectFriendMessages, 2500);
+}
+
+async function loadDirectFriendMessages() {
+    const sm = window.stateManager;
+    if (!sm?.token || !_fhActiveFriendUid) return;
+    try {
+        const res = await fetch(`/api/friends/chat/${_fhActiveFriendUid}`, {
+            headers: { 'Authorization': `Bearer ${sm.token}` }
+        });
+        const d = await res.json();
+        if (d.success && Array.isArray(d.messages)) {
+            renderDirectFriendMessages(d.messages, d.my_uid || sm.uid);
+        }
+    } catch (e) {}
+}
+
+function renderDirectFriendMessages(msgs, myUid) {
+    const body = document.getElementById('fh-chat-body');
+    if (!body) return;
+    if (!msgs || msgs.length === 0) {
+        body.innerHTML = `<div style="color:#71717a; text-align:center; font-size:12px; margin:auto;">No messages yet! Say Hi &amp; invite UID ${_fhActiveFriendUid} to Ludo 🎲</div>`;
+        return;
+    }
+    body.innerHTML = msgs.map(m => {
+        const isMe = Number(m.from_uid) === Number(myUid);
+        const cls = isMe ? 'chat-user' : 'chat-bot';
+        const tm = (m.created_at || '').replace('T', ' ').slice(11, 16);
+        const joinBtn = m.room_code
+            ? `<div style="margin-top:8px;"><button type="button" class="ludo-mini-gold-btn" style="width:100%; padding:7px 10px; border:1px solid #2b1704;" onclick="joinLudoFromFriendsHub('${m.room_code}')">🎲 Join Ludo Room #${m.room_code}</button></div>`
+            : '';
+        return `
+            <div class="chat-bubble ${cls}">
+                <div class="chat-sender-lbl"><span>${isMe ? 'You' : 'UID ' + m.from_uid}</span><span>${tm}</span></div>
+                <div style="white-space:pre-wrap;">${_escChatText(m.text)}</div>
+                ${joinBtn}
+            </div>
+        `;
+    }).join('');
+    body.scrollTop = body.scrollHeight;
+}
+
+function sendQuickFriendMsg(text) {
+    const inp = document.getElementById('fh-chat-input');
+    if (inp) inp.value = text;
+    sendFriendDirectMessage();
+}
+
+async function sendFriendDirectMessage(customText = '', roomCode = '') {
+    const sm = window.stateManager;
+    if (!sm?.token || !_fhActiveFriendUid) return;
+    const inp = document.getElementById('fh-chat-input');
+    const text = (customText || inp?.value || '').trim();
+    if (!text) return;
+    if (!customText && inp) inp.value = '';
+    try {
+        const res = await fetch('/api/friends/chat/send', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${sm.token}` },
+            body: JSON.stringify({ friend_uid: _fhActiveFriendUid, message: text, room_code: roomCode })
+        });
+        const d = await res.json();
+        if (d.success && Array.isArray(d.messages)) {
+            renderDirectFriendMessages(d.messages, sm.uid);
+        }
+    } catch (e) {}
+}
+
+async function quickInviteFriendToLudo(friendUid) {
+    const sm = window.stateManager;
+    if (!sm?.token) return;
+    try {
+        // Create a Free 4-Player Online Ludo Room (or ₹0 so any friend can jump in immediately!)
+        const res = await fetch('/api/ludo/room/create', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${sm.token}` },
+            body: JSON.stringify({ max_players: 4, entry_fee: 0 })
+        });
+        const d = await res.json();
+        if (!d.success || !d.room) {
+            sm.showToast(d.message || 'Could not create room', 'error');
+            return;
+        }
+        const code = d.room.code;
+        // Invite friend to room + drop clickable invite card in their direct chat!
+        await fetch('/api/ludo/room/invite', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${sm.token}` },
+            body: JSON.stringify({ room_code: code, friend_uid: friendUid })
+        });
+        await fetch('/api/friends/chat/send', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${sm.token}` },
+            body: JSON.stringify({
+                friend_uid: friendUid,
+                message: `🎲 Maine Ludo Room #${code} banaya hai! Jaldi join kar saath khelte hain!`,
+                room_code: code
+            })
+        });
+
+        closeFriendsHubModal();
+        // Open Ludo directly into the created waiting room!
+        sm.openGameView('ludo', true);
+        setTimeout(() => {
+            if (window.ludoGame) {
+                window.ludoGame.setPlayMode('online');
+                window.ludoGame.enterOnlineRoomState(d.room);
+                window.ludoGame.loadFriendsAndInvites();
+            }
+        }, 120);
+        sm.showToast(`📩 Ludo Room #${code} invite sent to UID ${friendUid}!`, 'success');
+    } catch (e) {
+        sm.showToast('Error creating Ludo room.', 'error');
+    }
+}
+
+function inviteCurrentChatFriendToLudo() {
+    if (_fhActiveFriendUid) quickInviteFriendToLudo(_fhActiveFriendUid);
+}
+
+function joinLudoFromFriendsHub(roomCode) {
+    const sm = window.stateManager;
+    closeFriendsHubModal();
+    if (sm) sm.openGameView('ludo', true);
+    setTimeout(() => {
+        if (window.ludoGame) {
+            window.ludoGame.setPlayMode('online');
+            window.ludoGame.joinOnlineRoom(roomCode);
+        }
+    }, 150);
 }
 
 // Global initialization
