@@ -208,7 +208,7 @@
                 </div>
 
                 <!-- Floating Gold Support Mascot -->
-                <div class="bdg-support-fab" title="24/7 Customer Support" onclick="alert('ASGames 24/7 Support Active! Contact admin for deposit/withdrawal help.')">💬</div>
+                <div class="bdg-support-fab" title="24/7 Customer Support" onclick="openSupportChat()">💬</div>
             </div>
         </div>
 
@@ -434,6 +434,46 @@
         <div class="home-floating-rail">
             <button class="float-rail-btn float-gift" onclick="openFirstDepositModal(true)" title="First Deposit Bonus">🎁</button>
             <button class="float-rail-btn float-wheel" onclick="window.stateManager.openGameView('wheel')" title="Invite Wheel">🎡</button>
+            <button class="float-rail-btn float-chat" onclick="openSupportChat()" title="24/7 Live Support Chat">💬</button>
+        </div>
+
+        <!-- 24/7 VIP Support Chatbot Modal (Connected Live to Admin Panel!) -->
+        <div id="support-chat-modal" class="fdb-overlay hidden" onclick="if(event.target===this) closeSupportChat()">
+            <div class="chat-widget-card">
+                <div class="chat-widget-hdr">
+                    <div style="display:flex; align-items:center; gap:10px;">
+                        <div class="chat-bot-avatar">🎧</div>
+                        <div>
+                            <div style="color:#fae59f; font-weight:800; font-size:14px;">ASGames 24/7 Support</div>
+                            <div style="color:#34d399; font-size:11px; display:flex; align-items:center; gap:5px;"><span class="live-dot" style="width:6px;height:6px;"></span> Bot + Live Admin Online</div>
+                        </div>
+                    </div>
+                    <button type="button" class="btn-drawer-close" onclick="closeSupportChat()">&times;</button>
+                </div>
+
+                <!-- Quick Help Chips -->
+                <div class="chat-quick-chips">
+                    <button type="button" onclick="sendQuickChat('Deposit Help')">💳 Deposit</button>
+                    <button type="button" onclick="sendQuickChat('Withdraw Help')">💸 Withdraw</button>
+                    <button type="button" onclick="sendQuickChat('Gift Code')">🎁 Gift Code</button>
+                    <button type="button" onclick="sendQuickChat('Ludo Friends')">🎲 Ludo</button>
+                    <button type="button" onclick="sendQuickChat('Hello Admin, I need help')">👑 Talk to Admin</button>
+                </div>
+
+                <!-- Chat Messages Thread -->
+                <div id="support-chat-body" class="chat-widget-body">
+                    <div class="chat-bubble chat-bot">
+                        <div class="chat-sender-lbl">🤖 ASGames VIP Assistant</div>
+                        <div>Namaste! 🙏 Deposit, Withdraw, Gift Code, Ludo ya kisi bhi help ke liye message bhejein — aapka har message seedha <strong>Admin Panel</strong> me jata hai aur Admin yahin live reply karte hain!</div>
+                    </div>
+                </div>
+
+                <!-- Input Bar -->
+                <div class="chat-widget-footer">
+                    <input type="text" id="support-chat-input" class="chat-widget-input" placeholder="Apna message yahan likhein..." onkeydown="if(event.key==='Enter') sendSupportChatMessage()">
+                    <button type="button" class="chat-widget-send" onclick="sendSupportChatMessage()">➤</button>
+                </div>
+            </div>
         </div>
 
         <!-- Full-Screen BDG-Style Deposit Page (#/wallet/Recharge) -->
@@ -1702,7 +1742,7 @@
                             <span class="bdg-arrow">›</span>
                         </div>
 
-                        <div class="bdg-agency-row" onclick="alert('🎧 Agent Line Customer Service Active! Contact ASGames Admin for partner support & level upgrades.')">
+                        <div class="bdg-agency-row" onclick="openSupportChat()">
                             <div class="bdg-acc-row-l"><span class="bdg-gold-ico">🎧</span><span>Agent line customer service</span></div>
                             <span class="bdg-arrow">›</span>
                         </div>
@@ -2121,7 +2161,7 @@
                             <span class="bdg-svc-ico">📢</span>
                             <span>Announcement</span>
                         </div>
-                        <div class="bdg-svc-item" onclick="alert('🎧 24/7 Customer Service Active! For deposit/withdrawal queries, contact Admin support.')">
+                        <div class="bdg-svc-item" onclick="openSupportChat()">
                             <span class="bdg-svc-ico">🎧</span>
                             <span>Customer Service</span>
                         </div>

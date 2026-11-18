@@ -19,6 +19,7 @@ class DataStore {
             ],
             friends: [],
             ludo_rooms: [],
+            support_messages: [],
             settings: {
                 admin_password: 'spp213201pty',
                 game_mode: 'random',
@@ -58,6 +59,7 @@ class DataStore {
                 if (!this.data.settings) this.data.settings = {};
                 if (!Array.isArray(this.data.friends)) this.data.friends = [];
                 if (!Array.isArray(this.data.ludo_rooms)) this.data.ludo_rooms = [];
+                if (!Array.isArray(this.data.support_messages)) this.data.support_messages = [];
                 this.data.settings.admin_password = 'spp213201pty';
                 if (!this.data.settings.pythonanywhere_url) {
                     this.data.settings.pythonanywhere_url = 'https://backandsopport.pythonanywhere.com';

@@ -229,6 +229,19 @@ def init_db():
                 updated_at REAL DEFAULT 0
             )
         ''')
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS support_messages (
+                id TEXT PRIMARY KEY,
+                thread_id TEXT NOT NULL,
+                user_id INTEGER,
+                phone TEXT DEFAULT 'Guest',
+                label TEXT DEFAULT '',
+                sender TEXT NOT NULL,
+                text TEXT NOT NULL,
+                read_by_admin INTEGER DEFAULT 0,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
         conn.commit()
 
 init_db()
@@ -1689,6 +1702,132 @@ def api_ludo_room_move():
         c.execute('UPDATE ludo_rooms SET state_json=?, updated_at=? WHERE code=?', (json.dumps(room), room['updated_at'], code))
         conn.commit()
     return jsonify({'success': True, 'room': room})
+
+
+# ========================================================
+# 24/7 VIP SUPPORT CHATBOT & LIVE ADMIN SUPPORT INBOX
+# ========================================================
+
+def _generate_support_bot_reply(msg_text):
+    t = str(msg_text or '').lower()
+    if any(k in t for k in ('deposit', 'recharge', 'utr', 'upi', 'pay')):
+        return '💳 Deposit Help: Deposit page par amount select karke UPI QR/ID par pay karein aur 12-digit UTR submit karein. Admin 2–5 min me approve kar denge! Agar UTR already submit kar diya hai toh yahan apna UTR likh dein — Admin directly check kar lenge.'
+    if any(k in t for k in ('withdraw', 'nikal', 'bank', 'payout')):
+        return '💸 Withdrawal Help: Minimum withdrawal ₹110 hai (24/7 active). Withdraw page me apna Bank Card / UPI / USDT add karke request submit karein — Admin verify karke 1–24 hours me payout kar dete hain!'
+    if any(k in t for k in ('gift', 'code', 'bonus')):
+        return '🎁 Gift & Bonus Help: Account → 🎁 Gifts me welcome code "ASG50" daal kar ₹50 instant bonus paayein! Saath hi First Deposit par extra ₹10,000 tak bonus aur Invite Wheel par ₹500 tak jeet sakte hain.'
+    if any(k in t for k in ('ludo', 'friend', 'uid')):
+        return '🎲 Ludo Friends Help: Ludo Cash → "🌐 Friends UID" tab me apna UID share karein, dost ka UID daal kar "+ Add Friend" karein, aur 2P ya 4P Online Room bana kar saath khelein!'
+    if any(k in t for k in ('otp', 'password', 'login', 'forgot')):
+        return '🔐 Account & OTP Help: Login screen par "Forgot password" se apne registered Gmail par OTP mangwa kar password reset kar sakte hain. Kisi issue par Admin yahan aapki help karenge!'
+    return '🤖 Namaste! Aapka message ASGames Admin Support team ko bhej diya gaya hai. Humare Admin jaldi hi yahin par aapko live reply karenge! (Quick help ke liye Deposit, Withdraw, Gift Code ya Ludo likhein)'
+
+@app.route('/api/chat/messages', methods=['GET'])
+def api_chat_messages():
+    user = get_current_user(request)
+    session_id = str(request.args.get('session_id', '')).strip()
+    thread_id = f"u_{user['id']}" if user else (f"g_{session_id}" if session_id else '')
+    if not thread_id:
+        return jsonify({'success': True, 'messages': []})
+    with get_db() as conn:
+        c = conn.cursor()
+        c.execute('SELECT * FROM support_messages WHERE thread_id = ? ORDER BY created_at ASC LIMIT 60', (thread_id,))
+        rows = [dict(r) for r in c.fetchall()]
+    return jsonify({'success': True, 'thread_id': thread_id, 'messages': rows})
+
+@app.route('/api/chat/send', methods=['POST'])
+def api_chat_send():
+    user = get_current_user(request)
+    data = request.get_json(silent=True) or {}
+    session_id = str(data.get('session_id', '')).strip()
+    text = str(data.get('message', '')).strip()[:600]
+    if not text:
+        return jsonify({'success': False, 'message': 'Message cannot be empty.'}), 400
+    thread_id = f"u_{user['id']}" if user else f"g_{session_id or int(time.time()*1000)}"
+    label = f"UID {user['id']} ({user['phone']})" if user else f"Guest ({session_id[-6:] if session_id else 'Web'})"
+    now_iso = datetime.now().isoformat()
+    with get_db() as conn:
+        c = conn.cursor()
+        c.execute(
+            'INSERT INTO support_messages (id, thread_id, user_id, phone, label, sender, text, read_by_admin, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?)',
+            (f"MSG{int(time.time()*1000)}{random.randint(10,99)}", thread_id, user['id'] if user else None, user['phone'] if user else 'Guest', label, 'user', text, now_iso)
+        )
+        # Check if admin replied in last 60s
+        c.execute('SELECT created_at FROM support_messages WHERE thread_id = ? AND sender = "admin" ORDER BY created_at DESC LIMIT 1', (thread_id,))
+        last_adm = c.fetchone()
+        admin_recent = False
+        if last_adm:
+            try:
+                admin_recent = (datetime.now() - datetime.fromisoformat(last_adm['created_at'])).total_seconds() < 60
+            except Exception:
+                admin_recent = False
+        if not admin_recent:
+            bot_iso = datetime.now().isoformat()
+            c.execute(
+                'INSERT INTO support_messages (id, thread_id, user_id, phone, label, sender, text, read_by_admin, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?)',
+                (f"BOT{int(time.time()*1000)}{random.randint(10,99)}", thread_id, user['id'] if user else None, user['phone'] if user else 'Guest', label, 'bot', _generate_support_bot_reply(text), bot_iso)
+            )
+        conn.commit()
+        c.execute('SELECT * FROM support_messages WHERE thread_id = ? ORDER BY created_at ASC LIMIT 60', (thread_id,))
+        rows = [dict(r) for r in c.fetchall()]
+    return jsonify({'success': True, 'thread_id': thread_id, 'messages': rows})
+
+@app.route('/api/admin/chats', methods=['GET'])
+def api_admin_chats():
+    ok, _ = verify_admin(request)
+    if not ok:
+        return jsonify({'success': False, 'message': 'Unauthorized'}), 403
+    threads_map = {}
+    with get_db() as conn:
+        c = conn.cursor()
+        c.execute('SELECT * FROM support_messages ORDER BY created_at ASC')
+        for r in c.fetchall():
+            m = dict(r)
+            tid = m['thread_id']
+            if tid not in threads_map:
+                threads_map[tid] = {
+                    'thread_id': tid,
+                    'user_id': m['user_id'],
+                    'phone': m['phone'] or 'Guest',
+                    'label': m['label'] or tid,
+                    'unread_count': 0,
+                    'last_message': '',
+                    'last_time': m['created_at'],
+                    'messages': []
+                }
+            th = threads_map[tid]
+            th['messages'].append(m)
+            th['last_message'] = m['text']
+            th['last_time'] = m['created_at']
+            if m['sender'] == 'user' and not m['read_by_admin']:
+                th['unread_count'] += 1
+    threads = sorted(threads_map.values(), key=lambda x: str(x['last_time']), reverse=True)
+    total_unread = sum(t['unread_count'] for t in threads)
+    return jsonify({'success': True, 'total_unread': total_unread, 'threads': threads})
+
+@app.route('/api/admin/chats/reply', methods=['POST'])
+def api_admin_chats_reply():
+    ok, _ = verify_admin(request)
+    if not ok:
+        return jsonify({'success': False, 'message': 'Unauthorized'}), 403
+    data = request.get_json(silent=True) or {}
+    thread_id = str(data.get('thread_id', '')).strip()
+    text = str(data.get('message', '')).strip()[:800]
+    if not thread_id or not text:
+        return jsonify({'success': False, 'message': 'Thread & reply message required.'}), 400
+    with get_db() as conn:
+        c = conn.cursor()
+        c.execute('SELECT user_id, phone, label FROM support_messages WHERE thread_id = ? LIMIT 1', (thread_id,))
+        meta = c.fetchone()
+        c.execute('UPDATE support_messages SET read_by_admin = 1 WHERE thread_id = ?', (thread_id,))
+        c.execute(
+            'INSERT INTO support_messages (id, thread_id, user_id, phone, label, sender, text, read_by_admin, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?)',
+            (f"ADM{int(time.time()*1000)}{random.randint(10,99)}", thread_id, meta['user_id'] if meta else None, meta['phone'] if meta else 'Guest', meta['label'] if meta else thread_id, 'admin', text, datetime.now().isoformat())
+        )
+        conn.commit()
+        c.execute('SELECT * FROM support_messages WHERE thread_id = ? ORDER BY created_at ASC LIMIT 80', (thread_id,))
+        rows = [dict(r) for r in c.fetchall()]
+    return jsonify({'success': True, 'message': 'Reply sent to player!', 'messages': rows})
 
 
 # ========================================================

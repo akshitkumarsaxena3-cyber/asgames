@@ -1457,6 +1457,164 @@ app.post('/api/ludo/room/move', requireAuth, async (req, res) => {
     res.json({ success: true, room });
 });
 
+// ========================================================
+// 24/7 VIP SUPPORT CHATBOT & LIVE ADMIN SUPPORT INBOX
+// ========================================================
+function generateSupportBotReply(msgText) {
+    const t = String(msgText || '').toLowerCase();
+    if (t.includes('deposit') || t.includes('recharge') || t.includes('utr') || t.includes('upi') || t.includes('pay')) {
+        return '💳 Deposit Help: Deposit page par amount select karke UPI QR/ID par pay karein aur 12-digit UTR submit karein. Admin 2–5 min me approve kar denge! Agar UTR already submit kar diya hai toh yahan apna UTR likh dein — Admin directly check kar lenge.';
+    }
+    if (t.includes('withdraw') || t.includes('nikal') || t.includes('bank') || t.includes('payout')) {
+        return '💸 Withdrawal Help: Minimum withdrawal ₹110 hai (24/7 active). Withdraw page me apna Bank Card / UPI / USDT add karke request submit karein — Admin verify karke 1–24 hours me payout kar dete hain!';
+    }
+    if (t.includes('gift') || t.includes('code') || t.includes('bonus')) {
+        return '🎁 Gift & Bonus Help: Account → 🎁 Gifts me welcome code "ASG50" daal kar ₹50 instant bonus paayein! Saath hi First Deposit par extra ₹10,000 tak bonus aur Invite Wheel par ₹500 tak jeet sakte hain.';
+    }
+    if (t.includes('ludo') || t.includes('friend') || t.includes('uid')) {
+        return '🎲 Ludo Friends Help: Ludo Cash → "🌐 Friends UID" tab me apna UID share karein, dost ka UID daal kar "+ Add Friend" karein, aur 2P ya 4P Online Room bana kar saath khelein!';
+    }
+    if (t.includes('otp') || t.includes('password') || t.includes('login') || t.includes('forgot')) {
+        return '🔐 Account & OTP Help: Login screen par "Forgot password" se apne registered Gmail par OTP mangwa kar password reset kar sakte hain. Kisi issue par Admin yahan aapki help karenge!';
+    }
+    return '🤖 Namaste! Aapka message ASGames Admin Support team ko bhej diya gaya hai. Humare Admin jaldi hi yahin par aapko live reply karenge! (Quick help ke liye Deposit, Withdraw, Gift Code ya Ludo likhein)';
+}
+
+app.get('/api/chat/messages', async (req, res) => {
+    if (!Array.isArray(DB.data.support_messages)) DB.data.support_messages = [];
+    const user = await getUserFromToken(req);
+    const sessionId = String(req.query.session_id || '').trim();
+    const threadId = user ? `u_${user.id}` : (sessionId ? `g_${sessionId}` : '');
+    if (!threadId) return res.json({ success: true, messages: [] });
+
+    const msgs = DB.data.support_messages
+        .filter(m => m.thread_id === threadId)
+        .slice(-60);
+    res.json({ success: true, thread_id: threadId, messages: msgs });
+});
+
+app.post('/api/chat/send', async (req, res) => {
+    try {
+        if (!Array.isArray(DB.data.support_messages)) DB.data.support_messages = [];
+        const user = await getUserFromToken(req);
+        const sessionId = String(req.body.session_id || '').trim();
+        const text = String(req.body.message || '').trim().slice(0, 600);
+        if (!text) return res.json({ success: false, message: 'Message cannot be empty.' });
+
+        const threadId = user ? `u_${user.id}` : `g_${sessionId || Date.now()}`;
+        const label = user ? `UID ${user.id} (${user.phone})` : `Guest (${sessionId.slice(-6) || 'Web'})`;
+        const nowIso = new Date().toISOString();
+
+        DB.data.support_messages.push({
+            id: 'MSG' + Date.now() + Math.floor(Math.random() * 999),
+            thread_id: threadId,
+            user_id: user ? user.id : null,
+            phone: user ? user.phone : 'Guest',
+            label,
+            sender: 'user',
+            text,
+            read_by_admin: false,
+            created_at: nowIso
+        });
+
+        // Instant Bot Auto-Reply (only if admin hasn't replied in last 60s so bot doesn't interrupt live admin chat)
+        const recentAdmin = DB.data.support_messages
+            .filter(m => m.thread_id === threadId && m.sender === 'admin')
+            .slice(-1)[0];
+        const adminActiveRecently = recentAdmin && (Date.now() - new Date(recentAdmin.created_at).getTime() < 60000);
+
+        if (!adminActiveRecently) {
+            DB.data.support_messages.push({
+                id: 'BOT' + Date.now() + Math.floor(Math.random() * 999),
+                thread_id: threadId,
+                user_id: user ? user.id : null,
+                phone: user ? user.phone : 'Guest',
+                label,
+                sender: 'bot',
+                text: generateSupportBotReply(text),
+                read_by_admin: true,
+                created_at: new Date(Date.now() + 200).toISOString()
+            });
+        }
+
+        if (DB.data.support_messages.length > 500) {
+            DB.data.support_messages = DB.data.support_messages.slice(-500);
+        }
+        DB.save();
+
+        const msgs = DB.data.support_messages.filter(m => m.thread_id === threadId).slice(-60);
+        res.json({ success: true, thread_id: threadId, messages: msgs });
+    } catch (e) {
+        res.status(500).json({ success: false, message: e.message });
+    }
+});
+
+app.get('/api/admin/chats', requireAdmin, async (req, res) => {
+    if (!Array.isArray(DB.data.support_messages)) DB.data.support_messages = [];
+    const map = new Map();
+    for (const m of DB.data.support_messages) {
+        if (!map.has(m.thread_id)) {
+            map.set(m.thread_id, {
+                thread_id: m.thread_id,
+                user_id: m.user_id,
+                phone: m.phone || 'Guest',
+                label: m.label || m.thread_id,
+                unread_count: 0,
+                last_message: '',
+                last_time: m.created_at,
+                messages: []
+            });
+        }
+        const th = map.get(m.thread_id);
+        th.messages.push(m);
+        th.last_message = m.text;
+        th.last_time = m.created_at;
+        if (m.sender === 'user' && !m.read_by_admin) th.unread_count++;
+    }
+    const threads = Array.from(map.values()).sort((a, b) => String(b.last_time).localeCompare(String(a.last_time)));
+    const totalUnread = threads.reduce((acc, t) => acc + t.unread_count, 0);
+    res.json({ success: true, total_unread: totalUnread, threads });
+});
+
+app.post('/api/admin/chats/reply', requireAdmin, async (req, res) => {
+    try {
+        if (!Array.isArray(DB.data.support_messages)) DB.data.support_messages = [];
+        const thread_id = String(req.body.thread_id || '').trim();
+        const text = String(req.body.message || '').trim().slice(0, 800);
+        if (!thread_id || !text) return res.json({ success: false, message: 'Thread & reply message required.' });
+
+        let label = thread_id;
+        let user_id = null;
+        let phone = 'Guest';
+        DB.data.support_messages.forEach(m => {
+            if (m.thread_id === thread_id) {
+                m.read_by_admin = true;
+                label = m.label || label;
+                if (m.user_id) user_id = m.user_id;
+                if (m.phone) phone = m.phone;
+            }
+        });
+
+        DB.data.support_messages.push({
+            id: 'ADM' + Date.now() + Math.floor(Math.random() * 999),
+            thread_id,
+            user_id,
+            phone,
+            label,
+            sender: 'admin',
+            text,
+            read_by_admin: true,
+            created_at: new Date().toISOString()
+        });
+        DB.save();
+
+        const msgs = DB.data.support_messages.filter(m => m.thread_id === thread_id).slice(-80);
+        res.json({ success: true, message: 'Reply sent to player!', messages: msgs });
+    } catch (e) {
+        res.status(500).json({ success: false, message: e.message });
+    }
+});
+
 // PythonAnywhere Central Sync Management APIs
 app.get('/api/admin/sync-status', requireAdmin, async (req, res) => {
     try {

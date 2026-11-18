@@ -2259,6 +2259,106 @@ function initLivePlayersCounter() {
     setTimeout(tick, 2000);
 }
 
+// ========================================================
+// 24/7 VIP SUPPORT CHATBOT (SYNCED LIVE WITH ADMIN PANEL)
+// ========================================================
+let _supportChatPollTimer = null;
+
+function _getChatSessionId() {
+    let sid = localStorage.getItem('asg_chat_sid');
+    if (!sid) {
+        sid = 'S' + Date.now() + Math.floor(Math.random() * 9999);
+        localStorage.setItem('asg_chat_sid', sid);
+    }
+    return sid;
+}
+
+function _escChatText(s) {
+    return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function openSupportChat() {
+    const modal = document.getElementById('support-chat-modal');
+    if (!modal) return;
+    modal.classList.remove('hidden');
+    loadSupportChatMessages();
+    if (_supportChatPollTimer) clearInterval(_supportChatPollTimer);
+    _supportChatPollTimer = setInterval(loadSupportChatMessages, 3000);
+}
+
+function closeSupportChat() {
+    const modal = document.getElementById('support-chat-modal');
+    if (modal) modal.classList.add('hidden');
+    if (_supportChatPollTimer) {
+        clearInterval(_supportChatPollTimer);
+        _supportChatPollTimer = null;
+    }
+}
+
+function renderSupportChatMessages(msgs) {
+    const body = document.getElementById('support-chat-body');
+    if (!body) return;
+    const welcomeHtml = `
+        <div class="chat-bubble chat-bot">
+            <div class="chat-sender-lbl">🤖 ASGames VIP Assistant</div>
+            <div>Namaste! 🙏 Deposit, Withdraw, Gift Code, Ludo ya kisi bhi help ke liye message bhejein — aapka har message seedha <strong>Admin Panel</strong> me jata hai aur Admin yahin live reply karte hain!</div>
+        </div>
+    `;
+    const listHtml = (msgs || []).map(m => {
+        const cls = m.sender === 'user' ? 'chat-user' : (m.sender === 'admin' ? 'chat-admin' : 'chat-bot');
+        const lbl = m.sender === 'user' ? 'You' : (m.sender === 'admin' ? '👑 Admin Support' : '🤖 VIP Bot');
+        const tm = (m.created_at || '').replace('T', ' ').slice(11, 16);
+        return `
+            <div class="chat-bubble ${cls}">
+                <div class="chat-sender-lbl"><span>${lbl}</span><span>${tm}</span></div>
+                <div style="white-space:pre-wrap;">${_escChatText(m.text)}</div>
+            </div>
+        `;
+    }).join('');
+    body.innerHTML = welcomeHtml + listHtml;
+    body.scrollTop = body.scrollHeight;
+}
+
+async function loadSupportChatMessages() {
+    try {
+        const sm = window.stateManager;
+        const headers = {};
+        if (sm && sm.token) headers['Authorization'] = `Bearer ${sm.token}`;
+        const res = await fetch(`/api/chat/messages?session_id=${encodeURIComponent(_getChatSessionId())}`, { headers });
+        const d = await res.json();
+        if (d.success && Array.isArray(d.messages)) {
+            renderSupportChatMessages(d.messages);
+        }
+    } catch (e) {}
+}
+
+function sendQuickChat(text) {
+    const inp = document.getElementById('support-chat-input');
+    if (inp) inp.value = text;
+    sendSupportChatMessage();
+}
+
+async function sendSupportChatMessage() {
+    const inp = document.getElementById('support-chat-input');
+    const text = (inp?.value || '').trim();
+    if (!text) return;
+    inp.value = '';
+    try {
+        const sm = window.stateManager;
+        const headers = { 'Content-Type': 'application/json' };
+        if (sm && sm.token) headers['Authorization'] = `Bearer ${sm.token}`;
+        const res = await fetch('/api/chat/send', {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({ message: text, session_id: _getChatSessionId() })
+        });
+        const d = await res.json();
+        if (d.success && Array.isArray(d.messages)) {
+            renderSupportChatMessages(d.messages);
+        }
+    } catch (e) {}
+}
+
 // Global initialization
 window.addEventListener('DOMContentLoaded', () => {
     window.stateManager = new StateManager();
