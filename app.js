@@ -254,10 +254,11 @@ class StateManager {
     }
 
     setupEventListeners() {
-        // Tab switching
+        // Tab switching (ignore center wheel button which has no data-tab)
         document.querySelectorAll('.tabbar-item').forEach(item => {
             item.addEventListener('click', (e) => {
                 const tab = item.dataset.tab;
+                if (!tab) return;
                 this.switchTab(tab);
                 if (window.sound) window.sound.click();
             });
@@ -545,6 +546,11 @@ class StateManager {
             ludo: 'Loading Ludo Supreme Cash Board...'
         };
         this.showSplashLoader(labels[gameName] || 'Loading Game Engine...', 420);
+
+        // Ensure Home tab container is visible (so opening Wheel or any game works from ANY tab!)
+        document.querySelectorAll('.tab-view').forEach(v => v.classList.add('hidden'));
+        const tabHome = document.getElementById('tab-home');
+        if (tabHome) tabHome.classList.remove('hidden');
 
         const homeMain = document.getElementById('home-main-content');
         if (homeMain) homeMain.classList.add('hidden');
