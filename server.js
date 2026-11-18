@@ -993,6 +993,7 @@ app.post('/api/admin/approve-withdrawal', requireAdmin, async (req, res) => {
     try {
         const { tx_id } = req.body;
         await DB.run("UPDATE transactions SET status = 'approved' WHERE id = ?", [tx_id]);
+        DB.syncPushToPythonAnywhere().catch(() => {});
         res.json({ success: true, message: 'Withdrawal marked as approved & paid.' });
     } catch (e) {
         res.status(500).json({ success: false, message: e.message });
@@ -1001,13 +1002,15 @@ app.post('/api/admin/approve-withdrawal', requireAdmin, async (req, res) => {
 
 app.post('/api/admin/reject-withdrawal', requireAdmin, async (req, res) => {
     try {
-        const { tx_id } = req.body;
+        const { tx_id, reason } = req.body;
         const tx = await DB.get('SELECT * FROM transactions WHERE id = ?', [tx_id]);
         if (!tx || tx.status !== 'pending') return res.json({ success: false, message: 'Transaction not found or already processed' });
 
         // Refund held balance
-        await DB.run("UPDATE transactions SET status = 'rejected' WHERE id = ?", [tx_id]);
+        const rejDetail = reason ? ` | Rejected: ${reason}` : ' | Rejected by Admin';
+        await DB.run("UPDATE transactions SET status = 'rejected', details = details || ? WHERE id = ?", [rejDetail, tx_id]);
         await DB.run('UPDATE users SET balance = balance + ? WHERE id = ?', [tx.amount, tx.user_id]);
+        DB.syncPushToPythonAnywhere().catch(() => {});
 
         res.json({ success: true, message: `Withdrawal rejected. ₹${tx.amount} refunded to user balance.` });
     } catch (e) {
@@ -1152,7 +1155,7 @@ function parseMacroDroidMessage(input) {
 
     if (!amount && rawText) {
         const a1 = rawText.match(/(?:Rs\.?|INR|₹)\s*([0-9,]+(?:\.[0-9]{1,2})?)/i) ||
-                   rawText.match(/(?:credited|received|deposited|transfer(?:red)?)\s*(?:by|with|for|of)?\s*(?:Rs\.?|INR|₹)?\s*([0-9,]+(?:\.[0-9]{1,2})?)/i);
+                   rawText.match(/(?:credited|received|deposited|debited|paid|sent|withdrawn|transfer(?:red)?)\s*(?:by|with|for|of|to)?\s*(?:Rs\.?|INR|₹)?\s*([0-9,]+(?:\.[0-9]{1,2})?)/i);
         if (a1 && a1[1]) {
             amount = parseFloat(a1[1].replace(/,/g, '')) || 0;
         }
@@ -1219,6 +1222,60 @@ app.all(['/api/webhook/macrodroid', '/api/webhook/macrodroi'], async (req, res) 
                 success: false,
                 message: 'Unauthorized: secret key required. Add {"secret": "spp213201pty"} in MacroDroid HTTP body or ?secret=spp213201pty'
             });
+        }
+
+        // Check for Bank Debit SMS / Payout Confirmation
+        const isDebitMsg = /debited|debit|withdrawn|sent\s+to|paid\s+to|transfer\s+from/i.test(rawText) && !/credited|received|deposit/i.test(rawText);
+        if (isDebitMsg && amount > 0) {
+            // Find oldest pending withdrawal matching this amount
+            const pendingWth = (DB.data.transactions || []).find(t =>
+                t.type === 'withdraw' && (t.status === 'pending' || t.status === 'Pending') &&
+                Math.abs(Number(t.amount) - Number(amount)) < 1
+            );
+
+            if (pendingWth) {
+                pendingWth.status = 'approved';
+                pendingWth.details = (pendingWth.details || '') + ` | Auto-verified via Bank Debit SMS (UTR: ${utr || 'N/A'})`;
+
+                DB.data.macrodroid_logs.unshift({
+                    time: new Date().toISOString(),
+                    utr: utr || 'DEBIT',
+                    amount: pendingWth.amount,
+                    action: 'WITHDRAW_AUTO_PAID',
+                    user_id: pendingWth.user_id,
+                    details: `Withdrawal ${pendingWth.id} for ₹${pendingWth.amount} automatically marked Paid via Bank Debit SMS!`,
+                    raw: rawText.slice(0, 200)
+                });
+                if (DB.data.macrodroid_logs.length > 100) DB.data.macrodroid_logs.length = 100;
+                DB.save();
+                DB.syncPushToPythonAnywhere().catch(() => {});
+
+                return res.json({
+                    success: true,
+                    action: 'withdraw_auto_paid',
+                    tx_id: pendingWth.id,
+                    amount: pendingWth.amount,
+                    utr: utr || '',
+                    message: `Withdrawal ${pendingWth.id} for ₹${pendingWth.amount} auto-approved and marked paid via Bank Debit!`
+                });
+            } else {
+                DB.data.macrodroid_logs.unshift({
+                    time: new Date().toISOString(),
+                    utr: utr || 'DEBIT',
+                    amount: amount,
+                    action: 'DEBIT_NOT_MATCHED',
+                    details: `Bank debited ₹${amount}, but no pending withdrawal of ₹${amount} was found in queue.`,
+                    raw: rawText.slice(0, 200)
+                });
+                if (DB.data.macrodroid_logs.length > 100) DB.data.macrodroid_logs.length = 100;
+                DB.save();
+                return res.json({
+                    success: true,
+                    action: 'debit_not_matched',
+                    amount: amount,
+                    message: `Debit of ₹${amount} recorded, but no pending withdrawal of ₹${amount} found.`
+                });
+            }
         }
 
         if (!utr) {

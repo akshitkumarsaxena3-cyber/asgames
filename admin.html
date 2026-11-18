@@ -74,6 +74,98 @@
         .btn-reject { background: var(--red); color: #fff; margin-left: 6px; }
         .btn-ban { background: #dc2626; color: #fff; }
         .btn-unban { background: #2563eb; color: #fff; }
+
+        /* Quick Payout & Copy Controls */
+        .btn-quick-upi {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 4px;
+            padding: 6px 12px;
+            border-radius: 6px;
+            background: linear-gradient(135deg, #10b981, #059669);
+            color: #fff !important;
+            font-size: 11.5px;
+            font-weight: 700;
+            text-decoration: none;
+            border: none;
+            cursor: pointer;
+            box-shadow: 0 2px 8px rgba(16, 185, 129, 0.35);
+            transition: all 0.2s ease;
+            text-align: center;
+        }
+        .btn-quick-upi:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 14px rgba(16, 185, 129, 0.55);
+            color: #fff !important;
+        }
+        .btn-quick-qr {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 4px;
+            padding: 6px 12px;
+            border-radius: 6px;
+            background: linear-gradient(135deg, #8b5cf6, #6d28d9);
+            color: #fff;
+            font-size: 11.5px;
+            font-weight: 700;
+            border: none;
+            cursor: pointer;
+            box-shadow: 0 2px 8px rgba(139, 92, 246, 0.35);
+            transition: all 0.2s ease;
+            text-align: center;
+        }
+        .btn-quick-qr:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 14px rgba(139, 92, 246, 0.55);
+        }
+        .btn-copy-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 3px;
+            padding: 3px 8px;
+            border-radius: 4px;
+            background: #1e293b;
+            border: 1px solid #334155;
+            color: #cbd5e1;
+            font-size: 11px;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            white-space: nowrap;
+        }
+        .btn-copy-chip:hover {
+            background: #334155;
+            color: #38bdf8;
+            border-color: #38bdf8;
+        }
+        /* Payout Modal */
+        .payout-modal-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0, 0, 0, 0.85);
+            backdrop-filter: blur(5px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 99999;
+        }
+        .payout-modal-card {
+            background: #0d1224;
+            border: 1px solid #334155;
+            border-radius: 16px;
+            padding: 24px;
+            max-width: 440px;
+            width: 92%;
+            text-align: center;
+            box-shadow: 0 20px 45px rgba(0, 0, 0, 0.8), 0 0 35px rgba(139, 92, 246, 0.25);
+            position: relative;
+            animation: popIn 0.25s ease-out;
+        }
+        @keyframes popIn {
+            from { transform: scale(0.9); opacity: 0; }
+            to { transform: scale(1); opacity: 1; }
+        }
     </style>
 </head>
 <body>
@@ -511,21 +603,57 @@
 
             <!-- TAB 4: WITHDRAWALS -->
             <div id="tab-withdrawals" class="hidden">
+                <!-- Smart Payout Quick Helper Card -->
+                <div style="background: linear-gradient(135deg, rgba(16,185,129,0.12), rgba(14,165,233,0.12)); border: 1px solid rgba(16,185,129,0.3); border-radius: 12px; padding: 16px 20px; margin-bottom: 20px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+                        <div style="display:flex; align-items:center; gap:10px;">
+                            <span style="font-size:24px;">⚡</span>
+                            <div>
+                                <h3 style="color:#fae59f; font-size:15px; margin:0; font-weight:800;">Fast Payout Assistant &amp; Auto-Approval</h3>
+                                <p style="font-size:12px; color:#cbd5e1; margin:2px 0 0;">Mobile par 1-tap se PhonePe/GPay khulega, PC par dynamic QR scan karein, ya 1-tap me A/C copy karein!</p>
+                            </div>
+                        </div>
+                        <div style="display:flex; gap:8px;">
+                            <button type="button" class="btn-action" style="background:#334155; color:#fff; font-size:11px;" onclick="loadWithdrawals()">↻ Refresh List</button>
+                        </div>
+                    </div>
+                    <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:10px; margin-top:14px; font-size:11.5px; color:#94a3b8;">
+                        <div style="background:rgba(0,0,0,0.3); padding:8px 12px; border-radius:6px; border-left:3px solid #10b981;">
+                            <strong style="color:#34d399;">1. Mobile UPI Intent:</strong> "⚡ Pay via UPI" par tap karein — PhonePe/GPay open hoga with pre-filled amount.
+                        </div>
+                        <div style="background:rgba(0,0,0,0.3); padding:8px 12px; border-radius:6px; border-left:3px solid #8b5cf6;">
+                            <strong style="color:#c084fc;">2. Dynamic QR Code:</strong> "📷 Scan QR" par click karein aur apne mobile bank app se scan karke pay karein.
+                        </div>
+                        <div style="background:rgba(0,0,0,0.3); padding:8px 12px; border-radius:6px; border-left:3px solid #38bdf8;">
+                            <strong style="color:#38bdf8;">3. Bank Copy Chips:</strong> A/C No aur IFSC ke bagal me 📋 button se instant clipboard copy.
+                        </div>
+                        <div style="background:rgba(0,0,0,0.3); padding:8px 12px; border-radius:6px; border-left:3px solid #f59e0b;">
+                            <strong style="color:#fbbf24;">4. MacroDroid Auto-Debit:</strong> Phone par bank ka debit SMS aate hi withdrawal auto-paid ho jayegi!
+                        </div>
+                    </div>
+                </div>
+
                 <div class="card">
-                    <div class="card-title">Pending Withdrawal Requests (Approve & Paid / Reject)</div>
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Tx ID</th>
-                                <th>User Phone</th>
-                                <th>Amount</th>
-                                <th>Bank / UPI</th>
-                                <th>Time</th>
-                                <th>Action</th>
-                            </tr>
-                        </thead>
-                        <tbody id="withdrawals-tbody"></tbody>
-                    </table>
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                        <div class="card-title" style="margin:0;">Pending Withdrawal Requests</div>
+                        <span id="wth-pending-count" style="font-size:12px; color:#fae59f; font-weight:700;"></span>
+                    </div>
+                    <div class="table-wrap" style="overflow-x:auto;">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Tx ID</th>
+                                    <th>User Phone</th>
+                                    <th>Amount</th>
+                                    <th>Payout Destination &amp; Details</th>
+                                    <th style="min-width:140px;">⚡ Instant Pay</th>
+                                    <th>Requested Time</th>
+                                    <th style="min-width:140px;">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="withdrawals-tbody"></tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
 
@@ -1069,45 +1197,275 @@
             alert('Copied to clipboard:\n' + txt);
         }
 
+        let activePayoutModalTxId = null;
+
+        function showPayoutQR(txId, upiId, amount, phone) {
+            activePayoutModalTxId = txId;
+            const upiUrl = 'upi://pay?pa=' + encodeURIComponent(upiId) +
+                '&pn=' + encodeURIComponent('Player_' + (phone || 'ASGames')) +
+                '&am=' + parseFloat(amount).toFixed(2) +
+                '&cu=INR&tn=' + encodeURIComponent('ASGames Withdrawal ' + txId);
+
+            const amtEl = document.getElementById('payout-modal-amount');
+            const upiEl = document.getElementById('payout-modal-upi');
+            const phEl = document.getElementById('payout-modal-phone');
+            const qrImg = document.getElementById('payout-modal-qr-img');
+
+            if (amtEl) amtEl.textContent = '₹' + parseFloat(amount).toFixed(2);
+            if (upiEl) upiEl.textContent = upiId;
+            if (phEl) phEl.textContent = phone || '--';
+            if (qrImg) qrImg.src = 'https://api.qrserver.com/v1/create-qr-code/?size=250x250&margin=8&data=' + encodeURIComponent(upiUrl);
+
+            const modal = document.getElementById('payout-qr-modal');
+            if (modal) modal.style.display = 'flex';
+        }
+
+        function closePayoutModal() {
+            const modal = document.getElementById('payout-qr-modal');
+            if (modal) modal.style.display = 'none';
+            activePayoutModalTxId = null;
+        }
+
+        async function confirmModalPaid() {
+            if (!activePayoutModalTxId) return;
+            const txId = activePayoutModalTxId;
+            closePayoutModal();
+            await approveWithdrawal(txId, true);
+        }
+
+        function copyAdminText(text, successMsg) {
+            if (!text) return;
+            if (navigator.clipboard) {
+                navigator.clipboard.writeText(text).then(() => {
+                    showAdminToast(successMsg || 'Copied to clipboard!', 'success');
+                }).catch(() => {
+                    copyAdminFallback(text, successMsg);
+                });
+            } else {
+                copyAdminFallback(text, successMsg);
+            }
+        }
+
+        function copyAdminFallback(text, successMsg) {
+            const ta = document.createElement('textarea');
+            ta.value = text;
+            ta.style.position = 'fixed';
+            ta.style.opacity = '0';
+            document.body.appendChild(ta);
+            ta.select();
+            try {
+                document.execCommand('copy');
+                showAdminToast(successMsg || 'Copied to clipboard!', 'success');
+            } catch (e) {
+                prompt('Copy this:', text);
+            }
+            document.body.removeChild(ta);
+        }
+
+        function showAdminToast(msg, type = 'info') {
+            const toast = document.createElement('div');
+            toast.style.cssText = `
+                position: fixed; bottom: 24px; right: 24px; z-index: 100000;
+                background: ${type === 'success' ? '#059669' : (type === 'error' ? '#dc2626' : '#2563eb')};
+                color: #fff; padding: 10px 18px; border-radius: 8px; font-size: 13px; font-weight: 700;
+                box-shadow: 0 4px 14px rgba(0,0,0,0.45); animation: popIn 0.2s ease-out;
+            `;
+            toast.textContent = msg;
+            document.body.appendChild(toast);
+            setTimeout(() => { if (toast.parentNode) toast.remove(); }, 2500);
+        }
+
+        function parseWithdrawDetails(detailsStr, userPhone) {
+            const str = String(detailsStr || '').trim();
+            let type = 'OTHER';
+            let upiId = '';
+            let bankName = '';
+            let holder = '';
+            let accNum = '';
+            let ifsc = '';
+            let usdt = '';
+
+            // Check for UPI (e.g. name@okhdfcbank, 9876543210@paytm)
+            const upiMatch = str.match(/([a-zA-Z0-9.\-_]{2,256}@[a-zA-Z]{2,64})/i);
+            if (upiMatch && upiMatch[1]) {
+                type = 'UPI';
+                upiId = upiMatch[1].trim();
+            }
+
+            // Check for USDT
+            const usdtMatch = str.match(/\b(T[A-Za-z1-9]{33}|0x[a-fA-F0-9]{40})\b/);
+            if (usdtMatch && usdtMatch[1]) {
+                type = 'USDT';
+                usdt = usdtMatch[1];
+            }
+
+            // Check for Bank
+            const ifscMatch = str.match(/\b([A-Z]{4}0[A-Z0-9]{6})\b/i);
+            if (ifscMatch && ifscMatch[1]) {
+                type = 'BANK';
+                ifsc = ifscMatch[1].toUpperCase();
+            }
+
+            const accMatch = str.match(/(?:A\/C|Account|Acc|AC|No|Number)?[:\s-]*([0-9]{9,18})\b/i);
+            if (accMatch && accMatch[1] && accMatch[1] !== userPhone) {
+                if (!upiId) type = 'BANK';
+                accNum = accMatch[1];
+            }
+
+            if (str.toUpperCase().includes('BANK:') || str.toUpperCase().includes('IFSC')) {
+                type = 'BANK';
+                const parts = str.split('|').map(p => p.trim());
+                parts.forEach(p => {
+                    if (p.toUpperCase().startsWith('BANK:')) bankName = p.replace(/^BANK:/i, '').trim();
+                    else if (p.toUpperCase().includes('A/C:') || p.toUpperCase().includes('ACC:')) accNum = p.replace(/.*(?:A\/C|ACC):/i, '').trim();
+                    else if (p.toUpperCase().includes('IFSC:')) ifsc = p.replace(/.*IFSC:/i, '').trim().toUpperCase();
+                    else if (!holder && !p.includes(':') && p.length > 2) holder = p;
+                });
+            }
+
+            return { type, upiId, bankName, holder, accNum, ifsc, usdt, raw: str };
+        }
+
         async function loadWithdrawals() {
             const res = await fetch('/api/admin/withdrawals', { headers: { 'x-admin-key': adminKey } });
             const d = await res.json();
             const tbody = document.getElementById('withdrawals-tbody');
-            if (d.withdrawals.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; color:#94a3b8;">No pending withdrawals</td></tr>`;
+            const cntEl = document.getElementById('wth-pending-count');
+            if (cntEl) cntEl.textContent = (d.withdrawals ? d.withdrawals.length : 0) + ' pending';
+
+            if (!d.withdrawals || d.withdrawals.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; padding:32px 10px; color:#94a3b8;">
+                    <div style="font-size:36px; margin-bottom:8px; opacity:0.6;">🎉</div>
+                    <div style="font-weight:700; color:#cbd5e1; font-size:14px;">No Pending Withdrawals!</div>
+                    <div style="font-size:12px; margin-top:4px;">All withdrawal requests have been processed.</div>
+                </td></tr>`;
                 return;
             }
-            tbody.innerHTML = d.withdrawals.map(t => `
-                <tr>
-                    <td>${t.id}</td>
-                    <td><strong>${t.phone}</strong></td>
-                    <td style="color:#ef4444; font-weight:700;">₹${t.amount}</td>
-                    <td>${t.details}</td>
-                    <td>${t.created_at}</td>
-                    <td>
-                        <button class="btn-action btn-approve" onclick="approveWithdrawal('${t.id}')">Approve & Paid</button>
-                        <button class="btn-action btn-reject" onclick="rejectWithdrawal('${t.id}')">Reject & Refund</button>
-                    </td>
-                </tr>
-            `).join('');
+
+            tbody.innerHTML = d.withdrawals.map(t => {
+                const parsed = parseWithdrawDetails(t.details, t.phone);
+                let destHtml = '';
+                let fastPayHtml = '';
+
+                if (parsed.upiId) {
+                    const upiUrl = 'upi://pay?pa=' + encodeURIComponent(parsed.upiId) +
+                        '&pn=' + encodeURIComponent('Player_' + (t.phone || 'ASGames')) +
+                        '&am=' + parseFloat(t.amount).toFixed(2) +
+                        '&cu=INR&tn=' + encodeURIComponent('ASGames Withdrawal ' + t.id);
+
+                    destHtml = `
+                        <div>
+                            <span style="background:rgba(16,185,129,0.18); color:#10b981; border:1px solid rgba(16,185,129,0.4); padding:2px 7px; border-radius:4px; font-weight:700; font-size:10.5px;">UPI PAYOUT</span>
+                            <div style="font-weight:700; color:#fae59f; font-size:13px; margin:4px 0 6px;">${parsed.upiId}</div>
+                            <button type="button" class="btn-copy-chip" onclick="copyAdminText('${parsed.upiId}', 'UPI ID Copied!')">📋 Copy UPI</button>
+                        </div>
+                    `;
+
+                    fastPayHtml = `
+                        <div style="display:flex; flex-direction:column; gap:6px;">
+                            <a href="${upiUrl}" class="btn-quick-upi" target="_blank" title="PhonePe / GPay / Paytm opens with amount pre-filled">⚡ Pay via UPI</a>
+                            <button type="button" class="btn-quick-qr" onclick="showPayoutQR('${t.id}', '${parsed.upiId}', ${t.amount}, '${t.phone}')">📷 Scan QR</button>
+                        </div>
+                    `;
+                } else if (parsed.type === 'BANK') {
+                    destHtml = `
+                        <div>
+                            <span style="background:rgba(56,189,248,0.18); color:#38bdf8; border:1px solid rgba(56,189,248,0.4); padding:2px 7px; border-radius:4px; font-weight:700; font-size:10.5px;">BANK TRANSFER</span>
+                            <div style="font-size:12px; color:#cbd5e1; margin:4px 0 6px; line-height:1.4;">
+                                ${parsed.bankName ? `<div>Bank: <strong style="color:#fff;">${parsed.bankName}</strong></div>` : ''}
+                                ${parsed.holder ? `<div>Holder: <strong style="color:#fff;">${parsed.holder}</strong></div>` : ''}
+                                <div>A/C: <strong style="color:#fae59f; font-size:12.5px;">${parsed.accNum || 'N/A'}</strong></div>
+                                <div>IFSC: <strong style="color:#a78bfa; font-size:12.5px;">${parsed.ifsc || 'N/A'}</strong></div>
+                            </div>
+                            <div style="display:flex; gap:4px; flex-wrap:wrap;">
+                                ${parsed.accNum ? `<button type="button" class="btn-copy-chip" onclick="copyAdminText('${parsed.accNum}', 'Account No Copied!')">📋 Copy A/C</button>` : ''}
+                                ${parsed.ifsc ? `<button type="button" class="btn-copy-chip" onclick="copyAdminText('${parsed.ifsc}', 'IFSC Copied!')">📋 Copy IFSC</button>` : ''}
+                                ${parsed.holder ? `<button type="button" class="btn-copy-chip" onclick="copyAdminText('${parsed.holder}', 'Name Copied!')">📋 Copy Name</button>` : ''}
+                            </div>
+                        </div>
+                    `;
+
+                    fastPayHtml = `
+                        <div style="font-size:11px; color:#94a3b8; line-height:1.4;">
+                            <div>1. 📋 Copy A/C &amp; IFSC</div>
+                            <div>2. Pay from Bank App</div>
+                            <div style="color:#34d399; margin-top:3px; font-weight:700;">IMPS / NEFT</div>
+                        </div>
+                    `;
+                } else if (parsed.type === 'USDT') {
+                    destHtml = `
+                        <div>
+                            <span style="background:rgba(234,179,8,0.18); color:#eab308; border:1px solid rgba(234,179,8,0.4); padding:2px 7px; border-radius:4px; font-weight:700; font-size:10.5px;">USDT (TRC20)</span>
+                            <div style="font-size:11px; color:#cbd5e1; margin:4px 0; word-break:break-all;">${parsed.usdt}</div>
+                            <button type="button" class="btn-copy-chip" onclick="copyAdminText('${parsed.usdt}', 'USDT Address Copied!')">📋 Copy Address</button>
+                        </div>
+                    `;
+                    fastPayHtml = `<span style="font-size:11px; color:#eab308; font-weight:600;">Crypto Transfer</span>`;
+                } else {
+                    destHtml = `
+                        <div style="font-size:12px; color:#cbd5e1;">${t.details || 'N/A'}</div>
+                    `;
+                    fastPayHtml = `<span style="font-size:11px; color:#94a3b8;">Manual Transfer</span>`;
+                }
+
+                return `
+                    <tr>
+                        <td><span style="font-family:monospace; font-size:11px; color:#94a3b8;">${t.id}</span></td>
+                        <td><strong style="color:#fff;">${t.phone}</strong></td>
+                        <td><span style="color:#ef4444; font-weight:800; font-size:14px;">₹${parseFloat(t.amount).toFixed(2)}</span></td>
+                        <td>${destHtml}</td>
+                        <td>${fastPayHtml}</td>
+                        <td><span style="font-size:11px; color:#71717a;">${(t.created_at || '').replace('T', ' ').slice(0, 19)}</span></td>
+                        <td>
+                            <div style="display:flex; flex-direction:column; gap:5px;">
+                                <button class="btn-action btn-approve" style="padding:6px 10px; font-weight:700;" onclick="approveWithdrawal('${t.id}')">✅ Approve &amp; Paid</button>
+                                <button class="btn-action btn-reject" style="padding:5px 10px; margin-left:0;" onclick="rejectWithdrawal('${t.id}')">❌ Reject &amp; Refund</button>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
         }
 
-        async function approveWithdrawal(txId) {
-            await fetch('/api/admin/approve-withdrawal', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'x-admin-key': adminKey },
-                body: JSON.stringify({ tx_id: txId })
-            });
+        async function approveWithdrawal(txId, skipConfirm = false) {
+            if (!skipConfirm && !confirm('Kya aap sure hain ki aapne player ko payout bhej diya hai? Status "Approved & Paid" mark ho jayega.')) return;
+            try {
+                const res = await fetch('/api/admin/approve-withdrawal', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'x-admin-key': adminKey },
+                    body: JSON.stringify({ tx_id: txId })
+                });
+                const d = await res.json();
+                if (d.success) {
+                    showAdminToast(d.message || 'Withdrawal approved & marked as Paid!', 'success');
+                } else {
+                    showAdminToast(d.message || 'Error approving withdrawal', 'error');
+                }
+            } catch (e) {
+                showAdminToast('Server error while approving', 'error');
+            }
             loadWithdrawals();
             refreshOverview();
         }
 
         async function rejectWithdrawal(txId) {
-            await fetch('/api/admin/reject-withdrawal', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'x-admin-key': adminKey },
-                body: JSON.stringify({ tx_id: txId })
-            });
+            const reason = prompt('Withdrawal Reject karne ka reason likhein (Player ke wallet me paise refund ho jayenge):', 'Incorrect bank/UPI details. Please verify and retry.');
+            if (reason === null) return;
+            try {
+                const res = await fetch('/api/admin/reject-withdrawal', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'x-admin-key': adminKey },
+                    body: JSON.stringify({ tx_id: txId, reason })
+                });
+                const d = await res.json();
+                if (d.success) {
+                    showAdminToast(d.message || 'Withdrawal rejected & refunded.', 'success');
+                } else {
+                    showAdminToast(d.message || 'Error rejecting withdrawal', 'error');
+                }
+            } catch (e) {
+                showAdminToast('Server error while rejecting', 'error');
+            }
             loadWithdrawals();
             refreshOverview();
         }
@@ -1604,5 +1962,41 @@
             }
         }
     </script>
+
+    <!-- Payout QR Modal Popup -->
+    <div id="payout-qr-modal" class="payout-modal-overlay" style="display:none;" onclick="if(event.target===this)closePayoutModal()">
+        <div class="payout-modal-card">
+            <button type="button" onclick="closePayoutModal()" style="position:absolute; top:12px; right:14px; background:none; border:none; color:#94a3b8; font-size:22px; cursor:pointer; line-height:1;">&times;</button>
+            <div style="font-size:26px; margin-bottom:2px;">⚡</div>
+            <h3 style="color:#fae59f; font-size:17px; margin:0 0 4px; font-weight:800;">Instant UPI Payout QR</h3>
+            <p style="font-size:12px; color:#94a3b8; margin:0 0 14px;">Scan with PhonePe, Google Pay, Paytm, BHIM or any UPI app</p>
+            
+            <div style="background:#020617; padding:12px; border-radius:12px; border:1px solid #1e293b; display:inline-block; margin-bottom:14px;">
+                <img id="payout-modal-qr-img" src="" alt="Payout QR Code" style="width:230px; height:230px; display:block; border-radius:8px; background:#fff;">
+            </div>
+
+            <div style="background:#0c1020; border:1px solid #1e293b; border-radius:8px; padding:10px 14px; margin-bottom:16px; text-align:left;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+                    <span style="font-size:11px; color:#94a3b8;">Payout Amount:</span>
+                    <span id="payout-modal-amount" style="font-size:18px; font-weight:800; color:#10b981;">₹0.00</span>
+                </div>
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+                    <span style="font-size:11px; color:#94a3b8;">Player UPI ID:</span>
+                    <span id="payout-modal-upi" style="font-size:12px; font-weight:700; color:#fae59f;">--</span>
+                </div>
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <span style="font-size:11px; color:#94a3b8;">Player Phone:</span>
+                    <span id="payout-modal-phone" style="font-size:12px; color:#cbd5e1;">--</span>
+                </div>
+            </div>
+
+            <div style="display:flex; gap:10px;">
+                <button type="button" class="btn-action btn-approve" id="payout-modal-paid-btn" style="flex:1; padding:10px 14px; font-size:13px; font-weight:700;" onclick="confirmModalPaid()">
+                    ✅ Maine Pay Kar Diya (Approve &amp; Paid)
+                </button>
+                <button type="button" class="btn-action" style="background:#334155; color:#fff; padding:10px 14px;" onclick="closePayoutModal()">Close</button>
+            </div>
+        </div>
+    </div>
 </body>
 </html>

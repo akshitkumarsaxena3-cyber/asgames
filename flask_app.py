@@ -1421,7 +1421,7 @@ def parse_macrodroid_message(input_data):
 
     if not amount and raw_text:
         a1 = _re.search(r'(?:Rs\.?|INR|₹)\s*([0-9,]+(?:\.[0-9]{1,2})?)', raw_text, _re.I) or \
-             _re.search(r'(?:credited|received|deposited|transfer(?:red)?)\s*(?:by|with|for|of)?\s*(?:Rs\.?|INR|₹)?\s*([0-9,]+(?:\.[0-9]{1,2})?)', raw_text, _re.I)
+             _re.search(r'(?:credited|received|deposited|debited|paid|sent|withdrawn|transfer(?:red)?)\s*(?:by|with|for|of|to)?\s*(?:Rs\.?|INR|₹)?\s*([0-9,]+(?:\.[0-9]{1,2})?)', raw_text, _re.I)
         if a1:
             try:
                 amount = float(a1.group(1).replace(',', ''))
@@ -1496,6 +1496,45 @@ def api_webhook_macrodroid():
                 'success': False,
                 'message': 'Unauthorized: secret key required. Add {"secret": "spp213201pty"} in MacroDroid HTTP body or ?secret=spp213201pty'
             }), 401
+
+        # Check for Bank Debit SMS / Payout Confirmation
+        is_debit = bool(_re.search(r'\b(debited|debit|withdrawn|sent\s+to|paid\s+to|transfer\s+from)\b', raw_text, _re.I)) and not bool(_re.search(r'\b(credited|received|deposit)\b', raw_text, _re.I))
+        if is_debit and amount and amount > 0:
+            c.execute("SELECT * FROM transactions WHERE type = 'withdraw' AND (status = 'pending' OR status = 'Pending') ORDER BY created_at ASC")
+            pending_wths = c.fetchall()
+            matching_wth = None
+            for pw in pending_wths:
+                if abs(float(pw['amount'] or 0) - amount) < 1:
+                    matching_wth = pw
+                    break
+            if matching_wth:
+                new_w_details = (matching_wth['details'] or '') + f" | Auto-verified via Bank Debit SMS (UTR: {utr or 'N/A'})"
+                c.execute('UPDATE transactions SET status = "completed", details = ? WHERE id = ?', (new_w_details, matching_wth['id']))
+                c.execute(
+                    'INSERT INTO macrodroid_logs (time, utr, amount, action, user_id, details, raw) VALUES (?, ?, ?, ?, ?, ?, ?)',
+                    (now_iso, utr or 'DEBIT', float(matching_wth['amount']), 'WITHDRAW_AUTO_PAID', matching_wth['user_id'], f"Withdrawal {matching_wth['id']} for ₹{matching_wth['amount']} automatically marked Paid via Debit SMS!", raw_text[:200])
+                )
+                conn.commit()
+                return jsonify({
+                    'success': True,
+                    'action': 'withdraw_auto_paid',
+                    'tx_id': matching_wth['id'],
+                    'amount': float(matching_wth['amount']),
+                    'utr': utr or '',
+                    'message': f"Withdrawal {matching_wth['id']} for ₹{matching_wth['amount']} auto-approved and marked paid via Bank Debit!"
+                })
+            else:
+                c.execute(
+                    'INSERT INTO macrodroid_logs (time, utr, amount, action, details, raw) VALUES (?, ?, ?, ?, ?, ?)',
+                    (now_iso, utr or 'DEBIT', amount, 'DEBIT_NOT_MATCHED', f"Bank debited ₹{amount}, but no pending withdrawal of ₹{amount} was found in queue.", raw_text[:200])
+                )
+                conn.commit()
+                return jsonify({
+                    'success': True,
+                    'action': 'debit_not_matched',
+                    'amount': amount,
+                    'message': f"Debit of ₹{amount} logged, but no matching pending withdrawal was found."
+                })
 
         if not utr:
             c.execute(
