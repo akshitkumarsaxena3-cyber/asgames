@@ -41,6 +41,8 @@ class DataStore {
             nextUserId: 1,
             nextCommissionId: 1
         };
+        this._dirty = false;
+        this._lastLocalWriteTs = 0;
         this.load();
     }
 
@@ -76,6 +78,8 @@ class DataStore {
 
     save() {
         try {
+            this._dirty = true;
+            this._lastLocalWriteTs = Date.now();
             fs.writeFileSync(DATA_FILE, JSON.stringify(this.data, null, 2), 'utf-8');
             this.triggerCloudSync();
         } catch (e) {
@@ -91,17 +95,30 @@ class DataStore {
         if (this._syncTimeout) clearTimeout(this._syncTimeout);
         this._syncTimeout = setTimeout(() => {
             this.syncPushToPythonAnywhere();
-        }, 1500);
+        }, 600);
     }
 
     async syncPullFromPythonAnywhere() {
         const url = this.getPythonAnywhereUrl();
         if (!url) return false;
+        // CRITICAL: Never overwrite fresh local balance changes (withdrawals/bets/gifts) with stale remote data!
+        if (this._dirty) {
+            const pushed = await this.syncPushToPythonAnywhere();
+            if (!pushed) return false;
+        }
+        if (Date.now() - (this._lastLocalWriteTs || 0) < 8000) {
+            return false;
+        }
         try {
             const res = await fetch(`${url}/api/sync/pull`, { headers: { 'x-admin-key': 'spp213201pty' } });
             if (!res.ok) return false;
             const remote = await res.json();
             if (!remote.success) return false;
+
+            // Abort pull if a local write occurred while fetch was in flight
+            if (this._dirty || Date.now() - (this._lastLocalWriteTs || 0) < 8000) {
+                return false;
+            }
 
             if (Array.isArray(remote.users)) {
                 for (const ru of remote.users) {
@@ -193,6 +210,7 @@ class DataStore {
             });
             const data = await res.json();
             if (data.success) {
+                this._dirty = false;
                 console.log(`[PythonAnywhere Sync] Pushed updates to ${url}`);
                 return true;
             }

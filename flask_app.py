@@ -578,16 +578,19 @@ def api_withdraw():
             return jsonify({'success': False, 'message': f'Insufficient balance! You have ₹{current_bal:.2f}'}), 400
 
         # Deduct balance immediately upon request
-        cursor.execute('UPDATE users SET balance = balance - ? WHERE id = ?', (amount, user['id']))
+        cursor.execute('UPDATE users SET balance = MAX(0, balance - ?) WHERE id = ?', (amount, user['id']))
         tx_id = f"WTH{int(time.time()*1000)}"
         now_iso = datetime.now().isoformat()
         cursor.execute(
             'INSERT INTO transactions (id, user_id, type, amount, status, details, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
             (tx_id, user['id'], 'withdraw', amount, 'pending', details, now_iso)
         )
+        cursor.execute('SELECT balance FROM users WHERE id = ?', (user['id'],))
+        new_row = cursor.fetchone()
+        new_bal = round(float(new_row['balance']), 2) if new_row else 0.0
         conn.commit()
 
-    return jsonify({'success': True, 'message': 'Withdrawal submitted! Admin will approve & payout.', 'tx_id': tx_id})
+    return jsonify({'success': True, 'balance': new_bal, 'message': 'Withdrawal submitted! Admin will approve & payout.', 'tx_id': tx_id})
 
 @app.route('/api/wallet/transactions', methods=['GET'])
 def api_my_transactions():
@@ -699,9 +702,10 @@ def api_game_bet():
             'INSERT INTO bets (id, user_id, period, select_type, select_val, amount, win_amount, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
             (bet_id, user['id'], period, select_type, select_val, amount, 0.0, 'pending', now_iso)
         )
+        new_bal = round(max(0.0, balance - amount), 2)
         conn.commit()
 
-    return jsonify({'success': True, 'message': 'Bet placed successfully!', 'new_balance': balance - amount})
+    return jsonify({'success': True, 'message': 'Bet placed successfully!', 'balance': new_bal, 'newBalance': new_bal, 'new_balance': new_bal})
 
 @app.route('/api/game/history', methods=['GET'])
 def api_game_history():

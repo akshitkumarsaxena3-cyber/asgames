@@ -363,13 +363,17 @@ class WinGoGame {
             return;
         }
 
+        if (this._placingBet) return;
         const totalBet = this.contractMoney * this.multiplier * this.quantity;
         if (this.sm.balance < totalBet) {
             this.sm.showToast('Insufficient balance! Please recharge.', 'error');
             return;
         }
 
-        // If user is authenticated, sync bet with backend server
+        this._placingBet = true;
+        let serverDeducted = false;
+
+        // If user is authenticated, sync bet with backend server (server deducts ONCE!)
         if (this.sm.token) {
             try {
                 const res = await fetch('/api/game/bet', {
@@ -387,16 +391,24 @@ class WinGoGame {
                 });
                 const d = await res.json();
                 if (!d.success) {
+                    this._placingBet = false;
                     this.sm.showToast(d.message, 'error');
                     return;
                 }
+                serverDeducted = true;
+                const serverBal = typeof d.balance === 'number' ? d.balance
+                    : (typeof d.newBalance === 'number' ? d.newBalance
+                    : (typeof d.new_balance === 'number' ? d.new_balance : Math.max(0, this.sm.balance - totalBet)));
+                this.sm.setLocalBalance(serverBal, 'down');
             } catch (e) {
                 console.log('Server bet sync offline, falling back to local simulation:', e);
             }
         }
 
-        // Deduct balance
-        this.sm.deductBalance(totalBet, `Win Go ${this.currentMode} Issue #${this.currentPeriod}`);
+        // Only deduct via sync-game-delta if /api/game/bet did NOT already deduct on server!
+        if (!serverDeducted) {
+            this.sm.deductBalance(totalBet, `Win Go ${this.currentMode} Issue #${this.currentPeriod}`);
+        }
 
         // Register user bet
         const betRecord = {
@@ -409,6 +421,7 @@ class WinGoGame {
             multiplier: this.multiplier,
             quantity: this.quantity,
             totalBet: totalBet,
+            serverSynced: serverDeducted,
             time: new Date().toLocaleTimeString(),
             status: 'Pending',
             winAmount: 0
@@ -417,7 +430,8 @@ class WinGoGame {
         this.userBets.unshift(betRecord);
         this.sm.saveUserBet(betRecord);
 
-        if (window.sound) window.sound.chip();
+        this._placingBet = false;
+        if (window.sound) window.sound.chip('wingo');
         this.sm.showToast(`Bet ₹${totalBet} placed on ${String(this.pendingBet.value).toUpperCase()}!`, 'success');
         this.closeBetModal();
         this.renderMyBets();
@@ -484,7 +498,8 @@ class WinGoGame {
                     bet.winAmount = netWin;
                     totalWinThisRound += netWin;
                     wonAny = true;
-                    this.sm.addBalance(netWin, `Win Go Win Period #${drawResult.period}`);
+                    // If serverSynced, backend drawPeriod already credited DB — skip double syncGameDelta!
+                    this.sm.addBalance(netWin, `Win Go Win Period #${drawResult.period}`, Boolean(bet.serverSynced));
                 } else {
                     bet.status = 'Lost';
                     bet.winAmount = 0;
@@ -493,12 +508,13 @@ class WinGoGame {
         });
 
         if (wonAny) {
-            if (window.sound) window.sound.win();
+            if (window.sound) window.sound.win('wingo');
             this.sm.showWinModal(totalWinThisRound, `Win Go ${this.currentMode} Issue #${drawResult.period}`);
+            setTimeout(() => this.sm.fetchUserProfile(), 1200);
         } else {
             // Check if user had any lost bets this round
             const hadBet = this.userBets.some(b => b.period === drawResult.period);
-            if (hadBet && window.sound) window.sound.loss();
+            if (hadBet && window.sound) window.sound.loss('wingo');
         }
     }
 

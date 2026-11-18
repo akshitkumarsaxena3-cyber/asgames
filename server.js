@@ -574,7 +574,9 @@ app.post('/api/game/bet', requireAuth, async (req, res) => {
             amount: betAmount
         });
 
-        res.json({ success: true, message: `Bet ₹${betAmount} placed successfully!`, newBalance: req.user.balance - betAmount });
+        const updatedUser = await DB.get('SELECT balance FROM users WHERE id = ?', [req.user.id]);
+        const finalBal = updatedUser ? updatedUser.balance : 0;
+        res.json({ success: true, message: `Bet ₹${betAmount} placed successfully!`, balance: finalBal, newBalance: finalBal });
     } catch (e) {
         res.status(500).json({ success: false, message: e.message });
     }
@@ -691,14 +693,20 @@ app.post('/api/wallet/withdraw', requireAuth, async (req, res) => {
             return res.json({ success: false, message: 'Insufficient balance' });
         }
 
-        // Deduct & Hold balance
+        // Deduct & Hold balance immediately
         await DB.run('UPDATE users SET balance = balance - ? WHERE id = ?', [withdrawAmt, req.user.id]);
 
         const txId = 'WTH' + Date.now();
         await DB.run(`INSERT INTO transactions (id, user_id, type, amount, status, details) VALUES (?, ?, ?, ?, ?, ?)`,
             [txId, req.user.id, 'withdraw', withdrawAmt, 'pending', bank_info || 'UPI / Bank Transfer']);
 
-        res.json({ success: true, message: 'Withdrawal requested! Processing within 1-24 hours.' });
+        const updatedUser = await DB.get('SELECT balance FROM users WHERE id = ?', [req.user.id]);
+        const finalBal = updatedUser ? Math.round(updatedUser.balance * 100) / 100 : 0;
+
+        // Immediately sync deduction to PythonAnywhere so pull cannot revert it
+        DB.syncPushToPythonAnywhere().catch(() => {});
+
+        res.json({ success: true, balance: finalBal, tx_id: txId, message: 'Withdrawal requested! Processing within 1-24 hours.' });
     } catch (e) {
         res.status(500).json({ success: false, message: e.message });
     }
@@ -1150,8 +1158,10 @@ app.listen(PORT, '0.0.0.0', () => {
 
     setInterval(async () => {
         if (DB.getPythonAnywhereUrl()) {
+            if (DB._dirty) {
+                await DB.syncPushToPythonAnywhere();
+            }
             await DB.syncPullFromPythonAnywhere();
-            await DB.syncPushToPythonAnywhere();
         }
     }, 12000);
 });

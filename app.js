@@ -185,18 +185,27 @@ class StateManager {
         } catch (e) {}
     }
 
-    addBalance(amount, desc) {
-        this.balance += amount;
+    setLocalBalance(newBalance, flashDir = null) {
+        this.balance = Math.max(0, Math.round(Number(newBalance || 0) * 100) / 100);
+        this._syncLockUntil = Date.now() + 5000;
         localStorage.setItem('asg_balance', this.balance);
-        this.updateBalanceUI('up');
-        this.syncGameDelta(amount);
+        this.updateBalanceUI(flashDir);
+        if (typeof updateWithdrawSummary === 'function') updateWithdrawSummary();
+        if (typeof updateWalletCenterRings === 'function') updateWalletCenterRings();
     }
 
-    deductBalance(amount, desc) {
-        this.balance = Math.max(0, this.balance - amount);
+    addBalance(amount, desc, skipServerSync = false) {
+        this.balance = Math.round((this.balance + amount) * 100) / 100;
+        localStorage.setItem('asg_balance', this.balance);
+        this.updateBalanceUI('up');
+        if (!skipServerSync) this.syncGameDelta(amount);
+    }
+
+    deductBalance(amount, desc, skipServerSync = false) {
+        this.balance = Math.max(0, Math.round((this.balance - amount) * 100) / 100);
         localStorage.setItem('asg_balance', this.balance);
         this.updateBalanceUI('down');
-        this.syncGameDelta(-amount);
+        if (!skipServerSync) this.syncGameDelta(-amount);
     }
 
     saveUserBet(bet) {
@@ -365,6 +374,7 @@ class StateManager {
         const submitWithdrawBtn = document.getElementById('btn-submit-withdraw');
         if (submitWithdrawBtn) {
             submitWithdrawBtn.addEventListener('click', async () => {
+                if (this._withdrawSubmitting) return;
                 if (!this.token) {
                     this.showToast('Please login first to withdraw funds!', 'warning');
                     openAuthModal();
@@ -388,6 +398,8 @@ class StateManager {
                     return;
                 }
 
+                this._withdrawSubmitting = true;
+                submitWithdrawBtn.disabled = true;
                 try {
                     const res = await fetch('/api/wallet/withdraw', {
                         method: 'POST',
@@ -399,9 +411,12 @@ class StateManager {
                     });
                     const d = await res.json();
                     if (d.success) {
-                        this.showToast('Withdrawal submitted! Admin will verify and process.', 'success');
+                        const updatedBal = (typeof d.balance === 'number')
+                            ? d.balance
+                            : Math.max(0, this.balance - amt);
+                        this.setLocalBalance(updatedBal, 'down');
+                        this.showToast(`Withdrawal ₹${amt} submitted! Balance updated.`, 'success');
                         if (amtInput) amtInput.value = '';
-                        this.fetchUserProfile();
                         if (typeof updateWithdrawSummary === 'function') updateWithdrawSummary();
                         if (typeof loadWithdrawPageHistory === 'function') loadWithdrawPageHistory();
                     } else {
@@ -409,6 +424,9 @@ class StateManager {
                     }
                 } catch (e) {
                     this.showToast('Error submitting withdrawal', 'error');
+                } finally {
+                    this._withdrawSubmitting = false;
+                    submitWithdrawBtn.disabled = false;
                 }
             });
         }
