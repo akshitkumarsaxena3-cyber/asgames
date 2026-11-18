@@ -544,11 +544,13 @@ app.get('/api/game/current', (req, res) => {
 
 app.post('/api/game/bet', requireAuth, async (req, res) => {
     try {
-        const { period_id, select_type, select_value, amount } = req.body;
+        const { period_id, select_type, select_value, amount, game_mode } = req.body;
+        const mode = String(game_mode || '30s');
         const betAmount = parseFloat(amount);
 
-        if (isLocked || period_id !== currentPeriod) {
-            return res.json({ success: false, message: 'Betting is locked for current round!' });
+        // Only enforce the 30s server lock on 30s mode; never fail due to client timezone/period drift!
+        if (mode === '30s' && isLocked) {
+            return res.json({ success: false, message: 'Betting is locked for last 5 seconds! Wait for next round.' });
         }
         if (!betAmount || betAmount < 1) {
             return res.json({ success: false, message: 'Invalid bet amount' });
@@ -557,26 +559,37 @@ app.post('/api/game/bet', requireAuth, async (req, res) => {
             return res.json({ success: false, message: 'Insufficient balance! Please recharge.' });
         }
 
-        // Deduct balance
+        const effectivePeriod = mode === '30s' ? currentPeriod : String(period_id || currentPeriod);
+
+        // Deduct balance ONCE
         await DB.run('UPDATE users SET balance = balance - ? WHERE id = ?', [betAmount, req.user.id]);
 
         // Record bet
         const betId = 'BET' + Date.now() + Math.floor(Math.random() * 999);
-        await DB.run(`INSERT INTO bets (id, user_id, period_id, game_mode, select_type, select_value, amount, status) VALUES (?, ?, ?, '30s', ?, ?, ?, 'pending')`,
-            [betId, req.user.id, period_id, select_type, String(select_value), betAmount]);
+        await DB.run(`INSERT INTO bets (id, user_id, period_id, game_mode, select_type, select_value, amount, status) VALUES (?, ?, ?, ?, ?, ?, ?, 'pending')`,
+            [betId, req.user.id, effectivePeriod, mode, select_type, String(select_value), betAmount]);
 
-        // Cache for admin live board
-        currentRoundBets.push({
-            id: betId,
-            user_phone: req.user.phone,
-            select_type,
-            select_value: String(select_value),
-            amount: betAmount
-        });
+        // Cache for admin live board (for 30s live round)
+        if (mode === '30s') {
+            currentRoundBets.push({
+                id: betId,
+                user_phone: req.user.phone,
+                select_type,
+                select_value: String(select_value),
+                amount: betAmount
+            });
+        }
 
         const updatedUser = await DB.get('SELECT balance FROM users WHERE id = ?', [req.user.id]);
         const finalBal = updatedUser ? updatedUser.balance : 0;
-        res.json({ success: true, message: `Bet ₹${betAmount} placed successfully!`, balance: finalBal, newBalance: finalBal });
+        res.json({
+            success: true,
+            message: `Bet ₹${betAmount} placed successfully!`,
+            balance: finalBal,
+            newBalance: finalBal,
+            period_id: effectivePeriod,
+            serverSettled: (mode === '30s')
+        });
     } catch (e) {
         res.status(500).json({ success: false, message: e.message });
     }

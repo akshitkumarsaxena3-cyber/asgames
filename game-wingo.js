@@ -71,8 +71,7 @@ class WinGoGame {
     init() {
         this.startTimer();
 
-        // Server synchronization
-        setInterval(async () => {
+        const syncCurrent = async () => {
             try {
                 const res = await fetch('/api/game/current');
                 const d = await res.json();
@@ -85,7 +84,9 @@ class WinGoGame {
                     else this.handleBettingUnlock();
                 }
             } catch (e) {}
-        }, 3000);
+        };
+        syncCurrent();
+        setInterval(syncCurrent, 3000);
     }
 
     switchMode(mode) {
@@ -372,6 +373,7 @@ class WinGoGame {
 
         this._placingBet = true;
         let serverDeducted = false;
+        let serverWillSettle = false;
 
         // If user is authenticated, sync bet with backend server (server deducts ONCE!)
         if (this.sm.token) {
@@ -384,6 +386,7 @@ class WinGoGame {
                     },
                     body: JSON.stringify({
                         period_id: this.currentPeriod,
+                        game_mode: this.currentMode,
                         select_type: this.pendingBet.type,
                         select_value: this.pendingBet.value,
                         amount: totalBet
@@ -396,6 +399,10 @@ class WinGoGame {
                     return;
                 }
                 serverDeducted = true;
+                serverWillSettle = Boolean(d.serverSettled);
+                if (d.period_id && this.currentMode === '30s') {
+                    this.currentPeriod = d.period_id;
+                }
                 const serverBal = typeof d.balance === 'number' ? d.balance
                     : (typeof d.newBalance === 'number' ? d.newBalance
                     : (typeof d.new_balance === 'number' ? d.new_balance : Math.max(0, this.sm.balance - totalBet)));
@@ -421,7 +428,7 @@ class WinGoGame {
             multiplier: this.multiplier,
             quantity: this.quantity,
             totalBet: totalBet,
-            serverSynced: serverDeducted,
+            serverSynced: serverWillSettle,
             time: new Date().toLocaleTimeString(),
             status: 'Pending',
             winAmount: 0

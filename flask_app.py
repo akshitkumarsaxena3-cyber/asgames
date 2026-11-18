@@ -753,6 +753,7 @@ def api_game_current():
     period, remaining, is_locked = get_current_period_info()
     return jsonify({
         'success': True,
+        'period': period,
         'currentPeriod': period,
         'remainingSeconds': remaining,
         'isLocked': is_locked
@@ -764,13 +765,15 @@ def api_game_bet():
     if not user:
         return jsonify({'success': False, 'message': 'Please login to place bets'}), 401
 
-    period, remaining, is_locked = get_current_period_info()
-    if is_locked or remaining <= 5:
-        return jsonify({'success': False, 'message': 'Round is locked! Please wait for next round.'}), 400
-
     data = request.get_json(silent=True) or {}
+    game_mode = str(data.get('game_mode', '30s'))
+    period, remaining, is_locked = get_current_period_info()
+    if game_mode == '30s' and (is_locked or remaining <= 5):
+        return jsonify({'success': False, 'message': 'Round is locked for last 5 seconds! Please wait for next round.'}), 400
+
+    effective_period = period if game_mode == '30s' else str(data.get('period_id') or period)
     select_type = data.get('select_type')
-    select_val = str(data.get('select_val', ''))
+    select_val = str(data.get('select_value') or data.get('select_val') or '').lower()
     amount = float(data.get('amount', 0))
 
     if amount < 1:
@@ -790,12 +793,12 @@ def api_game_bet():
         now_iso = datetime.now().isoformat()
         cursor.execute(
             'INSERT INTO bets (id, user_id, period, select_type, select_val, amount, win_amount, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-            (bet_id, user['id'], period, select_type, select_val, amount, 0.0, 'pending', now_iso)
+            (bet_id, user['id'], effective_period, select_type, select_val, amount, 0.0, 'pending', now_iso)
         )
         new_bal = round(max(0.0, balance - amount), 2)
         conn.commit()
 
-    return jsonify({'success': True, 'message': 'Bet placed successfully!', 'balance': new_bal, 'newBalance': new_bal, 'new_balance': new_bal})
+    return jsonify({'success': True, 'message': 'Bet placed successfully!', 'balance': new_bal, 'newBalance': new_bal, 'new_balance': new_bal, 'period_id': effective_period, 'serverSettled': (game_mode == '30s')})
 
 @app.route('/api/game/history', methods=['GET'])
 def api_game_history():
