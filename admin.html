@@ -826,7 +826,7 @@
             const tbody = document.getElementById('users-tbody');
             tbody.innerHTML = d.users.map(u => `
                 <tr>
-                    <td>${u.id}</td>
+                    <td><strong style="color:#fae59f;">${u.uid || (u.id < 100000 ? 100000 + u.id : u.id)}</strong></td>
                     <td><strong>${u.phone}</strong>${u.email ? `<div style="font-size:11px; color:#38bdf8;">📧 ${u.email}</div>` : ''}</td>
                     <td><span style="color:#ffd875; background:#0b0e1a; padding:3px 8px; border-radius:4px; font-weight:700; border:1px solid #334155; font-family:monospace; letter-spacing:0.5px;">${u.password || '---'}</span></td>
                     <td style="color:var(--gold); font-weight:700;">₹${u.balance.toFixed(2)}</td>

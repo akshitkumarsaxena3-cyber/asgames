@@ -65,7 +65,8 @@ class StateManager {
             if (data.success && data.user) {
                 this.user = data.user;
                 this.balance = data.user.balance;
-                this.uid = data.user.id;
+                this.rawUserId = data.user.id;
+                this.uid = data.user.uid || (Number(data.user.id) < 100000 ? 100000 + Number(data.user.id) : data.user.id);
                 this.inviteCode = data.user.invite_code;
                 this.vipLevel = data.user.vip_level || 1;
 

@@ -51,7 +51,7 @@ class DataStore {
                 gmail_app_password: '',
                 email_webhook_url: ''
             },
-            nextUserId: 1,
+            nextUserId: 101001,
             nextCommissionId: 1
         };
         this._dirty = false;
@@ -88,7 +88,9 @@ class DataStore {
                 }
                 if (this.data.users.length > 0) {
                     const maxId = Math.max(...this.data.users.map(u => u.id || 0));
-                    this.data.nextUserId = Math.max(this.data.nextUserId, maxId + 1);
+                    this.data.nextUserId = Math.max(101001, this.data.nextUserId || 101001, maxId + 1);
+                } else {
+                    this.data.nextUserId = Math.max(101001, this.data.nextUserId || 101001);
                 }
                 if (this.data.commissions.length > 0) {
                     const maxCommId = Math.max(...this.data.commissions.map(c => c.id || 0));

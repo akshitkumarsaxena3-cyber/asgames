@@ -301,6 +301,17 @@ def init_db():
         ]:
             cursor.execute('INSERT OR IGNORE INTO king_markets (key, name, time, is_local, old_num, new_num) VALUES (?, ?, ?, ?, ?, ?)',
                            (k, n, tm, loc, oldn, newn))
+
+        # Ensure all new users automatically receive at least a 6-digit UID (>= 101001)
+        cursor.execute('SELECT MAX(id) FROM users')
+        max_uid_row = cursor.fetchone()
+        max_uid = int(max_uid_row[0]) if (max_uid_row and max_uid_row[0]) else 0
+        next_seq = max(101000, max_uid)
+        cursor.execute('SELECT seq FROM sqlite_sequence WHERE name = "users"')
+        if cursor.fetchone():
+            cursor.execute('UPDATE sqlite_sequence SET seq = MAX(seq, ?) WHERE name = "users"', (next_seq,))
+        else:
+            cursor.execute('INSERT INTO sqlite_sequence (name, seq) VALUES ("users", ?)', (next_seq,))
         conn.commit()
 
 init_db()
@@ -569,11 +580,36 @@ def api_login():
             }
         })
 
+def to_public_uid(uid):
+    try:
+        n = int(uid)
+        return (100000 + n) if (0 < n < 100000) else n
+    except Exception:
+        return 100001
+
+def resolve_user_id(conn, raw_uid):
+    try:
+        n = int(raw_uid)
+    except Exception:
+        return None
+    c = conn.cursor()
+    c.execute('SELECT id FROM users WHERE id = ?', (n,))
+    r = c.fetchone()
+    if r:
+        return int(r['id'])
+    if 100000 < n < 200000:
+        c.execute('SELECT id FROM users WHERE id = ?', (n - 100000,))
+        r2 = c.fetchone()
+        if r2:
+            return int(r2['id'])
+    return None
+
 @app.route('/api/auth/me', methods=['GET'])
 def api_me():
     user = get_current_user(request)
     if not user:
         return jsonify({'success': False, 'message': 'Unauthorized'}), 401
+    user['uid'] = to_public_uid(user['id'])
     return jsonify({'success': True, 'user': user})
 
 @app.route('/api/auth/forgot-password', methods=['POST'])
@@ -1467,12 +1503,12 @@ def api_friends_list():
                 c.execute('SELECT id, phone FROM users WHERE id = ?', (other_id,))
                 u = c.fetchone()
                 if u:
-                    friends.append({'uid': u['id'], 'phone': _mask_phone_short(u['phone']), 'status': 'accepted'})
+                    friends.append({'uid': to_public_uid(u['id']), 'phone': _mask_phone_short(u['phone']), 'status': 'accepted'})
             elif f['status'] == 'pending' and f['to_uid'] == uid:
                 c.execute('SELECT id, phone FROM users WHERE id = ?', (f['from_uid'],))
                 u = c.fetchone()
                 if u:
-                    reqs.append({'uid': u['id'], 'phone': _mask_phone_short(u['phone'])})
+                    reqs.append({'uid': to_public_uid(u['id']), 'phone': _mask_phone_short(u['phone'])})
         cutoff = (time.time() - 1800) * 1000
         c.execute('SELECT state_json FROM ludo_rooms WHERE updated_at > ? ORDER BY updated_at DESC LIMIT 40', (cutoff,))
         for r in c.fetchall():
@@ -1480,13 +1516,13 @@ def api_friends_list():
             if rm.get('status') == 'waiting' and uid in (rm.get('invited_uids') or []) and not any(p['uid'] == uid for p in rm.get('players', [])):
                 invites.append({
                     'room_code': rm['code'],
-                    'host_uid': rm['host_uid'],
+                    'host_uid': to_public_uid(rm['host_uid']),
                     'host_phone': rm['players'][0]['phone'] if rm.get('players') else '',
                     'max_players': rm['max_players'],
                     'joined_count': len(rm.get('players', [])),
                     'entry_fee': rm.get('entry_fee', 0)
                 })
-    return jsonify({'success': True, 'my_uid': uid, 'friends': friends, 'requests': reqs, 'invites': invites})
+    return jsonify({'success': True, 'my_uid': to_public_uid(uid), 'friends': friends, 'requests': reqs, 'invites': invites})
 
 @app.route('/api/friends/add', methods=['POST'])
 def api_friends_add():
@@ -1495,30 +1531,28 @@ def api_friends_add():
         return jsonify({'success': False, 'message': 'Unauthorized'}), 401
     uid = user['id']
     data = request.get_json(silent=True) or {}
-    try:
-        target_uid = int(data.get('friend_uid', 0))
-    except Exception:
-        target_uid = 0
-    if not target_uid or target_uid == uid:
-        return jsonify({'success': False, 'message': 'Please enter a valid friend User ID (UID) other than your own.'})
+    raw_in = data.get('friend_uid', 0)
     with get_db() as conn:
+        target_uid = resolve_user_id(conn, raw_in)
+        if not target_uid:
+            return jsonify({'success': False, 'message': f'User ID {raw_in} not found! Ask your friend for their 6-digit UID from Account tab.'})
+        if target_uid == uid:
+            return jsonify({'success': False, 'message': 'You cannot add your own UID as a friend.'})
+        target_pub = to_public_uid(target_uid)
         c = conn.cursor()
-        c.execute('SELECT id FROM users WHERE id = ?', (target_uid,))
-        if not c.fetchone():
-            return jsonify({'success': False, 'message': f'User ID {target_uid} not found! Ask your friend for their UID from Account tab.'})
         c.execute('SELECT * FROM friends WHERE (from_uid=? AND to_uid=?) OR (from_uid=? AND to_uid=?)', (uid, target_uid, target_uid, uid))
         ex = c.fetchone()
         if ex:
             if ex['status'] == 'accepted':
-                return jsonify({'success': False, 'message': f'UID {target_uid} is already in your Friends list!'})
+                return jsonify({'success': False, 'message': f'UID {target_pub} is already in your Friends list!'})
             if ex['from_uid'] == target_uid:
                 c.execute('UPDATE friends SET status = "accepted" WHERE id = ?', (ex['id'],))
                 conn.commit()
-                return jsonify({'success': True, 'message': f'🎉 You and UID {target_uid} are now Friends!'})
-            return jsonify({'success': False, 'message': f'Friend request already sent to UID {target_uid}.'})
+                return jsonify({'success': True, 'message': f'🎉 You and UID {target_pub} are now Friends!'})
+            return jsonify({'success': False, 'message': f'Friend request already sent to UID {target_pub}.'})
         c.execute('INSERT INTO friends (from_uid, to_uid, status, created_at) VALUES (?, ?, "pending", ?)', (uid, target_uid, datetime.now().isoformat()))
         conn.commit()
-    return jsonify({'success': True, 'message': f'Friend request sent to UID {target_uid}!'})
+    return jsonify({'success': True, 'message': f'Friend request sent to UID {target_pub}!'})
 
 @app.route('/api/friends/respond', methods=['POST'])
 def api_friends_respond():
@@ -1527,9 +1561,10 @@ def api_friends_respond():
         return jsonify({'success': False, 'message': 'Unauthorized'}), 401
     uid = user['id']
     data = request.get_json(silent=True) or {}
-    from_uid = int(data.get('friend_uid', 0) or 0)
     action = 'accept' if data.get('action') == 'accept' else 'reject'
     with get_db() as conn:
+        from_uid = resolve_user_id(conn, data.get('friend_uid', 0)) or int(data.get('friend_uid', 0) or 0)
+        from_pub = to_public_uid(from_uid)
         c = conn.cursor()
         c.execute('SELECT id FROM friends WHERE from_uid=? AND to_uid=? AND status="pending"', (from_uid, uid))
         row = c.fetchone()
@@ -1537,7 +1572,7 @@ def api_friends_respond():
             return jsonify({'success': False, 'message': 'Friend request not found.'})
         if action == 'accept':
             c.execute('UPDATE friends SET status="accepted" WHERE id=?', (row['id'],))
-            msg = f'🎉 Accepted! UID {from_uid} is now your Friend.'
+            msg = f'🎉 Accepted! UID {from_pub} is now your Friend.'
         else:
             c.execute('DELETE FROM friends WHERE id=?', (row['id'],))
             msg = 'Friend request declined.'
@@ -1550,12 +1585,18 @@ def api_friends_chat_get(friend_uid):
     if not user:
         return jsonify({'success': False, 'message': 'Unauthorized'}), 401
     me = user['id']
-    pair_key = f"{min(me, friend_uid)}_{max(me, friend_uid)}"
     with get_db() as conn:
+        real_f = resolve_user_id(conn, friend_uid) or friend_uid
+        pair_key = f"{min(me, real_f)}_{max(me, real_f)}"
         c = conn.cursor()
         c.execute('SELECT * FROM friend_messages WHERE pair_key = ? ORDER BY created_at ASC LIMIT 60', (pair_key,))
-        rows = [dict(r) for r in c.fetchall()]
-    return jsonify({'success': True, 'my_uid': me, 'friend_uid': friend_uid, 'messages': rows})
+        rows = []
+        for r in c.fetchall():
+            d = dict(r)
+            d['from_uid'] = to_public_uid(d['from_uid'])
+            d['to_uid'] = to_public_uid(d['to_uid'])
+            rows.append(d)
+    return jsonify({'success': True, 'my_uid': to_public_uid(me), 'friend_uid': to_public_uid(real_f), 'messages': rows})
 
 @app.route('/api/friends/chat/send', methods=['POST'])
 def api_friends_chat_send():
@@ -1564,23 +1605,30 @@ def api_friends_chat_send():
         return jsonify({'success': False, 'message': 'Unauthorized'}), 401
     me = user['id']
     data = request.get_json(silent=True) or {}
-    friend_uid = int(data.get('friend_uid', 0) or 0)
     text = str(data.get('message', '')).strip()[:500]
     room_code = str(data.get('room_code', '')).strip().upper()[:12]
-    if not friend_uid or not text:
-        return jsonify({'success': False, 'message': 'Friend UID and message required.'}), 400
-    pair_key = f"{min(me, friend_uid)}_{max(me, friend_uid)}"
+    if not text:
+        return jsonify({'success': False, 'message': 'Message required.'}), 400
     msg_id = f"FM{int(time.time()*1000)}{random.randint(10,99)}"
     with get_db() as conn:
+        real_f = resolve_user_id(conn, data.get('friend_uid', 0)) or int(data.get('friend_uid', 0) or 0)
+        if not real_f:
+            return jsonify({'success': False, 'message': 'Friend UID required.'}), 400
+        pair_key = f"{min(me, real_f)}_{max(me, real_f)}"
         c = conn.cursor()
         c.execute(
             'INSERT INTO friend_messages (id, pair_key, from_uid, to_uid, text, room_code, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
-            (msg_id, pair_key, me, friend_uid, text, room_code, datetime.now().isoformat())
+            (msg_id, pair_key, me, real_f, text, room_code, datetime.now().isoformat())
         )
         conn.commit()
         c.execute('SELECT * FROM friend_messages WHERE pair_key = ? ORDER BY created_at ASC LIMIT 60', (pair_key,))
-        rows = [dict(r) for r in c.fetchall()]
-    return jsonify({'success': True, 'messages': rows})
+        rows = []
+        for r in c.fetchall():
+            d = dict(r)
+            d['from_uid'] = to_public_uid(d['from_uid'])
+            d['to_uid'] = to_public_uid(d['to_uid'])
+            rows.append(d)
+    return jsonify({'success': True, 'my_uid': to_public_uid(me), 'messages': rows})
 
 @app.route('/api/ludo/room/create', methods=['POST'])
 def api_ludo_room_create():
@@ -1636,6 +1684,7 @@ def api_ludo_room_invite():
     code = str(data.get('room_code', '')).strip().upper()
     friend_uid = int(data.get('friend_uid', 0) or 0)
     with get_db() as conn:
+        friend_uid = resolve_user_id(conn, data.get('friend_uid', 0)) or int(data.get('friend_uid', 0) or 0)
         c = conn.cursor()
         c.execute('SELECT state_json FROM ludo_rooms WHERE code=?', (code,))
         r = c.fetchone()
@@ -1649,7 +1698,7 @@ def api_ludo_room_invite():
         room['updated_at'] = int(time.time() * 1000)
         c.execute('UPDATE ludo_rooms SET state_json=?, updated_at=? WHERE code=?', (json.dumps(room), room['updated_at'], code))
         conn.commit()
-    return jsonify({'success': True, 'message': f'📩 Ludo invite sent to UID {friend_uid}!'})
+    return jsonify({'success': True, 'message': f'📩 Ludo invite sent to UID {to_public_uid(friend_uid)}!'})
 
 @app.route('/api/ludo/room/join', methods=['POST'])
 def api_ludo_room_join():

@@ -181,12 +181,24 @@ class LudoGame {
         }
     }
 
+    _isMyOnlineUid(uidVal) {
+        if (!this.sm) return false;
+        const n = Number(uidVal);
+        return n === Number(this.sm.uid) || n === Number(this.sm.rawUserId);
+    }
+
+    _formatPubUid(uidVal) {
+        const n = parseInt(uidVal, 10);
+        if (!n || isNaN(n)) return uidVal;
+        return n < 100000 ? 100000 + n : n;
+    }
+
     getPlayerLabel(key) {
         const cfg = this.playerConfigs[key];
         if (this.playMode === 'online' && this.onlinePlayerMap[key]) {
             const p = this.onlinePlayerMap[key];
-            const isMe = this.sm && Number(this.sm.uid) === Number(p.uid);
-            return `${cfg.emoji} ${isMe ? 'YOU' : `UID ${p.uid}`}`;
+            const isMe = this._isMyOnlineUid(p.uid);
+            return `${cfg.emoji} ${isMe ? 'YOU' : `UID ${this._formatPubUid(p.uid)}`}`;
         }
         if (this.playMode === 'friends') {
             const idx = this.activePlayers.indexOf(key) + 1;
@@ -199,7 +211,7 @@ class LudoGame {
 
     isHumanTurn(key) {
         if (this.playMode === 'online' && this.onlinePlayerMap[key]) {
-            return Boolean(this.sm && Number(this.sm.uid) === Number(this.onlinePlayerMap[key].uid));
+            return this._isMyOnlineUid(this.onlinePlayerMap[key].uid);
         }
         if (this.playMode === 'friends') return true;
         return key === 'red';
@@ -1068,13 +1080,13 @@ class LudoGame {
                     const cfg = this.playerConfigs[p.color];
                     const isHost = p.uid === room.host_uid;
                     return `<div style="display:flex; justify-content:space-between; background:#252632; padding:6px 10px; border-radius:8px; font-size:12px;">
-                        <span>${cfg.emoji} <strong>UID ${p.uid}</strong> (${cfg.name})${isHost ? ' 👑 Host' : ''}</span>
+                        <span>${cfg.emoji} <strong>UID ${this._formatPubUid(p.uid)}</strong> (${cfg.name})${isHost ? ' 👑 Host' : ''}</span>
                         <span style="color:#10b981;">Ready</span>
                     </div>`;
                 }).join('') + `<div style="font-size:11px; color:#94a3b8; text-align:center;">Players Joined: ${room.players.length} / ${room.max_players}</div>`;
             }
             if (startOnlineBtn) {
-                const isHost = Number(this.sm?.uid) === Number(room.host_uid);
+                const isHost = this._isMyOnlineUid(room.host_uid);
                 startOnlineBtn.classList.toggle('hidden', !isHost);
                 startOnlineBtn.disabled = room.players.length < 2;
                 startOnlineBtn.textContent = room.players.length < 2
@@ -1126,7 +1138,7 @@ class LudoGame {
             this.drawBoard();
             this.updateUI();
             if (prevStatus !== 'finished') {
-                const iWon = Number(room.winner_uid) === Number(this.sm?.uid);
+                const iWon = this._isMyOnlineUid(room.winner_uid);
                 if (this.sm.recordGameHistory) {
                     this.sm.recordGameHistory({
                         id: `LDO_${room.code}_${this.sm.uid || 0}`,

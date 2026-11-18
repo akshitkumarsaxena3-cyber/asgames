@@ -486,11 +486,24 @@ app.post('/api/auth/login', async (req, res) => {
     }
 });
 
+function toPublicUid(id) {
+    const n = parseInt(id, 10);
+    if (!n || isNaN(n)) return 100001;
+    return n < 100000 ? 100000 + n : n;
+}
+
+function resolveUserByPublicUid(rawUid) {
+    const n = parseInt(rawUid, 10);
+    if (!n || isNaN(n)) return null;
+    return (DB.data.users || []).find(u => u.id === n || toPublicUid(u.id) === n) || null;
+}
+
 app.get('/api/auth/me', requireAuth, async (req, res) => {
     res.json({
         success: true,
         user: {
             id: req.user.id,
+            uid: toPublicUid(req.user.id),
             phone: req.user.phone,
             email: req.user.email || '',
             balance: req.user.balance,
@@ -1228,10 +1241,10 @@ app.get('/api/friends/list', requireAuth, async (req, res) => {
         if (f.status === 'accepted' && (f.from_uid === uid || f.to_uid === uid)) {
             const otherId = f.from_uid === uid ? f.to_uid : f.from_uid;
             const u = DB.data.users.find(x => x.id === otherId);
-            if (u) friends.push({ uid: u.id, phone: maskPhoneShort(u.phone), status: 'accepted' });
+            if (u) friends.push({ uid: toPublicUid(u.id), phone: maskPhoneShort(u.phone), status: 'accepted' });
         } else if (f.status === 'pending' && f.to_uid === uid) {
             const u = DB.data.users.find(x => x.id === f.from_uid);
-            if (u) requests.push({ uid: u.id, phone: maskPhoneShort(u.phone) });
+            if (u) requests.push({ uid: toPublicUid(u.id), phone: maskPhoneShort(u.phone) });
         }
     }
 
@@ -1240,26 +1253,28 @@ app.get('/api/friends/list', requireAuth, async (req, res) => {
         .filter(r => r.status === 'waiting' && (r.created_at || 0) > cutoff && Array.isArray(r.invited_uids) && r.invited_uids.includes(uid) && !r.players.some(p => p.uid === uid))
         .map(r => ({
             room_code: r.code,
-            host_uid: r.host_uid,
+            host_uid: toPublicUid(r.host_uid),
             host_phone: r.players[0] ? r.players[0].phone : '',
             max_players: r.max_players,
             joined_count: r.players.length,
             entry_fee: r.entry_fee
         }));
 
-    res.json({ success: true, my_uid: uid, friends, requests, invites });
+    res.json({ success: true, my_uid: toPublicUid(uid), friends, requests, invites });
 });
 
 app.post('/api/friends/add', requireAuth, async (req, res) => {
     if (!Array.isArray(DB.data.friends)) DB.data.friends = [];
     const uid = req.user.id;
-    const targetUid = parseInt(req.body.friend_uid, 10);
-    if (!targetUid || targetUid === uid) {
-        return res.json({ success: false, message: 'Please enter a valid friend User ID (UID) other than your own.' });
-    }
-    const targetUser = DB.data.users.find(u => u.id === targetUid);
+    const rawInput = parseInt(req.body.friend_uid, 10);
+    const targetUser = resolveUserByPublicUid(rawInput);
     if (!targetUser) {
-        return res.json({ success: false, message: `User ID ${targetUid} not found! Ask your friend for their UID from Account tab.` });
+        return res.json({ success: false, message: `User ID ${rawInput || ''} not found! Ask your friend for their 6-digit UID from Account tab.` });
+    }
+    const targetUid = targetUser.id;
+    const targetPub = toPublicUid(targetUid);
+    if (targetUid === uid) {
+        return res.json({ success: false, message: 'You cannot add your own UID as a friend.' });
     }
 
     const existing = DB.data.friends.find(f =>
@@ -1267,25 +1282,27 @@ app.post('/api/friends/add', requireAuth, async (req, res) => {
     );
     if (existing) {
         if (existing.status === 'accepted') {
-            return res.json({ success: false, message: `UID ${targetUid} is already in your Friends list!` });
+            return res.json({ success: false, message: `UID ${targetPub} is already in your Friends list!` });
         }
         if (existing.from_uid === targetUid) {
             existing.status = 'accepted';
             DB.save();
-            return res.json({ success: true, message: `🎉 You and UID ${targetUid} are now Friends! You can invite them to Ludo.` });
+            return res.json({ success: true, message: `🎉 You and UID ${targetPub} are now Friends! You can invite them to Ludo.` });
         }
-        return res.json({ success: false, message: `Friend request already sent to UID ${targetUid}. Waiting for them to accept.` });
+        return res.json({ success: false, message: `Friend request already sent to UID ${targetPub}. Waiting for them to accept.` });
     }
 
     DB.data.friends.push({ from_uid: uid, to_uid: targetUid, status: 'pending', created_at: new Date().toISOString() });
     DB.save();
-    res.json({ success: true, message: `Friend request sent to UID ${targetUid}! Ask them to accept in Ludo → Online Friends.` });
+    res.json({ success: true, message: `Friend request sent to UID ${targetPub}! Ask them to accept in Friends & Chat.` });
 });
 
 app.post('/api/friends/respond', requireAuth, async (req, res) => {
     if (!Array.isArray(DB.data.friends)) DB.data.friends = [];
     const uid = req.user.id;
-    const fromUid = parseInt(req.body.friend_uid, 10);
+    const resolved = resolveUserByPublicUid(req.body.friend_uid);
+    const fromUid = resolved ? resolved.id : parseInt(req.body.friend_uid, 10);
+    const fromPub = toPublicUid(fromUid);
     const action = req.body.action === 'accept' ? 'accept' : 'reject';
     const idx = DB.data.friends.findIndex(f => f.from_uid === fromUid && f.to_uid === uid && f.status === 'pending');
     if (idx === -1) return res.json({ success: false, message: 'Friend request not found.' });
@@ -1293,7 +1310,7 @@ app.post('/api/friends/respond', requireAuth, async (req, res) => {
     if (action === 'accept') {
         DB.data.friends[idx].status = 'accepted';
         DB.save();
-        return res.json({ success: true, message: `🎉 Accepted! UID ${fromUid} is now your Friend.` });
+        return res.json({ success: true, message: `🎉 Accepted! UID ${fromPub} is now your Friend.` });
     } else {
         DB.data.friends.splice(idx, 1);
         DB.save();
@@ -1305,19 +1322,22 @@ app.post('/api/friends/respond', requireAuth, async (req, res) => {
 app.get('/api/friends/chat/:friendUid', requireAuth, async (req, res) => {
     if (!Array.isArray(DB.data.friend_messages)) DB.data.friend_messages = [];
     const me = req.user.id;
-    const friendUid = parseInt(req.params.friendUid, 10);
+    const resolved = resolveUserByPublicUid(req.params.friendUid);
+    const friendUid = resolved ? resolved.id : parseInt(req.params.friendUid, 10);
     if (!friendUid) return res.json({ success: false, message: 'Invalid friend UID.' });
     const pairKey = `${Math.min(me, friendUid)}_${Math.max(me, friendUid)}`;
     const msgs = DB.data.friend_messages
         .filter(m => m.pair_key === pairKey)
-        .slice(-60);
-    res.json({ success: true, my_uid: me, friend_uid: friendUid, messages: msgs });
+        .slice(-60)
+        .map(m => Object.assign({}, m, { from_uid: toPublicUid(m.from_uid), to_uid: toPublicUid(m.to_uid) }));
+    res.json({ success: true, my_uid: toPublicUid(me), friend_uid: toPublicUid(friendUid), messages: msgs });
 });
 
 app.post('/api/friends/chat/send', requireAuth, async (req, res) => {
     if (!Array.isArray(DB.data.friend_messages)) DB.data.friend_messages = [];
     const me = req.user.id;
-    const friendUid = parseInt(req.body.friend_uid, 10);
+    const resolved = resolveUserByPublicUid(req.body.friend_uid);
+    const friendUid = resolved ? resolved.id : parseInt(req.body.friend_uid, 10);
     const text = String(req.body.message || '').trim().slice(0, 500);
     const roomCode = String(req.body.room_code || '').trim().toUpperCase().slice(0, 12);
     if (!friendUid || !text) return res.json({ success: false, message: 'Friend UID and message required.' });
@@ -1337,8 +1357,11 @@ app.post('/api/friends/chat/send', requireAuth, async (req, res) => {
     }
     DB.save();
 
-    const msgs = DB.data.friend_messages.filter(m => m.pair_key === pairKey).slice(-60);
-    res.json({ success: true, messages: msgs });
+    const msgs = DB.data.friend_messages
+        .filter(m => m.pair_key === pairKey)
+        .slice(-60)
+        .map(m => Object.assign({}, m, { from_uid: toPublicUid(m.from_uid), to_uid: toPublicUid(m.to_uid) }));
+    res.json({ success: true, my_uid: toPublicUid(me), messages: msgs });
 });
 
 app.post('/api/ludo/room/create', requireAuth, async (req, res) => {
@@ -1387,13 +1410,14 @@ app.post('/api/ludo/room/create', requireAuth, async (req, res) => {
 
 app.post('/api/ludo/room/invite', requireAuth, async (req, res) => {
     const code = String(req.body.room_code || '').trim().toUpperCase();
-    const friendUid = parseInt(req.body.friend_uid, 10);
+    const resolved = resolveUserByPublicUid(req.body.friend_uid);
+    const friendUid = resolved ? resolved.id : parseInt(req.body.friend_uid, 10);
     const room = (DB.data.ludo_rooms || []).find(r => r.code === code && r.status === 'waiting');
     if (!room) return res.json({ success: false, message: 'Room not found or already started.' });
     if (!Array.isArray(room.invited_uids)) room.invited_uids = [];
     if (!room.invited_uids.includes(friendUid)) room.invited_uids.push(friendUid);
     DB.save();
-    res.json({ success: true, message: `📩 Ludo invite sent to UID ${friendUid}!` });
+    res.json({ success: true, message: `📩 Ludo invite sent to UID ${toPublicUid(friendUid)}!` });
 });
 
 app.post('/api/ludo/room/join', requireAuth, async (req, res) => {
