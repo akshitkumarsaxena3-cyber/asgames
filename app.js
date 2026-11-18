@@ -2244,11 +2244,27 @@ function initHeroCarousel() {
     }, 4500);
 }
 
+function initLivePlayersCounter() {
+    const el = document.getElementById('live-players-count');
+    if (!el) return;
+    let count = 13200 + Math.floor(Math.random() * 4800);
+    el.textContent = count.toLocaleString('en-US');
+
+    const tick = () => {
+        const delta = Math.floor(Math.random() * 115) - 52; // natural -52 to +62 drift
+        count = Math.max(10800, Math.min(22500, count + delta));
+        el.textContent = count.toLocaleString('en-US');
+        setTimeout(tick, 1800 + Math.floor(Math.random() * 2000));
+    };
+    setTimeout(tick, 2000);
+}
+
 // Global initialization
 window.addEventListener('DOMContentLoaded', () => {
     window.stateManager = new StateManager();
     applyLanguage(currentLang);
     initHeroCarousel();
+    initLivePlayersCounter();
     window.stateManager.showSplashLoader('Loading ASGames VIP...', 850);
 
     // Automatically show Extra First Deposit Bonus modal right after login!
