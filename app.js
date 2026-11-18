@@ -434,7 +434,11 @@ class StateManager {
                     });
                     const d = await res.json();
                     if (d.success) {
-                        this.showToast('Deposit submitted! Waiting for admin approval.', 'success');
+                        this.showToast(d.message || (d.instant_credited ? 'Deposit verified & credited instantly!' : 'Deposit submitted! Waiting for admin approval.'), 'success');
+                        if (d.instant_credited) {
+                            if (window.sound && window.sound.coin) window.sound.coin();
+                            this.fetchUserProfile();
+                        }
                         if (typeof closeDepositCheckoutSheet === 'function') closeDepositCheckoutSheet();
                         if (typeof loadDepositPageHistory === 'function') loadDepositPageHistory();
                         if (utrInput) utrInput.value = '';

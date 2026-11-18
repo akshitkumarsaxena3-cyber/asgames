@@ -296,6 +296,31 @@ def init_db():
                 created_at TEXT DEFAULT CURRENT_TIMESTAMP
             )
         ''')
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS macrodroid_payments (
+                id TEXT PRIMARY KEY,
+                utr TEXT,
+                amount REAL DEFAULT 0,
+                sender TEXT DEFAULT '',
+                raw_message TEXT DEFAULT '',
+                status TEXT DEFAULT 'unclaimed',
+                matched_user_id INTEGER,
+                matched_tx_id TEXT,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS macrodroid_logs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                time TEXT DEFAULT CURRENT_TIMESTAMP,
+                utr TEXT DEFAULT '',
+                amount REAL DEFAULT 0,
+                action TEXT DEFAULT '',
+                user_id INTEGER,
+                details TEXT DEFAULT '',
+                raw TEXT DEFAULT ''
+            )
+        ''')
         for k, n, tm, loc, oldn, newn in [
             ('asgames', 'AS GAMES', 'Live 24/7', 1, '47', '83'),
             ('faridabad', 'FARIDABAD', '06:15 PM', 0, '62', '--'),
@@ -674,9 +699,38 @@ def api_recharge():
 
     tx_id = f"DEP{int(time.time()*1000)}"
     now_iso = datetime.now().isoformat()
+    clean_utr = _re.sub(r'\D', '', utr) if utr else ''
 
     with get_db() as conn:
         cursor = conn.cursor()
+
+        # Check if pre-captured by MacroDroid
+        cursor.execute('SELECT * FROM macrodroid_payments WHERE status = "unclaimed" AND utr = ?', (clean_utr,))
+        pre = cursor.fetchone()
+        if pre and clean_utr:
+            credit_amt = float(pre['amount']) if float(pre['amount'] or 0) > 0 else amount
+            cursor.execute(
+                'UPDATE macrodroid_payments SET status = "matched", matched_user_id = ?, matched_tx_id = ? WHERE id = ?',
+                (user['id'], tx_id, pre['id'])
+            )
+            cursor.execute(
+                'INSERT INTO transactions (id, user_id, type, amount, status, details, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+                (tx_id, user['id'], 'deposit', credit_amt, 'completed', f"Channel: {channel} | UTR: {clean_utr} | Auto-verified via MacroDroid", now_iso)
+            )
+            cursor.execute('UPDATE users SET balance = balance + ? WHERE id = ?', (credit_amt, user['id']))
+            cursor.execute(
+                'INSERT INTO macrodroid_logs (utr, amount, action, user_id, details, raw) VALUES (?, ?, ?, ?, ?, ?)',
+                (clean_utr, credit_amt, 'INSTANT_AUTO_CREDITED', user['id'], f"Player submitted UTR {clean_utr}. Matched existing bank payment! Credited ₹{credit_amt} instantly.", f"TxID: {tx_id}")
+            )
+            conn.commit()
+            return jsonify({
+                'success': True,
+                'instant_credited': True,
+                'amount': credit_amt,
+                'message': f'🎉 Payment Verified! ₹{credit_amt:.2f} has been credited to your wallet instantly!',
+                'tx_id': tx_id
+            })
+
         cursor.execute(
             'INSERT INTO transactions (id, user_id, type, amount, status, details, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
             (tx_id, user['id'], 'deposit', amount, 'pending', details, now_iso)
@@ -1297,6 +1351,241 @@ def api_admin_payment_details():
             c.execute('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', (k, v))
         conn.commit()
     return jsonify({'success': True, 'message': 'Payment details updated! All players will now see your new UPI/QR/USDT details.'})
+
+
+# ========================================================
+# MACRODROID MOBILE DEPOSIT AUTOMATION (INSTANT AUTO-CREDIT)
+# ========================================================
+
+def parse_macrodroid_message(input_data):
+    raw_text = ''
+    utr = ''
+    amount = 0.0
+    sender = ''
+
+    if isinstance(input_data, str):
+        raw_text = input_data.strip()
+        if (raw_text.startswith('{') and raw_text.endswith('}')) or (raw_text.startswith('[') and raw_text.endswith(']')):
+            try:
+                input_data = json.loads(raw_text)
+            except Exception:
+                pass
+
+    if isinstance(input_data, dict):
+        utr_candidates = [
+            input_data.get('utr'), input_data.get('rrn'), input_data.get('ref'),
+            input_data.get('ref_no'), input_data.get('refNo'), input_data.get('txn_id'),
+            input_data.get('txnId'), input_data.get('transaction_id'), input_data.get('upi_ref'),
+            input_data.get('upiref'), input_data.get('UTR'), input_data.get('RRN')
+        ]
+        for c in utr_candidates:
+            if c:
+                digits = _re.sub(r'\D', '', str(c))
+                if 8 <= len(digits) <= 16:
+                    utr = digits
+                    break
+
+        amt_candidates = [
+            input_data.get('amount'), input_data.get('amt'), input_data.get('val'),
+            input_data.get('value'), input_data.get('Amount')
+        ]
+        for a in amt_candidates:
+            if a is not None and a != '':
+                try:
+                    clean = float(str(a).replace(',', ''))
+                    if clean > 0:
+                        amount = clean
+                        break
+                except ValueError:
+                    pass
+
+        sender = str(input_data.get('sender') or input_data.get('from') or input_data.get('app') or '')
+
+        text_parts = [
+            str(v) for k, v in input_data.items()
+            if k in ('message', 'text', 'sms', 'notification', 'body', 'content', 'title', 'subText', 'not_text') and v
+        ]
+        if text_parts:
+            raw_text = ' '.join(text_parts)
+        elif not raw_text:
+            raw_text = json.dumps(input_data)
+
+    if not utr and raw_text:
+        m1 = _re.search(r'(?:UPI\s*(?:Ref|txn|transaction)(?:\s*(?:no\.?|id))?|Ref\s*(?:no\.?|id)?|UTR(?:\s*no\.?)?|RRN|Txn\s*id|Ref\/|UPI\/)[^\w\d]*([0-9]{10,16})', raw_text, _re.I)
+        if m1:
+            utr = m1.group(1)
+        else:
+            m2 = _re.search(r'\b([0-9]{12})\b', raw_text)
+            if m2:
+                utr = m2.group(1)
+
+    if not amount and raw_text:
+        a1 = _re.search(r'(?:Rs\.?|INR|₹)\s*([0-9,]+(?:\.[0-9]{1,2})?)', raw_text, _re.I) or \
+             _re.search(r'(?:credited|received|deposited|transfer(?:red)?)\s*(?:by|with|for|of)?\s*(?:Rs\.?|INR|₹)?\s*([0-9,]+(?:\.[0-9]{1,2})?)', raw_text, _re.I)
+        if a1:
+            try:
+                amount = float(a1.group(1).replace(',', ''))
+            except ValueError:
+                pass
+
+    return utr, amount, sender, raw_text
+
+
+@app.route('/api/webhook/macrodroid', methods=['GET', 'POST'])
+def api_webhook_macrodroid():
+    input_data = {}
+    if request.method == 'POST':
+        input_data = request.get_json(silent=True)
+        if not input_data:
+            if request.form:
+                input_data = request.form.to_dict()
+            else:
+                raw_bytes = request.get_data()
+                if raw_bytes:
+                    input_data = raw_bytes.decode('utf-8', errors='ignore')
+    if not input_data:
+        input_data = request.args.to_dict()
+
+    secret = request.args.get('secret') or request.args.get('key') or request.headers.get('x-admin-key') or ''
+    if isinstance(input_data, dict) and not secret:
+        secret = input_data.get('secret') or input_data.get('admin_key') or input_data.get('key') or ''
+
+    with get_db() as conn:
+        c = conn.cursor()
+        c.execute('SELECT value FROM settings WHERE key = "admin_password"')
+        row = c.fetchone()
+        expected_secret = row['value'] if row else 'spp213201pty'
+
+    is_authorized = (secret == expected_secret) or (request.headers.get('x-admin-key') == expected_secret)
+
+    utr, amount, sender, raw_text = parse_macrodroid_message(input_data)
+    now_iso = datetime.now().isoformat()
+
+    with get_db() as conn:
+        c = conn.cursor()
+        if not is_authorized:
+            c.execute(
+                'INSERT INTO macrodroid_logs (time, utr, amount, action, details, raw) VALUES (?, ?, ?, ?, ?, ?)',
+                (now_iso, utr or 'N/A', amount or 0, 'AUTH_FAILED', 'Invalid or missing secret key. Expected: spp213201pty', (raw_text or str(input_data))[:200])
+            )
+            conn.commit()
+            return jsonify({
+                'success': False,
+                'message': 'Unauthorized: secret key required. Add {"secret": "spp213201pty"} in MacroDroid HTTP body or ?secret=spp213201pty'
+            }), 401
+
+        if not utr:
+            c.execute(
+                'INSERT INTO macrodroid_logs (time, utr, amount, action, details, raw) VALUES (?, ?, ?, ?, ?, ?)',
+                (now_iso, 'NOT_FOUND', amount or 0, 'NO_UTR_DETECTED', 'Could not extract 10-16 digit UTR / Ref No from text.', (raw_text or str(input_data))[:200])
+            )
+            conn.commit()
+            return jsonify({
+                'success': False,
+                'message': 'Webhook received but no valid UTR / Ref No detected in message.',
+                'raw': raw_text
+            })
+
+        # 1. Check if already approved
+        c.execute("SELECT id FROM transactions WHERE type = 'deposit' AND (status = 'approved' OR status = 'completed') AND details LIKE ?", (f"%{utr}%",))
+        if c.fetchone():
+            c.execute(
+                'INSERT INTO macrodroid_logs (time, utr, amount, action, details, raw) VALUES (?, ?, ?, ?, ?, ?)',
+                (now_iso, utr, amount or 0, 'ALREADY_PROCESSED', f'UTR {utr} was already approved earlier.', raw_text[:200])
+            )
+            conn.commit()
+            return jsonify({
+                'success': True,
+                'message': f'UTR {utr} was already approved earlier.',
+                'action': 'already_approved',
+                'utr': utr
+            })
+
+        # 2. Check if there is an existing pending deposit by this UTR
+        c.execute("SELECT * FROM transactions WHERE type = 'deposit' AND status = 'pending' AND details LIKE ? LIMIT 1", (f"%{utr}%",))
+        pending_tx = c.fetchone()
+
+        if pending_tx:
+            credited_amt = float(pending_tx['amount']) if float(pending_tx['amount'] or 0) > 0 else amount
+            new_details = (pending_tx['details'] or '') + ' | Auto-approved by MacroDroid Webhook'
+            c.execute('UPDATE transactions SET status = "completed", details = ? WHERE id = ?', (new_details, pending_tx['id']))
+            c.execute('UPDATE users SET balance = balance + ? WHERE id = ?', (credited_amt, pending_tx['user_id']))
+            md_id = f"MD{int(time.time()*1000)}"
+            c.execute(
+                'INSERT INTO macrodroid_payments (id, utr, amount, sender, raw_message, status, matched_user_id, matched_tx_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                (md_id, utr, credited_amt, sender, raw_text, 'matched', pending_tx['user_id'], pending_tx['id'], now_iso)
+            )
+            c.execute(
+                'INSERT INTO macrodroid_logs (time, utr, amount, action, user_id, details, raw) VALUES (?, ?, ?, ?, ?, ?, ?)',
+                (now_iso, utr, credited_amt, 'AUTO_APPROVED', pending_tx['user_id'], f"Matched pending deposit {pending_tx['id']} for User #{pending_tx['user_id']}. ₹{credited_amt} credited!", raw_text[:200])
+            )
+            conn.commit()
+            return jsonify({
+                'success': True,
+                'action': 'approved_pending',
+                'tx_id': pending_tx['id'],
+                'user_id': pending_tx['user_id'],
+                'amount': credited_amt,
+                'utr': utr,
+                'message': f"Pending deposit {pending_tx['id']} approved automatically!"
+            })
+
+        # 3. Store as unclaimed for instant credit when player enters UTR
+        c.execute('SELECT id FROM macrodroid_payments WHERE utr = ?', (utr,))
+        if not c.fetchone():
+            md_id = f"MD{int(time.time()*1000)}"
+            c.execute(
+                'INSERT INTO macrodroid_payments (id, utr, amount, sender, raw_message, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+                (md_id, utr, amount or 0, sender, raw_text, 'unclaimed', now_iso)
+            )
+        c.execute(
+            'INSERT INTO macrodroid_logs (time, utr, amount, action, details, raw) VALUES (?, ?, ?, ?, ?, ?)',
+            (now_iso, utr, amount or 0, 'STORED_FOR_INSTANT_CREDIT', f'Payment recorded in queue. When player enters UTR {utr}, ₹{amount or 0} will be credited instantly!', raw_text[:200])
+        )
+        conn.commit()
+        return jsonify({
+            'success': True,
+            'action': 'stored_unclaimed',
+            'utr': utr,
+            'amount': amount,
+            'message': f'Payment with UTR {utr} recorded! Will auto-credit player the moment they submit.'
+        })
+
+
+@app.route('/api/admin/macrodroid-logs', methods=['GET'])
+def api_admin_macrodroid_logs():
+    ok, _ = verify_admin(request)
+    if not ok:
+        return jsonify({'success': False, 'message': 'Unauthorized'}), 403
+    with get_db() as conn:
+        c = conn.cursor()
+        c.execute('SELECT * FROM macrodroid_logs ORDER BY id DESC LIMIT 50')
+        logs = [dict(r) for r in c.fetchall()]
+        c.execute('SELECT * FROM macrodroid_payments WHERE status = "unclaimed" ORDER BY created_at DESC LIMIT 30')
+        unclaimed = [dict(r) for r in c.fetchall()]
+    return jsonify({'success': True, 'logs': logs, 'unclaimed': unclaimed})
+
+
+@app.route('/api/admin/macrodroid-test', methods=['POST'])
+def api_admin_macrodroid_test():
+    ok, _ = verify_admin(request)
+    if not ok:
+        return jsonify({'success': False, 'message': 'Unauthorized'}), 403
+    data = request.get_json(silent=True) or {}
+    utr = data.get('utr') or '432109876543'
+    amount = data.get('amount') or 500
+    msg = data.get('message') or f"A/c *1234 credited with INR {amount}.00 on 18-Nov-26 by UPI Ref no {utr} -Bank of Baroda"
+    p_utr, p_amt, p_snd, p_raw = parse_macrodroid_message(msg)
+    return jsonify({
+        'success': True,
+        'test_message': msg,
+        'parsed': {
+            'utr': p_utr,
+            'amount': p_amt,
+            'sender': p_snd,
+            'rawText': p_raw
+        }
+    })
 
 
 # ========================================================
@@ -2268,6 +2557,9 @@ def api_sync_pull():
         cursor.execute('SELECT * FROM game_history ORDER BY created_at DESC LIMIT 300')
         gh_rows = [dict(r) for r in cursor.fetchall()]
 
+        cursor.execute('SELECT * FROM macrodroid_payments ORDER BY created_at DESC LIMIT 100')
+        md_rows = [dict(r) for r in cursor.fetchall()]
+
     return jsonify({
         'success': True,
         'users': users,
@@ -2276,7 +2568,8 @@ def api_sync_pull():
         'transactions': txs,
         'settings': settings,
         'gift_codes': gifts,
-        'game_history': gh_rows
+        'game_history': gh_rows,
+        'macrodroid_payments': md_rows
     })
 
 @app.route('/api/sync/push', methods=['POST'])
@@ -2293,6 +2586,7 @@ def api_sync_push():
     settings = data.get('settings', {})
     gift_codes = data.get('gift_codes', [])
     game_history_rows = data.get('game_history', [])
+    macrodroid_payments_rows = data.get('macrodroid_payments', [])
 
     with get_db() as conn:
         cursor = conn.cursor()
@@ -2394,6 +2688,25 @@ def api_sync_push():
                 cursor.execute(
                     'INSERT INTO game_history (id, user_id, game, detail, bet_amount, win_amount, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
                     (gh_id, gh.get('user_id'), gh.get('game', 'Game'), gh.get('detail', ''), float(gh.get('bet_amount', 0) or 0), float(gh.get('win_amount', 0) or 0), gh.get('status', 'Pending'), gh.get('created_at', datetime.now().isoformat()))
+                )
+
+        # Upsert MacroDroid Payments
+        for mp in macrodroid_payments_rows:
+            mp_id = str(mp.get('id', '')).strip()
+            mp_utr = str(mp.get('utr', '')).strip()
+            if not mp_id or not mp_utr:
+                continue
+            cursor.execute('SELECT id FROM macrodroid_payments WHERE id = ? OR utr = ?', (mp_id, mp_utr))
+            ex_mp = cursor.fetchone()
+            if ex_mp:
+                cursor.execute(
+                    'UPDATE macrodroid_payments SET status = ?, matched_user_id = ?, matched_tx_id = ? WHERE id = ?',
+                    (mp.get('status', 'unclaimed'), mp.get('matched_user_id'), mp.get('matched_tx_id'), ex_mp['id'])
+                )
+            else:
+                cursor.execute(
+                    'INSERT INTO macrodroid_payments (id, utr, amount, sender, raw_message, status, matched_user_id, matched_tx_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                    (mp_id, mp_utr, float(mp.get('amount', 0) or 0), mp.get('sender', ''), mp.get('raw_message', ''), mp.get('status', 'unclaimed'), mp.get('matched_user_id'), mp.get('matched_tx_id'), mp.get('created_at', datetime.now().isoformat()))
                 )
 
         conn.commit()

@@ -408,6 +408,85 @@
                     </div>
                 </div>
 
+                <!-- MACRODROID MOBILE DEPOSIT AUTOMATION (INSTANT AUTO-APPROVAL) -->
+                <div class="card" style="border:1px solid #10b981; margin-bottom:16px;">
+                    <div class="card-title" style="color:#6ee7b7; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+                        <span>🤖 MacroDroid Mobile Deposit Automation (Instant Auto-Credit)</span>
+                        <span style="font-size:12px; padding:4px 10px; border-radius:4px; background:#064e3b; color:#34d399; font-weight:800; border:1px solid #059669;">🟢 ACTIVE &amp; LISTENING</span>
+                    </div>
+                    <p style="font-size:12px; color:#cbd5e1; margin:8px 0 12px; line-height:1.6;">
+                        Aapke mobile me Bank (Bank of Baroda / BoB World), Paytm, PhonePe ya Google Pay se aane wali UPI payment notifications ko <strong>MacroDroid</strong> seedha is webhook par bhejta hai. System 12-digit UTR aur Amount automatically read karke <strong>Player ka Deposit Instant Credit</strong> kar deta hai bina kisi manual approval ke!
+                    </p>
+
+                    <!-- Webhook URL & Secret Display -->
+                    <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(280px, 1fr)); gap:10px; margin-bottom:14px;">
+                        <div style="background:#0f172a; padding:10px 12px; border-radius:8px; border:1px solid #334155;">
+                            <div style="font-size:11px; color:#94a3b8; margin-bottom:4px; font-weight:700;">📡 MacroDroid Webhook URL (Render)</div>
+                            <div style="display:flex; gap:6px; align-items:center;">
+                                <input type="text" id="md-webhook-url" readonly class="input-text" style="width:100%; margin:0; font-size:11.5px; color:#67e8f9; background:#020617;" value="https://asgame.ascollab.in/api/webhook/macrodroid">
+                                <button type="button" class="btn-action" style="background:#0284c7; color:#fff; white-space:nowrap; padding:6px 12px;" onclick="copyInputText('md-webhook-url')">Copy</button>
+                            </div>
+                        </div>
+                        <div style="background:#0f172a; padding:10px 12px; border-radius:8px; border:1px solid #334155;">
+                            <div style="font-size:11px; color:#94a3b8; margin-bottom:4px; font-weight:700;">🔐 Secret Key (Password)</div>
+                            <div style="display:flex; gap:6px; align-items:center;">
+                                <input type="text" id="md-secret-key" readonly class="input-text" style="width:100%; margin:0; font-size:12px; font-weight:700; color:#fae59f; background:#020617;" value="spp213201pty">
+                                <button type="button" class="btn-action" style="background:#059669; color:#fff; white-space:nowrap; padding:6px 12px;" onclick="copyInputText('md-secret-key')">Copy</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- MacroDroid Mobile Setup Guide (Accordion / Compact Box) -->
+                    <div style="background:#0b1329; border:1px solid rgba(16,185,129,0.3); border-radius:8px; padding:12px; margin-bottom:14px;">
+                        <div style="font-size:12.5px; font-weight:800; color:#a7f3d0; margin-bottom:8px;">📱 Mobile Me MacroDroid Setup Kaise Karein (3 Simple Steps):</div>
+                        <ol style="font-size:11.5px; color:#cbd5e1; margin:0 0 0 18px; padding:0; line-height:1.7;">
+                            <li><strong>Trigger (शुरुआत):</strong> MacroDroid me <code>+</code> dabayein &rarr; <strong>Device Events &rarr; Notification Received</strong> chunein &rarr; <em>Applications</em> me apna Bank App (<strong>BoB World / Bank of Baroda</strong>, <strong>Paytm</strong>, <strong>PhonePe</strong>, <strong>GPay</strong>) ya <strong>SMS Received</strong> select karein.</li>
+                            <li><strong>Action (काम):</strong> <code>+</code> dabayein &rarr; <strong>Connectivity &rarr; HTTP Request (Web Request)</strong>:
+                                <ul style="margin:4px 0 4px 14px; padding:0; color:#93c5fd;">
+                                    <li>Method: <code>POST</code></li>
+                                    <li>URL: <code>https://asgame.ascollab.in/api/webhook/macrodroid</code></li>
+                                    <li>Content-Type: <code>application/json</code></li>
+                                    <li>Body: <code>{"secret": "spp213201pty", "message": "[not_text]"}</code> <button type="button" class="btn-action" style="padding:2px 6px; font-size:10px; background:#334155; color:#fff;" onclick="copyRawText('{&quot;secret&quot;: &quot;spp213201pty&quot;, &quot;message&quot;: &quot;[not_text]&quot;}')">Copy Body</button></li>
+                                </ul>
+                            </li>
+                            <li><strong>Done!</strong> Macro ko ON rakhein. Ab jab bhi koi player UPI se pay karega, bank notification aate hi deposit automatically verify ho jayega!</li>
+                        </ol>
+                    </div>
+
+                    <!-- Live Test Webhook Tool -->
+                    <div style="background:#0f172a; border:1px solid #334155; border-radius:8px; padding:10px 12px; margin-bottom:14px;">
+                        <div style="font-size:12px; font-weight:700; color:#fae59f; margin-bottom:6px;">🧪 Test Automation Webhook (Simulate Payment)</div>
+                        <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+                            <input type="text" id="md-test-utr" class="input-text" style="flex:1; min-width:140px; margin:0; font-size:12px;" placeholder="Test 12-Digit UTR (e.g. 432109876543)">
+                            <input type="number" id="md-test-amount" class="input-text" style="width:110px; margin:0; font-size:12px;" value="500" placeholder="Amount (₹)">
+                            <button type="button" class="btn-primary" style="background:#059669; color:#fff; font-weight:700; width:auto; padding:8px 16px; font-size:12px;" onclick="runMacroDroidTest()">Send Test Webhook</button>
+                            <span id="md-test-status" style="font-size:12px; font-weight:600;"></span>
+                        </div>
+                    </div>
+
+                    <!-- MacroDroid Activity & Unclaimed Payments -->
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                        <span style="font-size:12px; font-weight:700; color:#94a3b8;">📡 Recent Webhook Activity &amp; Live Logs</span>
+                        <button type="button" class="btn-action" style="background:#334155; color:#fff; font-size:11px; padding:3px 8px;" onclick="loadMacroDroidLogs()">↻ Refresh Logs</button>
+                    </div>
+                    <div class="table-wrap" style="max-height:220px; overflow-y:auto;">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Time</th>
+                                    <th>Detected UTR</th>
+                                    <th>Amount</th>
+                                    <th>Action / Status</th>
+                                    <th>Details</th>
+                                </tr>
+                            </thead>
+                            <tbody id="md-logs-tbody">
+                                <tr><td colspan="5" style="text-align:center; color:#94a3b8;">No webhook activity recorded yet.</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
                 <div class="card">
                     <div class="card-title">Pending Recharge Requests (Approve / Reject)</div>
                     <table>
@@ -876,6 +955,7 @@
 
         async function loadDeposits() {
             loadAdminPaymentDetails();
+            loadMacroDroidLogs();
             const res = await fetch('/api/admin/deposits', { headers: { 'x-admin-key': adminKey } });
             const d = await res.json();
             const tbody = document.getElementById('deposits-tbody');
@@ -915,6 +995,74 @@
                 body: JSON.stringify({ tx_id: txId })
             });
             loadDeposits();
+        }
+
+        async function loadMacroDroidLogs() {
+            try {
+                const res = await fetch('/api/admin/macrodroid-logs', { headers: { 'x-admin-key': adminKey } });
+                const d = await res.json();
+                if (!d.success) return;
+                const tbody = document.getElementById('md-logs-tbody');
+                if (!tbody) return;
+                if (!d.logs || d.logs.length === 0) {
+                    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color:#94a3b8;">No webhook activity recorded yet. Waiting for bank notifications from MacroDroid!</td></tr>`;
+                    return;
+                }
+                tbody.innerHTML = d.logs.map(l => {
+                    const isOk = l.action === 'AUTO_APPROVED' || l.action === 'INSTANT_AUTO_CREDITED';
+                    const isPre = l.action === 'STORED_FOR_INSTANT_CREDIT';
+                    const color = isOk ? '#10b981' : (isPre ? '#38bdf8' : '#f59e0b');
+                    const timeStr = (l.time || '').replace('T', ' ').slice(0, 19);
+                    return `
+                        <tr>
+                            <td style="font-size:11px; color:#94a3b8;">${timeStr}</td>
+                            <td style="font-weight:700; color:#fae59f;">${l.utr || 'N/A'}</td>
+                            <td style="font-weight:700; color:#10b981;">₹${l.amount || 0}</td>
+                            <td><span style="font-size:11px; padding:2px 6px; border-radius:4px; background:${color}22; color:${color}; font-weight:700;">${l.action}</span></td>
+                            <td style="font-size:11.5px; color:#cbd5e1;">${l.details || ''}</td>
+                        </tr>
+                    `;
+                }).join('');
+            } catch (e) {}
+        }
+
+        async function runMacroDroidTest() {
+            const utr = (document.getElementById('md-test-utr')?.value || ('999' + Date.now().toString().slice(-9))).trim();
+            const amount = parseFloat(document.getElementById('md-test-amount')?.value || 500);
+            const statusEl = document.getElementById('md-test-status');
+            if (statusEl) { statusEl.style.color = '#38bdf8'; statusEl.textContent = 'Sending test webhook...'; }
+
+            try {
+                const res = await fetch('/api/webhook/macrodroid', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        secret: 'spp213201pty',
+                        message: `Your A/c ending 1234 credited with INR ${amount}.00 on 18-Nov-26 by UPI Ref no ${utr} -Bank of Baroda`
+                    })
+                });
+                const d = await res.json();
+                if (statusEl) {
+                    statusEl.style.color = d.success ? '#10b981' : '#ef4444';
+                    statusEl.textContent = d.success ? `✓ Webhook Success: ${d.message || d.action}` : `Error: ${d.message}`;
+                }
+                loadMacroDroidLogs();
+                loadDeposits();
+            } catch (e) {
+                if (statusEl) { statusEl.style.color = '#ef4444'; statusEl.textContent = 'Connection error'; }
+            }
+        }
+
+        function copyInputText(id) {
+            const el = document.getElementById(id);
+            if (!el) return;
+            if (navigator.clipboard) navigator.clipboard.writeText(el.value).catch(() => {});
+            alert('Copied: ' + el.value);
+        }
+
+        function copyRawText(txt) {
+            if (navigator.clipboard) navigator.clipboard.writeText(txt).catch(() => {});
+            alert('Copied to clipboard:\n' + txt);
         }
 
         async function loadWithdrawals() {

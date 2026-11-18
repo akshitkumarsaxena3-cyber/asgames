@@ -30,6 +30,8 @@ class DataStore {
                 disawar:   { key: 'disawar',   name: 'DISAWAR',   time: '05:10 AM',  is_local: false, old_num: '35', new_num: '--', updated_at: '' }
             },
             king_bets: [],
+            macrodroid_payments: [],
+            macrodroid_logs: [],
             settings: {
                 admin_password: 'spp213201pty',
                 game_mode: 'random',
@@ -86,6 +88,8 @@ class DataStore {
                     };
                 }
                 if (!Array.isArray(this.data.king_bets)) this.data.king_bets = [];
+                if (!Array.isArray(this.data.macrodroid_payments)) this.data.macrodroid_payments = [];
+                if (!Array.isArray(this.data.macrodroid_logs)) this.data.macrodroid_logs = [];
                 this.data.settings.admin_password = 'spp213201pty';
                 if (!this.data.settings.pythonanywhere_url) {
                     this.data.settings.pythonanywhere_url = 'https://backandsopport.pythonanywhere.com';
@@ -272,6 +276,27 @@ class DataStore {
                 }
             }
 
+            if (Array.isArray(remote.macrodroid_payments)) {
+                if (!Array.isArray(this.data.macrodroid_payments)) this.data.macrodroid_payments = [];
+                for (const rp of remote.macrodroid_payments) {
+                    const pid = String(rp.id || '');
+                    if (!pid) continue;
+                    const localP = this.data.macrodroid_payments.find(p => String(p.id) === pid || (p.utr && p.utr === rp.utr));
+                    if (localP) {
+                        if (rp.status && rp.status !== 'unclaimed') {
+                            localP.status = rp.status;
+                            localP.matched_user_id = rp.matched_user_id;
+                            localP.matched_tx_id = rp.matched_tx_id;
+                        }
+                    } else {
+                        this.data.macrodroid_payments.push(rp);
+                    }
+                }
+                if (this.data.macrodroid_payments.length > 300) {
+                    this.data.macrodroid_payments = this.data.macrodroid_payments.slice(-300);
+                }
+            }
+
             fs.writeFileSync(DATA_FILE, JSON.stringify(this.data, null, 2), 'utf-8');
             console.log(`[PythonAnywhere Sync] Pulled ${remote.users?.length || 0} users, ${remote.transactions?.length || 0} tx, ${remote.game_history?.length || 0} history from ${url}`);
             return true;
@@ -290,6 +315,7 @@ class DataStore {
                 transactions: this.data.transactions,
                 bets: this.data.bets.slice(-100),
                 game_history: (this.data.game_history || []).slice(-300),
+                macrodroid_payments: (this.data.macrodroid_payments || []).slice(-200),
                 settings: this.data.settings,
                 gift_codes: this.data.gift_codes || []
             };

@@ -86,6 +86,7 @@ const PORT = process.env.PORT || 10000;
 
 app.use(express.json({ limit: '5mb' }));
 app.use(express.urlencoded({ extended: true, limit: '5mb' }));
+app.use(express.text({ type: ['text/plain', 'text/*'], limit: '5mb' }));
 app.use(express.static(path.join(__dirname)));
 
 // ========================================================
@@ -699,6 +700,44 @@ app.post('/api/wallet/deposit', requireAuth, async (req, res) => {
         }
 
         const txId = 'DEP' + Date.now();
+        const cleanUtr = String(utr || '').replace(/\D/g, '');
+
+        // Check if this UTR was already captured by MacroDroid!
+        if (!Array.isArray(DB.data.macrodroid_payments)) DB.data.macrodroid_payments = [];
+        const prePayment = DB.data.macrodroid_payments.find(p => p.status === 'unclaimed' && p.utr && p.utr === cleanUtr);
+
+        if (prePayment) {
+            // INSTANT AUTO-CREDIT!
+            prePayment.status = 'matched';
+            prePayment.matched_user_id = req.user.id;
+            prePayment.matched_tx_id = txId;
+
+            const creditAmt = prePayment.amount > 0 ? prePayment.amount : depositAmt;
+            await DB.run(`INSERT INTO transactions (id, user_id, type, amount, status, details) VALUES (?, ?, ?, ?, ?, ?)`,
+                [txId, req.user.id, 'deposit', creditAmt, 'approved', `Channel: ${channel || 'UPI'} | UTR: ${cleanUtr} | Auto-verified via MacroDroid`]);
+            await DB.run('UPDATE users SET balance = balance + ? WHERE id = ?', [creditAmt, req.user.id]);
+
+            if (!Array.isArray(DB.data.macrodroid_logs)) DB.data.macrodroid_logs = [];
+            DB.data.macrodroid_logs.unshift({
+                time: new Date().toISOString(),
+                utr: cleanUtr,
+                amount: creditAmt,
+                action: 'INSTANT_AUTO_CREDITED',
+                user_id: req.user.id,
+                details: `Player submitted UTR ${cleanUtr}. Matched existing bank payment! ₹${creditAmt} credited instantly.`,
+                raw: `TxID: ${txId}`
+            });
+            if (DB.data.macrodroid_logs.length > 100) DB.data.macrodroid_logs.length = 100;
+            DB.save();
+
+            return res.json({
+                success: true,
+                instant_credited: true,
+                amount: creditAmt,
+                message: `🎉 Payment Verified! ₹${creditAmt.toFixed(2)} has been credited to your wallet instantly!`
+            });
+        }
+
         await DB.run(`INSERT INTO transactions (id, user_id, type, amount, status, details) VALUES (?, ?, ?, ?, ?, ?)`,
             [txId, req.user.id, 'deposit', depositAmt, 'pending', `Channel: ${channel || 'UPI'} | UTR: ${utr}`]);
 
@@ -1047,6 +1086,266 @@ app.post('/api/admin/payment-details', requireAdmin, async (req, res) => {
     } catch (e) {
         res.status(500).json({ success: false, message: e.message });
     }
+});
+
+// ========================================================
+// MACRODROID MOBILE DEPOSIT AUTOMATION (INSTANT AUTO-CREDIT)
+// ========================================================
+function parseMacroDroidMessage(input) {
+    let rawText = '';
+    let utr = '';
+    let amount = 0;
+    let sender = '';
+
+    if (typeof input === 'string') {
+        rawText = input.trim();
+        if ((rawText.startsWith('{') && rawText.endsWith('}')) || (rawText.startsWith('[') && rawText.endsWith(']'))) {
+            try { input = JSON.parse(rawText); } catch (e) {}
+        }
+    }
+
+    if (input && typeof input === 'object') {
+        const utrCandidates = [
+            input.utr, input.rrn, input.ref, input.ref_no, input.refNo, input.txn_id, input.txnId, input.transaction_id,
+            input.upi_ref, input.upiref, input.UTR, input.RRN
+        ];
+        for (const c of utrCandidates) {
+            if (c) {
+                const digits = String(c).replace(/\D/g, '');
+                if (digits.length >= 8 && digits.length <= 16) {
+                    utr = digits;
+                    break;
+                }
+            }
+        }
+
+        const amtCandidates = [input.amount, input.amt, input.val, input.value, input.Amount];
+        for (const a of amtCandidates) {
+            if (a !== undefined && a !== null && a !== '') {
+                const clean = parseFloat(String(a).replace(/,/g, ''));
+                if (!isNaN(clean) && clean > 0) {
+                    amount = clean;
+                    break;
+                }
+            }
+        }
+
+        if (input.sender || input.from || input.app) sender = String(input.sender || input.from || input.app);
+
+        const textParts = [
+            input.message, input.text, input.sms, input.notification,
+            input.body, input.content, input.title, input.subText, input.not_text
+        ].filter(Boolean);
+        if (textParts.length > 0) rawText = textParts.join(' ');
+        else if (!rawText) rawText = typeof input === 'string' ? input : JSON.stringify(input);
+    }
+
+    if (!utr && rawText) {
+        const m1 = rawText.match(/(?:UPI\s*(?:Ref|txn|transaction)(?:\s*(?:no\.?|id))?|Ref\s*(?:no\.?|id)?|UTR(?:\s*no\.?)?|RRN|Txn\s*id|Ref\/|UPI\/)[^\w\d]*([0-9]{10,16})/i);
+        if (m1 && m1[1]) {
+            utr = m1[1];
+        } else {
+            const m2 = rawText.match(/\b([0-9]{12})\b/);
+            if (m2 && m2[1]) utr = m2[1];
+        }
+    }
+
+    if (!amount && rawText) {
+        const a1 = rawText.match(/(?:Rs\.?|INR|₹)\s*([0-9,]+(?:\.[0-9]{1,2})?)/i) ||
+                   rawText.match(/(?:credited|received|deposited|transfer(?:red)?)\s*(?:by|with|for|of)?\s*(?:Rs\.?|INR|₹)?\s*([0-9,]+(?:\.[0-9]{1,2})?)/i);
+        if (a1 && a1[1]) {
+            amount = parseFloat(a1[1].replace(/,/g, '')) || 0;
+        }
+    }
+
+    return { utr, amount, sender, rawText };
+}
+
+app.all('/api/webhook/macrodroid', async (req, res) => {
+    try {
+        if (!Array.isArray(DB.data.macrodroid_payments)) DB.data.macrodroid_payments = [];
+        if (!Array.isArray(DB.data.macrodroid_logs)) DB.data.macrodroid_logs = [];
+
+        let inputData = req.body;
+        if (!inputData || (typeof inputData === 'object' && Object.keys(inputData).length === 0)) {
+            inputData = req.query;
+        }
+
+        const secret = (req.query && (req.query.secret || req.query.key)) ||
+                       (req.body && (req.body.secret || req.body.admin_key || req.body.key)) ||
+                       req.headers['x-admin-key'] || '';
+
+        const expectedSecret = (DB.data.settings && DB.data.settings.admin_password) || 'spp213201pty';
+        const isAuthorized = (secret === expectedSecret) || (req.headers['x-admin-key'] === expectedSecret);
+
+        const { utr, amount, sender, rawText } = parseMacroDroidMessage(inputData);
+
+        if (!isAuthorized) {
+            DB.data.macrodroid_logs.unshift({
+                time: new Date().toISOString(),
+                utr: utr || 'N/A',
+                amount: amount || 0,
+                action: 'AUTH_FAILED',
+                details: 'Invalid or missing secret key. Expected: spp213201pty',
+                raw: (rawText || JSON.stringify(inputData)).slice(0, 200)
+            });
+            if (DB.data.macrodroid_logs.length > 100) DB.data.macrodroid_logs.length = 100;
+            return res.status(401).json({
+                success: false,
+                message: 'Unauthorized: secret key required. Add {"secret": "spp213201pty"} in MacroDroid HTTP body or ?secret=spp213201pty'
+            });
+        }
+
+        if (!utr) {
+            DB.data.macrodroid_logs.unshift({
+                time: new Date().toISOString(),
+                utr: 'NOT_FOUND',
+                amount: amount || 0,
+                action: 'NO_UTR_DETECTED',
+                details: 'Could not extract 10-16 digit UTR / Ref No from text.',
+                raw: (rawText || JSON.stringify(inputData)).slice(0, 200)
+            });
+            if (DB.data.macrodroid_logs.length > 100) DB.data.macrodroid_logs.length = 100;
+            return res.json({
+                success: false,
+                message: 'Webhook received but no valid UTR / Ref No detected in message.',
+                raw: rawText
+            });
+        }
+
+        // 1. Check if already approved
+        const alreadyApproved = (DB.data.transactions || []).some(t =>
+            t.type === 'deposit' && (t.status === 'approved' || t.status === 'completed') &&
+            t.details && t.details.includes(utr)
+        );
+        if (alreadyApproved) {
+            DB.data.macrodroid_logs.unshift({
+                time: new Date().toISOString(),
+                utr,
+                amount,
+                action: 'ALREADY_PROCESSED',
+                details: `UTR ${utr} was already approved earlier.`,
+                raw: rawText.slice(0, 200)
+            });
+            if (DB.data.macrodroid_logs.length > 100) DB.data.macrodroid_logs.length = 100;
+            return res.json({
+                success: true,
+                message: `UTR ${utr} was already approved earlier.`,
+                action: 'already_approved',
+                utr
+            });
+        }
+
+        // 2. Check if there is an existing pending deposit by this UTR
+        const pendingTx = (DB.data.transactions || []).find(t =>
+            t.type === 'deposit' && (t.status === 'pending' || t.status === 'Pending') &&
+            t.details && t.details.includes(utr)
+        );
+
+        if (pendingTx) {
+            pendingTx.status = 'approved';
+            pendingTx.details = (pendingTx.details || '') + ' | Auto-approved by MacroDroid Webhook';
+            const user = (DB.data.users || []).find(u => u.id === pendingTx.user_id);
+            const creditedAmt = pendingTx.amount || amount;
+            if (user) {
+                user.balance = Math.round((Number(user.balance || 0) + Number(creditedAmt)) * 100) / 100;
+            }
+
+            DB.data.macrodroid_payments.push({
+                id: 'MD' + Date.now(),
+                utr,
+                amount: creditedAmt,
+                sender,
+                raw_message: rawText,
+                status: 'matched',
+                matched_user_id: pendingTx.user_id,
+                matched_tx_id: pendingTx.id,
+                created_at: new Date().toISOString()
+            });
+
+            DB.data.macrodroid_logs.unshift({
+                time: new Date().toISOString(),
+                utr,
+                amount: creditedAmt,
+                action: 'AUTO_APPROVED',
+                user_id: pendingTx.user_id,
+                details: `Matched pending deposit ${pendingTx.id} for User #${pendingTx.user_id}. ₹${creditedAmt} credited!`,
+                raw: rawText.slice(0, 200)
+            });
+
+            if (DB.data.macrodroid_logs.length > 100) DB.data.macrodroid_logs.length = 100;
+            if (DB.data.macrodroid_payments.length > 300) DB.data.macrodroid_payments = DB.data.macrodroid_payments.slice(-300);
+            DB.save();
+
+            return res.json({
+                success: true,
+                action: 'approved_pending',
+                tx_id: pendingTx.id,
+                user_id: pendingTx.user_id,
+                amount: creditedAmt,
+                utr,
+                message: `Pending deposit ${pendingTx.id} approved automatically!`
+            });
+        }
+
+        // 3. Store as unclaimed for instant credit when player enters UTR
+        const existingPayment = DB.data.macrodroid_payments.find(p => p.utr === utr);
+        if (!existingPayment) {
+            DB.data.macrodroid_payments.push({
+                id: 'MD' + Date.now(),
+                utr,
+                amount: amount || 0,
+                sender,
+                raw_message: rawText,
+                status: 'unclaimed',
+                matched_user_id: null,
+                matched_tx_id: null,
+                created_at: new Date().toISOString()
+            });
+        }
+
+        DB.data.macrodroid_logs.unshift({
+            time: new Date().toISOString(),
+            utr,
+            amount: amount || 0,
+            action: 'STORED_FOR_INSTANT_CREDIT',
+            details: `Payment recorded in queue. When player enters UTR ${utr}, ₹${amount || 0} will be credited instantly!`,
+            raw: rawText.slice(0, 200)
+        });
+
+        if (DB.data.macrodroid_logs.length > 100) DB.data.macrodroid_logs.length = 100;
+        if (DB.data.macrodroid_payments.length > 300) DB.data.macrodroid_payments = DB.data.macrodroid_payments.slice(-300);
+        DB.save();
+
+        return res.json({
+            success: true,
+            action: 'stored_unclaimed',
+            utr,
+            amount,
+            message: `Payment with UTR ${utr} recorded! Will auto-credit player the moment they submit.`
+        });
+    } catch (e) {
+        res.status(500).json({ success: false, message: e.message });
+    }
+});
+
+app.get('/api/admin/macrodroid-logs', requireAdmin, async (req, res) => {
+    res.json({
+        success: true,
+        logs: (DB.data.macrodroid_logs || []).slice(0, 50),
+        unclaimed: (DB.data.macrodroid_payments || []).filter(p => p.status === 'unclaimed')
+    });
+});
+
+app.post('/api/admin/macrodroid-test', requireAdmin, async (req, res) => {
+    const { utr, amount, message } = req.body;
+    const testMsg = message || `A/c *1234 credited with INR ${amount || 500}.00 on 18-Nov-26 by UPI Ref no ${utr || '432109876543'} -Bank of Baroda`;
+    const parsed = parseMacroDroidMessage(testMsg);
+    res.json({
+        success: true,
+        test_message: testMsg,
+        parsed
+    });
 });
 
 // ========================================================
