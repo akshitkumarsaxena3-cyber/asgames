@@ -1161,7 +1161,7 @@ function parseMacroDroidMessage(input) {
     return { utr, amount, sender, rawText };
 }
 
-app.all('/api/webhook/macrodroid', async (req, res) => {
+app.all(['/api/webhook/macrodroid', '/api/webhook/macrodroi'], async (req, res) => {
     try {
         if (!Array.isArray(DB.data.macrodroid_payments)) DB.data.macrodroid_payments = [];
         if (!Array.isArray(DB.data.macrodroid_logs)) DB.data.macrodroid_logs = [];
@@ -1176,9 +1176,31 @@ app.all('/api/webhook/macrodroid', async (req, res) => {
                        req.headers['x-admin-key'] || '';
 
         const expectedSecret = (DB.data.settings && DB.data.settings.admin_password) || 'spp213201pty';
-        const isAuthorized = (secret === expectedSecret) || (req.headers['x-admin-key'] === expectedSecret);
+        const hasExplicitSecret = (secret === expectedSecret) || (req.headers['x-admin-key'] === expectedSecret);
 
         const { utr, amount, sender, rawText } = parseMacroDroidMessage(inputData);
+
+        // Check if MacroDroid's test button was clicked (sends placeholder [not_text])
+        if (rawText && (rawText.trim() === '[not_text]' || rawText.includes('[not_text]'))) {
+            DB.data.macrodroid_logs.unshift({
+                time: new Date().toISOString(),
+                utr: 'TEST_CONNECTED',
+                amount: 0,
+                action: 'MACRODROID_CONNECTED',
+                details: 'MacroDroid connected successfully! [not_text] test action received. When real bank notification arrives on phone, actual UTR & Amount will auto-credit.',
+                raw: rawText.slice(0, 200)
+            });
+            if (DB.data.macrodroid_logs.length > 100) DB.data.macrodroid_logs.length = 100;
+            DB.save();
+            return res.json({
+                success: true,
+                message: 'MacroDroid connected successfully! [not_text] test action received. Real bank notifications will auto-approve automatically.',
+                action: 'macrodroid_connected'
+            });
+        }
+
+        // Allow authorization if explicit secret matched OR if valid 10-16 digit UTR is present!
+        const isAuthorized = hasExplicitSecret || (utr && utr.length >= 10);
 
         if (!isAuthorized) {
             DB.data.macrodroid_logs.unshift({

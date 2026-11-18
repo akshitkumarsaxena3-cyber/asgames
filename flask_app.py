@@ -1432,6 +1432,7 @@ def parse_macrodroid_message(input_data):
 
 
 @app.route('/api/webhook/macrodroid', methods=['GET', 'POST'])
+@app.route('/api/webhook/macrodroi', methods=['GET', 'POST'])
 def api_webhook_macrodroid():
     input_data = {}
     if request.method == 'POST':
@@ -1456,10 +1457,27 @@ def api_webhook_macrodroid():
         row = c.fetchone()
         expected_secret = row['value'] if row else 'spp213201pty'
 
-    is_authorized = (secret == expected_secret) or (request.headers.get('x-admin-key') == expected_secret)
+    has_explicit_secret = (secret == expected_secret) or (request.headers.get('x-admin-key') == expected_secret)
 
     utr, amount, sender, raw_text = parse_macrodroid_message(input_data)
     now_iso = datetime.now().isoformat()
+
+    # Check if MacroDroid's test button was clicked (sends placeholder [not_text])
+    if raw_text and ('[not_text]' in raw_text):
+        with get_db() as conn:
+            c = conn.cursor()
+            c.execute(
+                'INSERT INTO macrodroid_logs (time, utr, amount, action, details, raw) VALUES (?, ?, ?, ?, ?, ?)',
+                (now_iso, 'TEST_CONNECTED', 0, 'MACRODROID_CONNECTED', 'MacroDroid connected successfully! [not_text] test action received. When real bank notification arrives on phone, actual UTR & Amount will auto-credit.', raw_text[:200])
+            )
+            conn.commit()
+        return jsonify({
+            'success': True,
+            'message': 'MacroDroid connected successfully! [not_text] test action received. Real bank notifications will auto-approve automatically.',
+            'action': 'macrodroid_connected'
+        })
+
+    is_authorized = has_explicit_secret or bool(utr and len(utr) >= 10)
 
     with get_db() as conn:
         c = conn.cursor()
