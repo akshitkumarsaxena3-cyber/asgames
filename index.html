@@ -668,22 +668,27 @@
                     <div class="dep-section-card">
                         <div class="dep-sec-hdr"><span class="bdg-gold-ico">💼</span> <span>Deposit amount</span></div>
                         <div class="dep-amounts-grid">
-                            <button type="button" class="recharge-pill dep-amt-btn" data-amount="100"><span>₹</span><strong>100</strong></button>
-                            <button type="button" class="recharge-pill dep-amt-btn" data-amount="200"><span>₹</span><strong>200</strong></button>
-                            <button type="button" class="recharge-pill dep-amt-btn" data-amount="300"><span>₹</span><strong>300</strong></button>
-                            <button type="button" class="recharge-pill dep-amt-btn" data-amount="400"><span>₹</span><strong>400</strong></button>
-                            <button type="button" class="recharge-pill dep-amt-btn" data-amount="500"><span>₹</span><strong>500</strong></button>
-                            <button type="button" class="recharge-pill dep-amt-btn" data-amount="1000"><span>₹</span><strong>1K</strong></button>
-                            <button type="button" class="recharge-pill dep-amt-btn" data-amount="2000"><span>₹</span><strong>2K</strong></button>
-                            <button type="button" class="recharge-pill dep-amt-btn" data-amount="3000"><span>₹</span><strong>3K</strong></button>
-                            <button type="button" class="recharge-pill dep-amt-btn" data-amount="5000"><span>₹</span><strong>5K</strong></button>
+                            <button type="button" class="recharge-pill dep-amt-btn" data-amount="100" onclick="selectDepositAmount(100, this)"><span>₹</span><strong>100</strong></button>
+                            <button type="button" class="recharge-pill dep-amt-btn" data-amount="200" onclick="selectDepositAmount(200, this)"><span>₹</span><strong>200</strong></button>
+                            <button type="button" class="recharge-pill dep-amt-btn" data-amount="300" onclick="selectDepositAmount(300, this)"><span>₹</span><strong>300</strong></button>
+                            <button type="button" class="recharge-pill dep-amt-btn" data-amount="400" onclick="selectDepositAmount(400, this)"><span>₹</span><strong>400</strong></button>
+                            <button type="button" class="recharge-pill dep-amt-btn active" data-amount="500" onclick="selectDepositAmount(500, this)"><span>₹</span><strong>500</strong></button>
+                            <button type="button" class="recharge-pill dep-amt-btn" data-amount="1000" onclick="selectDepositAmount(1000, this)"><span>₹</span><strong>1K</strong></button>
+                            <button type="button" class="recharge-pill dep-amt-btn" data-amount="2000" onclick="selectDepositAmount(2000, this)"><span>₹</span><strong>2K</strong></button>
+                            <button type="button" class="recharge-pill dep-amt-btn" data-amount="3000" onclick="selectDepositAmount(3000, this)"><span>₹</span><strong>3K</strong></button>
+                            <button type="button" class="recharge-pill dep-amt-btn" data-amount="5000" onclick="selectDepositAmount(5000, this)"><span>₹</span><strong>5K</strong></button>
                         </div>
                         <div class="dep-input-bar">
                             <span class="dep-input-rs">₹</span>
                             <span class="dep-input-sep">|</span>
-                            <input type="number" id="recharge-amount-input" class="dep-amount-input" placeholder="₹100.00 - ₹50,000.00" oninput="updateDepositButtonState()">
+                            <input type="number" id="recharge-amount-input" class="dep-amount-input" placeholder="₹100.00 - ₹50,000.00" value="500" oninput="updateDepositButtonState()">
                             <button type="button" class="dep-input-clear" onclick="clearDepositAmount()">⊗</button>
                         </div>
+
+                        <!-- Direct Primary In-Card Deposit Button -->
+                        <button type="button" id="dep-card-pay-btn" class="dep-card-submit-btn ready" onclick="openDepositCheckoutSheet()">
+                            ⚡ Deposit ₹500
+                        </button>
                     </div>
 
                     <!-- Recharge Instructions Card -->
@@ -715,7 +720,7 @@
                         <div class="dep-footer-lbl">Recharge Method:</div>
                         <div id="dep-footer-method" class="dep-footer-method">UPI-QR</div>
                     </div>
-                    <button type="button" id="dep-open-pay-btn" class="dep-submit-btn" onclick="openDepositCheckoutSheet()">Deposit</button>
+                    <button type="button" id="dep-open-pay-btn" class="dep-submit-btn ready" onclick="openDepositCheckoutSheet()">Deposit ₹500</button>
                 </div>
 
                 <!-- Step 2: UPI / USDT Payment & UTR Submission Overlay -->

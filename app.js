@@ -736,6 +736,16 @@ class StateManager {
     openRechargeModal() {
         const modal = document.getElementById('recharge-modal');
         if (modal) modal.classList.remove('hidden');
+
+        // Pre-select ₹500 if input is empty
+        const inp = document.getElementById('recharge-amount-input');
+        if (inp && (!inp.value || parseFloat(inp.value) < 100)) {
+            inp.value = '500';
+            document.querySelectorAll('.dep-amt-btn, .recharge-pill').forEach(b => {
+                b.classList.toggle('active', b.dataset.amount === '500');
+            });
+        }
+
         if (typeof fetchLivePaymentDetails === 'function') fetchLivePaymentDetails();
         if (typeof updateDepositButtonState === 'function') updateDepositButtonState();
         if (typeof loadDepositPageHistory === 'function') loadDepositPageHistory();
@@ -1985,22 +1995,61 @@ function selectDepositChannel(channel, el) {
     if (window.sound) window.sound.click();
 }
 
+function selectDepositAmount(amt, el) {
+    const inp = document.getElementById('recharge-amount-input');
+    if (inp) {
+        inp.value = amt;
+    }
+    document.querySelectorAll('.dep-amt-btn, .recharge-pill').forEach(b => {
+        const bAmt = parseFloat(b.dataset.amount || '0');
+        b.classList.toggle('active', bAmt === parseFloat(amt));
+    });
+    if (el) el.classList.add('active');
+    updateDepositButtonState();
+    if (window.sound) window.sound.click();
+}
+window.selectDepositAmount = selectDepositAmount;
+
 function updateDepositButtonState() {
     const inp = document.getElementById('recharge-amount-input');
-    const btn = document.getElementById('dep-open-pay-btn');
+    const footerBtn = document.getElementById('dep-open-pay-btn');
+    const cardBtn = document.getElementById('dep-card-pay-btn');
     const amt = parseFloat(inp?.value || '0');
-    if (btn) {
-        if (amt >= 100) btn.classList.add('ready');
-        else btn.classList.remove('ready');
+
+    if (amt >= 100) {
+        const formattedAmt = amt.toLocaleString('en-IN');
+        if (footerBtn) {
+            footerBtn.classList.add('ready');
+            footerBtn.classList.remove('disabled');
+            footerBtn.textContent = `Deposit ₹${formattedAmt}`;
+        }
+        if (cardBtn) {
+            cardBtn.classList.add('ready');
+            cardBtn.classList.remove('disabled');
+            cardBtn.textContent = `⚡ Deposit ₹${formattedAmt}`;
+        }
+    } else {
+        if (footerBtn) {
+            footerBtn.classList.remove('ready');
+            footerBtn.classList.add('disabled');
+            footerBtn.textContent = amt > 0 ? `Min ₹100` : `Deposit`;
+        }
+        if (cardBtn) {
+            cardBtn.classList.remove('ready');
+            cardBtn.classList.add('disabled');
+            cardBtn.textContent = amt > 0 ? `Deposit (Min ₹100)` : `Select Amount`;
+        }
     }
 }
+window.updateDepositButtonState = updateDepositButtonState;
 
 function clearDepositAmount() {
     const inp = document.getElementById('recharge-amount-input');
     if (inp) inp.value = '';
-    document.querySelectorAll('.dep-amt-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.dep-amt-btn, .recharge-pill').forEach(b => b.classList.remove('active'));
     updateDepositButtonState();
 }
+window.clearDepositAmount = clearDepositAmount;
 
 window._livePaymentDetails = {
     upi_id: 'akshit9908@barodampay',
@@ -2149,13 +2198,14 @@ function openUpiAppIntent(appType = 'any') {
 
 async function openDepositCheckoutSheet() {
     const sm = window.stateManager;
+    const inp = document.getElementById('recharge-amount-input');
+    const amt = parseFloat(inp?.value || '0');
     if (!sm || !sm.token) {
-        if (sm) sm.showToast('Please login first to deposit funds!', 'warning');
+        if (amt >= 100) localStorage.setItem('asg_pending_deposit_amt', amt);
+        if (sm) sm.showToast('Please login / register first to complete deposit!', 'warning');
         openAuthModal('login');
         return;
     }
-    const inp = document.getElementById('recharge-amount-input');
-    const amt = parseFloat(inp?.value || '0');
     if (!amt || amt < 100) {
         sm.showToast('Please select or enter at least ₹100 to deposit.', 'warning');
         return;
@@ -3241,8 +3291,19 @@ window.addEventListener('DOMContentLoaded', () => {
 
     // Automatically show Extra First Deposit Bonus modal right after login!
     if (localStorage.getItem('asg_token')) {
-        setTimeout(() => {
-            openFirstDepositModal(false);
-        }, 950);
+        const pendingDep = localStorage.getItem('asg_pending_deposit_amt');
+        if (pendingDep) {
+            localStorage.removeItem('asg_pending_deposit_amt');
+            setTimeout(() => {
+                if (window.stateManager) window.stateManager.openRechargeModal();
+                const inp = document.getElementById('recharge-amount-input');
+                if (inp) inp.value = pendingDep;
+                if (typeof updateDepositButtonState === 'function') updateDepositButtonState();
+            }, 600);
+        } else {
+            setTimeout(() => {
+                openFirstDepositModal(false);
+            }, 950);
+        }
     }
 });
