@@ -2060,6 +2060,91 @@ function selectDepositUpiSlot(slot) {
             qrImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&margin=6&data=${encodeURIComponent(qrPayload)}`;
         }
     }
+
+    if (typeof updateUpiIntentLinks === 'function') {
+        updateUpiIntentLinks();
+    }
+}
+
+function getDepositUpiUrl(appType = 'any') {
+    const pay = window._livePaymentDetails || {};
+    const amt = Number(window._depCheckoutAmount || 500);
+    const addr = window._depCheckoutSlot === 2
+        ? (pay.arpay_upi || 'manusaxena465267@ikwik')
+        : (pay.upi_id || 'akshit9908@barodampay');
+    const payeeName = window._depCheckoutSlot === 2
+        ? 'MANU SAXENA'
+        : (pay.upi_name || 'AKSHIT KUMAR SAXENA');
+
+    const note = `ASGames_DEP_${Date.now()}`;
+    const amtStr = amt.toFixed(2);
+    const q = `pa=${encodeURIComponent(addr)}&pn=${encodeURIComponent(payeeName)}&am=${amtStr}&cu=INR&tn=${encodeURIComponent(note)}`;
+
+    if (appType === 'phonepe') return `phonepe://pay?${q}`;
+    if (appType === 'paytm') return `paytmmp://pay?${q}`;
+    if (appType === 'gpay') return `gpay://upi/pay?${q}`;
+    if (appType === 'bhim') return `bhim://pay?${q}`;
+    return `upi://pay?${q}`;
+}
+
+function updateUpiIntentLinks() {
+    const isUsdt = window._selectedDepositMethod === 'USDT';
+    const intentSec = document.getElementById('dep-upi-intent-section');
+    const qrDiv = document.getElementById('dep-qr-section-divider');
+    if (intentSec) intentSec.style.display = isUsdt ? 'none' : 'block';
+    if (qrDiv) qrDiv.style.display = isUsdt ? 'none' : 'flex';
+    if (isUsdt) return;
+
+    const anyLink = document.getElementById('dep-intent-link-any');
+    const phLink = document.getElementById('dep-intent-link-phonepe');
+    const paytmLink = document.getElementById('dep-intent-link-paytm');
+    const gpayLink = document.getElementById('dep-intent-link-gpay');
+    const bhimLink = document.getElementById('dep-intent-link-bhim');
+
+    if (anyLink) anyLink.href = getDepositUpiUrl('any');
+    if (phLink) phLink.href = getDepositUpiUrl('phonepe');
+    if (paytmLink) paytmLink.href = getDepositUpiUrl('paytm');
+    if (gpayLink) gpayLink.href = getDepositUpiUrl('gpay');
+    if (bhimLink) bhimLink.href = getDepositUpiUrl('bhim');
+}
+
+function openUpiAppIntent(appType = 'any') {
+    const isUsdt = window._selectedDepositMethod === 'USDT';
+    if (isUsdt) {
+        if (window.stateManager) window.stateManager.showToast('USDT transfer does not use UPI apps. Please scan QR or copy address.', 'info');
+        return;
+    }
+
+    const upiUrl = getDepositUpiUrl(appType);
+    const fallbackUniversalUrl = getDepositUpiUrl('any');
+
+    let hasBlurred = false;
+    const onBlur = () => { hasBlurred = true; };
+    window.addEventListener('blur', onBlur, { once: true });
+
+    try {
+        window.location.href = upiUrl;
+    } catch (e) {
+        const a = document.createElement('a');
+        a.href = upiUrl;
+        a.target = '_self';
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(() => { if (document.body.contains(a)) a.remove(); }, 300);
+    }
+
+    if (appType !== 'any') {
+        setTimeout(() => {
+            window.removeEventListener('blur', onBlur);
+            if (!hasBlurred && document.visibilityState === 'visible') {
+                window.location.href = fallbackUniversalUrl;
+            }
+        }, 1400);
+    }
+
+    if (window.stateManager) {
+        window.stateManager.showToast('Opening payment app... Complete payment & paste 12-digit UTR below!', 'info');
+    }
 }
 
 async function openDepositCheckoutSheet() {
@@ -2103,8 +2188,20 @@ async function openDepositCheckoutSheet() {
         selectDepositUpiSlot(isArPay ? 2 : 1);
     }
 
+    if (typeof updateUpiIntentLinks === 'function') {
+        updateUpiIntentLinks();
+    }
+
     const sheet = document.getElementById('dep-checkout-sheet');
     if (sheet) sheet.classList.remove('hidden');
+
+    // On mobile devices, automatically launch the native UPI App Chooser (PhonePe, Paytm, GPay, BHIM, etc.)
+    const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent || '');
+    if (isMobile && !isUsdt) {
+        setTimeout(() => {
+            openUpiAppIntent('any');
+        }, 250);
+    }
 }
 
 function closeDepositCheckoutSheet() {

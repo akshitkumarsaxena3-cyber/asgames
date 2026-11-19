@@ -733,8 +733,71 @@
                             <button type="button" id="dep-upi-btn-1" onclick="selectDepositUpiSlot(1)" style="padding:8px 6px; border-radius:8px; border:1px solid #d9ac4f; background:linear-gradient(135deg,#fae59f,#c4933f); color:#1a1305; font-size:11px; font-weight:800; cursor:pointer;">⚡ UPI 1 (BarodaPay)</button>
                             <button type="button" id="dep-upi-btn-2" onclick="selectDepositUpiSlot(2)" style="padding:8px 6px; border-radius:8px; border:1px solid rgba(255,255,255,0.14); background:#18181b; color:#e4e4e7; font-size:11px; font-weight:700; cursor:pointer;">⚡ UPI 2 (iKwik)</button>
                         </div>
+
+                        <!-- Mobile UPI Intent App Chooser Section -->
+                        <div id="dep-upi-intent-section" class="dep-upi-intent-section">
+                            <div class="dep-intent-badge-row">
+                                <span class="dep-intent-badge">⚡ INSTANT 1-TAP PAY</span>
+                                <span style="font-size:11px; color:#a1a1aa;">Pre-filled UPI &amp; Amount</span>
+                            </div>
+
+                            <!-- Primary All-Apps Trigger Button -->
+                            <a id="dep-intent-link-any" class="dep-intent-btn-primary" href="javascript:void(0);" onclick="openUpiAppIntent('any'); return false;">
+                                <div class="dep-intent-pri-left">
+                                    <span class="dep-intent-pri-icon">⚡</span>
+                                    <div>
+                                        <div class="dep-intent-pri-title">Pay via Any UPI App</div>
+                                        <div class="dep-intent-pri-sub">PhonePe • Paytm • GPay • BHIM • BarodaPay</div>
+                                    </div>
+                                </div>
+                                <span class="dep-intent-pri-arrow">➔</span>
+                            </a>
+
+                            <!-- Direct App Deep-links Grid -->
+                            <div class="dep-intent-apps-grid">
+                                <!-- PhonePe -->
+                                <a id="dep-intent-link-phonepe" class="dep-intent-app-item" href="javascript:void(0);" onclick="openUpiAppIntent('phonepe'); return false;" title="Pay with PhonePe">
+                                    <div class="dep-app-icon-circle" style="background:#5f259f;">
+                                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M16.5 7h-7a2.5 2.5 0 0 0-2.5 2.5v7a2.5 2.5 0 0 0 2.5 2.5h7a2.5 2.5 0 0 0 2.5-2.5v-7A2.5 2.5 0 0 0 16.5 7zm-3.5 8.5h-1.5V13h-1v-1.5h1V10h1.5v1.5h1V13h-1v2.5z" fill="#fff"/><circle cx="12" cy="12" r="9.5" stroke="#fff" stroke-width="1.5"/></svg>
+                                    </div>
+                                    <span>PhonePe</span>
+                                </a>
+                                <!-- Paytm -->
+                                <a id="dep-intent-link-paytm" class="dep-intent-app-item" href="javascript:void(0);" onclick="openUpiAppIntent('paytm'); return false;" title="Pay with Paytm">
+                                    <div class="dep-app-icon-circle" style="background:#00b9f1;">
+                                        <span style="font-size:11px; font-weight:900; color:#fff; letter-spacing:-0.5px;">Paytm</span>
+                                    </div>
+                                    <span>Paytm</span>
+                                </a>
+                                <!-- Google Pay -->
+                                <a id="dep-intent-link-gpay" class="dep-intent-app-item" href="javascript:void(0);" onclick="openUpiAppIntent('gpay'); return false;" title="Pay with Google Pay">
+                                    <div class="dep-app-icon-circle" style="background:#ffffff; border:1px solid #e2e8f0;">
+                                        <svg width="18" height="18" viewBox="0 0 24 24"><path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.665-5.17 3.665-9.17z"/><path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.25v3.15C3.26 21.36 7.33 24 12 24z"/><path fill="#FBBC05" d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.25C.45 8.18 0 10.03 0 12s.45 3.82 1.25 5.42l4.03-3.15z"/><path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.33 0 3.26 2.64 1.25 6.58l4.03 3.15c.95-2.83 3.6-4.98 6.72-4.98z"/></svg>
+                                    </div>
+                                    <span>GPay</span>
+                                </a>
+                                <!-- BHIM / BarodaPay -->
+                                <a id="dep-intent-link-bhim" class="dep-intent-app-item" href="javascript:void(0);" onclick="openUpiAppIntent('bhim'); return false;" title="Pay with BHIM / BarodaPay">
+                                    <div class="dep-app-icon-circle" style="background:#004b87;">
+                                        <span style="font-size:10px; font-weight:900; color:#fff;">BHIM</span>
+                                    </div>
+                                    <span>BHIM</span>
+                                </a>
+                            </div>
+
+                            <div class="dep-intent-help-text">
+                                💡 App select karte hi UPI ID aur Amount apne aap fill ho jayegi. Bas UPI PIN enter karein!
+                            </div>
+                        </div>
+
+                        <div id="dep-qr-section-divider" style="display:flex; align-items:center; gap:8px; margin:12px 0 10px;">
+                            <div style="flex:1; height:1px; background:rgba(255,255,255,0.1);"></div>
+                            <span style="font-size:10px; color:#71717a; text-transform:uppercase; letter-spacing:0.5px;">Or Scan QR Code</span>
+                            <div style="flex:1; height:1px; background:rgba(255,255,255,0.1);"></div>
+                        </div>
+
                         <div class="dep-checkout-qr-wrap">
-                            <img id="dep-pay-qr-img" src="/assets/deposit-qr.jpg" alt="Payment QR" style="width:188px; height:auto; max-height:220px; object-fit:contain; border-radius:10px; background:#fff; padding:6px; display:block; margin:0 auto;">
+                            <img id="dep-pay-qr-img" src="/assets/deposit-qr.jpg" alt="Payment QR" style="width:160px; height:auto; max-height:180px; object-fit:contain; border-radius:10px; background:#fff; padding:6px; display:block; margin:0 auto;">
                         </div>
                         <div class="dep-checkout-upi-row">
                             <div>
