@@ -2892,21 +2892,7 @@ body {
 }
 
 .bdg-support-fab {
-    position: fixed;
-    bottom: 24px;
-    right: 20px;
-    width: 48px;
-    height: 48px;
-    border-radius: 50%;
-    background: linear-gradient(135deg, #fae59f 0%, #b8832a 100%);
-    color: #2b1704;
-    font-size: 22px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    box-shadow: 0 6px 20px rgba(245, 196, 67, 0.45);
-    cursor: pointer;
-    z-index: 2600;
+    display: none !important;
 }
 
 
@@ -3348,43 +3334,129 @@ body {
     transform: scale(0.9);
 }
 
-/* Floating Right-Side Quick Shortcuts (Gift + Wheel) */
+/* Removed Floating Side Rail: Hidden cleanly */
 .home-floating-rail {
-    position: fixed;
-    right: 12px;
-    bottom: 92px;
-    z-index: 950;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
+    display: none !important;
 }
 
-.float-rail-btn {
-    width: 46px;
-    height: 46px;
-    border-radius: 50%;
-    border: 2px solid #fde047;
-    font-size: 22px;
+/* ========================================================
+   LUXURY IN-APP QUICK SERVICES GRID (REPLACES FLOATING RAIL)
+======================================================== */
+.home-quick-services {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+    margin: 8px 12px 10px;
+    padding: 12px 8px 10px;
+    background: linear-gradient(180deg, rgba(30, 38, 70, 0.85) 0%, rgba(20, 25, 48, 0.95) 100%);
+    border: 1px solid rgba(245, 196, 67, 0.22);
+    border-radius: 14px;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.qs-item {
     display: flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
     cursor: pointer;
-    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.5);
-    transition: transform 0.15s;
+    text-align: center;
+    padding: 4px 2px;
+    border-radius: 10px;
+    transition: transform 0.15s ease, background 0.2s ease;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
 }
 
-.float-gift {
+.qs-item:hover {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.qs-item:active {
+    transform: scale(0.92);
+}
+
+.qs-icon-box {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 21px;
+    margin-bottom: 5px;
+    border: 1.5px solid rgba(255, 255, 255, 0.25);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.qs-item:hover .qs-icon-box {
+    transform: translateY(-2px);
+}
+
+.qs-gift {
     background: linear-gradient(135deg, #ec4899 0%, #be123c 100%);
-    animation: floatCoin 2.8s ease-in-out infinite;
+    border-color: #f472b6;
+    box-shadow: 0 4px 14px rgba(236, 72, 153, 0.4);
 }
 
-.float-wheel {
+.qs-wheel {
     background: linear-gradient(135deg, #f97316 0%, #dc2626 100%);
-    animation: floatCoin 3.2s ease-in-out infinite 0.5s;
+    border-color: #fb923c;
+    box-shadow: 0 4px 14px rgba(249, 115, 22, 0.4);
 }
 
-.float-rail-btn:active {
-    transform: scale(0.9);
+.qs-friends {
+    background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+    border-color: #60a5fa;
+    box-shadow: 0 4px 14px rgba(59, 130, 246, 0.4);
+}
+
+.qs-support {
+    background: linear-gradient(135deg, #fae59f 0%, #c4933f 100%);
+    border-color: #fde047;
+    box-shadow: 0 4px 14px rgba(245, 196, 67, 0.4);
+}
+
+.qs-label {
+    font-size: 11px;
+    font-weight: 700;
+    color: #f1f5f9;
+    letter-spacing: 0.1px;
+    line-height: 1.2;
+    margin-bottom: 3px;
+    white-space: nowrap;
+}
+
+.qs-subtag {
+    font-size: 9px;
+    font-weight: 800;
+    color: #f5c443;
+    background: rgba(245, 196, 67, 0.12);
+    border: 1px solid rgba(245, 196, 67, 0.28);
+    padding: 1px 5px;
+    border-radius: 6px;
+    display: inline-block;
+}
+
+/* Header Live Support Chat Button */
+.header-support-btn {
+    position: relative;
+    background: var(--bg-card) !important;
+    border: 1px solid rgba(245, 196, 67, 0.45) !important;
+    color: #fae59f !important;
+}
+
+.header-support-btn .live-dot-mini {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    width: 7px;
+    height: 7px;
+    background: #10b981;
+    border-radius: 50%;
+    border: 1.5px solid #161b34;
+    box-shadow: 0 0 5px #10b981;
 }
 
 

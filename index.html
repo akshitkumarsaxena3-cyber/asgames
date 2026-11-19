@@ -205,10 +205,14 @@
                     <button type="button" class="bdg-btn-outline" onclick="switchAuthTab('login')">
                         <span style="color:#f5c443; font-weight:700;" data-i18n="back_login">← Back to Login</span>
                     </button>
-                </div>
 
-                <!-- Floating Gold Support Mascot -->
-                <div class="bdg-support-fab" title="24/7 Customer Support" onclick="openSupportChat()">💬</div>
+                    <!-- In-Modal Support Link -->
+                    <div style="text-align:center; margin-top:12px;">
+                        <button type="button" class="bdg-auth-help-btn" onclick="openSupportChat()" style="background:none; border:none; color:#f5c443; font-size:12px; font-weight:600; cursor:pointer; display:inline-flex; align-items:center; gap:6px;">
+                            <span>🎧</span> <span>Need Help? Contact 24/7 Live Support</span>
+                        </button>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -552,14 +556,6 @@
                     </div>
                 </div>
             </div>
-        </div>
-
-        <!-- Floating Right-Side Quick Shortcuts (Like BDG Win!) -->
-        <div class="home-floating-rail">
-            <button class="float-rail-btn float-gift" onclick="openFirstDepositModal(true)" title="First Deposit Bonus">🎁</button>
-            <button class="float-rail-btn float-wheel" onclick="window.stateManager.openGameView('wheel')" title="Invite Wheel">🎡</button>
-            <button class="float-rail-btn float-friends" onclick="openFriendsHubModal()" title="Friends & Direct Chat">👥</button>
-            <button class="float-rail-btn float-chat" onclick="openSupportChat()" title="24/7 Live Support Chat">💬</button>
         </div>
 
         <!-- 24/7 VIP Support Chatbot Modal (Connected Live to Admin Panel!) -->
@@ -1039,6 +1035,7 @@
                     </button>
                     <button id="btn-auth-trigger" class="btn-deposit" style="padding:4px 10px; font-size:11px;" onclick="openAuthModal('register')" data-i18n="login_register">Login / Register</button>
                     <button id="sound-toggle-btn" class="icon-btn" title="Toggle Sound">🔊</button>
+                    <button id="header-support-btn" class="icon-btn header-support-btn" onclick="openSupportChat()" title="24/7 Live Support Chat">💬<span class="live-dot-mini"></span></button>
                 </div>
             </div>
 
@@ -1106,10 +1103,34 @@
                     </div>
                 </div>
 
+                <!-- Luxury In-App Quick Services Hub (Replaces floating rail) -->
+                <div class="home-quick-services">
+                    <div class="qs-item" onclick="openFirstDepositModal(true)" title="First Deposit Bonus">
+                        <div class="qs-icon-box qs-gift">🎁</div>
+                        <div class="qs-label">Deposit Bonus</div>
+                        <span class="qs-subtag">Extra ₹</span>
+                    </div>
+                    <div class="qs-item" onclick="window.stateManager.openGameView('wheel')" title="Lucky Wheel">
+                        <div class="qs-icon-box qs-wheel">🎡</div>
+                        <div class="qs-label">Lucky Wheel</div>
+                        <span class="qs-subtag">Win ₹500</span>
+                    </div>
+                    <div class="qs-item" onclick="openFriendsHubModal()" title="Friends & Chat">
+                        <div class="qs-icon-box qs-friends">👥</div>
+                        <div class="qs-label">Friends &amp; Chat</div>
+                        <span class="qs-subtag">Live</span>
+                    </div>
+                    <div class="qs-item" onclick="openSupportChat()" title="24/7 Live Support Chat">
+                        <div class="qs-icon-box qs-support">💬</div>
+                        <div class="qs-label">24/7 Support</div>
+                        <span class="qs-subtag">Online</span>
+                    </div>
+                </div>
+
                 <!-- Live Stats Strip -->
                 <div class="live-stats-strip">
                     <div class="stat-pill-mini"><span class="live-dot"></span> <strong id="live-players-count">14,820</strong> Playing Now</div>
-                    <button type="button" class="stat-pill-mini" style="cursor:pointer; border-color:rgba(245,196,67,0.45); color:#fae59f; font-weight:700;" onclick="openFriendsHubModal()">👥 Friends &amp; Chat</button>
+                    <button type="button" class="stat-pill-mini" style="cursor:pointer; border-color:rgba(245,196,67,0.45); color:#fae59f; font-weight:700;" onclick="openSupportChat()"><span class="live-dot"></span> 💬 24/7 Support</button>
                 </div>
 
                 <!-- Category Navigation Pills -->
