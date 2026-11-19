@@ -229,7 +229,7 @@
                 <div class="card">
                     <div class="card-title">
                         <span>Win Go Outcome Decision Engine</span>
-                        <span id="current-mode-badge" style="color: #10b981; font-size: 12px;">Active: Random RNG</span>
+                        <span id="current-mode-badge" style="color: #10b981; font-size: 12px;">Active: Smart House-Edge (Profit Max)</span>
                     </div>
 
                     <div class="mode-row">
@@ -904,12 +904,14 @@
                     bWth.style.display = d.stats.pendingWithdrawals > 0 ? 'inline-block' : 'none';
                 }
 
-                document.getElementById('current-mode-badge').textContent = `Active Mode: ${d.gameMode.toUpperCase()}` + (d.manualNumber !== '' ? ` (Forced #${d.manualNumber})` : '');
+                const currentWingoMode = d.gameMode || 'house_edge';
+                const badgeTxt = currentWingoMode === 'house_edge' ? 'Smart House-Edge (Profit Max)' : (currentWingoMode === 'random' ? 'Fair Random RNG' : 'Manual Force');
+                document.getElementById('current-mode-badge').textContent = `Active: ${badgeTxt}` + (d.manualNumber !== '' ? ` (Forced #${d.manualNumber})` : '');
                 
                 ['random', 'house', 'manual'].forEach(m => document.getElementById('chip-' + m).classList.remove('active'));
-                if (d.gameMode === 'random') document.getElementById('chip-random').classList.add('active');
-                if (d.gameMode === 'house_edge') document.getElementById('chip-house').classList.add('active');
-                if (d.gameMode === 'manual') document.getElementById('chip-manual').classList.add('active');
+                if (currentWingoMode === 'random') document.getElementById('chip-random').classList.add('active');
+                if (currentWingoMode === 'house_edge') document.getElementById('chip-house').classList.add('active');
+                if (currentWingoMode === 'manual') document.getElementById('chip-manual').classList.add('active');
 
                 // Live Wagers
                 document.getElementById('wag-green').textContent = `₹${d.wagers.green || 0}`;
@@ -929,7 +931,7 @@
                 if (aviMode === 'high_flight') document.getElementById('avi-high')?.classList.add('active');
 
                 // Mines Active Mode UI
-                const mMode = d.minesMode || 'random';
+                const mMode = d.minesMode || 'house_profit';
                 const mBadge = document.getElementById('mines-mode-badge');
                 if (mBadge) mBadge.textContent = `Active: ${mMode.toUpperCase()}` + (mMode === 'house_profit' ? ` (Max ${d.minesMaxSafe || 1} Safe)` : '');
                 ['mines-random', 'mines-house', 'mines-easy'].forEach(id => document.getElementById(id)?.classList.remove('active'));
@@ -947,9 +949,9 @@
                 if (kMode === 'big') document.getElementById('k3-big')?.classList.add('active');
 
                 // Ludo Active Mode UI
-                const lMode = d.ludoMode || 'fair';
+                const lMode = d.ludoMode || 'bot_win';
                 const lBadge = document.getElementById('ludo-mode-badge');
-                if (lBadge) lBadge.textContent = `Active: ${lMode.toUpperCase()}`;
+                if (lBadge) lBadge.textContent = `Active: ${lMode.toUpperCase()}` + (lMode === 'bot_win' ? ' (House Profit)' : '');
                 ['ludo-fair', 'ludo-bot', 'ludo-player'].forEach(id => document.getElementById(id)?.classList.remove('active'));
                 if (lMode === 'fair') document.getElementById('ludo-fair')?.classList.add('active');
                 if (lMode === 'bot_win') document.getElementById('ludo-bot')?.classList.add('active');

