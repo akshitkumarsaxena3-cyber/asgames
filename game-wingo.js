@@ -1,4 +1,4 @@
-// Win Go Game Engine - ASGames Authentic Implementation
+// Win Go Game Engine - ASGames Authentic Implementation (100% Server Authoritative)
 
 class WinGoGame {
     constructor(stateManager) {
@@ -12,9 +12,10 @@ class WinGoGame {
         };
 
         this.remainingSeconds = 30;
-        this.currentPeriod = this.generatePeriodNumber();
+        this.currentPeriod = this.generatePeriodNumber(this.currentMode);
         this.isLocked = false;
         this.timerInterval = null;
+        this._isDrawing = false;
 
         // Betting State for Modal
         this.pendingBet = null;
@@ -22,12 +23,12 @@ class WinGoGame {
         this.multiplier = 1;
         this.quantity = 1;
 
-        // History data per mode (strictly past 10 rounds)
+        // Real history synchronized from server per mode
         this.history = {
-            '30s': this.generateInitialHistory(10),
-            '1m': this.generateInitialHistory(10),
-            '3m': this.generateInitialHistory(10),
-            '5m': this.generateInitialHistory(10)
+            '30s': [],
+            '1m': [],
+            '3m': [],
+            '5m': []
         };
 
         // User Bets
@@ -36,29 +37,16 @@ class WinGoGame {
         this.init();
     }
 
-    generatePeriodNumber() {
-        const now = new Date();
-        const y = now.getFullYear();
-        const m = String(now.getMonth() + 1).padStart(2, '0');
-        const d = String(now.getDate()).padStart(2, '0');
-        const sec = Math.floor((now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds()) / 30);
-        return `${y}${m}${d}100${String(sec).padStart(4, '0')}`;
-    }
-
-    generateInitialHistory(count) {
-        const list = [];
-        let basePeriod = parseInt(this.generatePeriodNumber()) - count;
-        for (let i = 0; i < count; i++) {
-            const num = Math.floor(Math.random() * 10);
-            const period = String(basePeriod + i);
-            list.unshift({
-                period: period,
-                number: num,
-                color: this.getColorForNumber(num),
-                size: num >= 5 ? 'Big' : 'Small'
-            });
-        }
-        return list;
+    generatePeriodNumber(mode = '30s', nowMs = Date.now()) {
+        const prefixes = { '30s': '1', '1m': '2', '3m': '3', '5m': '5' };
+        const duration = this.modeDurations[mode] || 30;
+        const d = new Date(nowMs);
+        const y = d.getUTCFullYear();
+        const m = String(d.getUTCMonth() + 1).padStart(2, '0');
+        const day = String(d.getUTCDate()).padStart(2, '0');
+        const secInDay = d.getUTCHours() * 3600 + d.getUTCMinutes() * 60 + d.getUTCSeconds();
+        const daySlot = Math.floor(secInDay / duration) + 1;
+        return `${y}${m}${day}${prefixes[mode] || '1'}${String(daySlot).padStart(4, '0')}`;
     }
 
     getColorForNumber(num) {
@@ -68,34 +56,74 @@ class WinGoGame {
         return 'red';
     }
 
+    async loadHistory(mode = this.currentMode) {
+        try {
+            const res = await fetch(`/api/game/history?mode=${mode}`, { cache: 'no-store' });
+            const d = await res.json();
+            if (d.success && Array.isArray(d.history)) {
+                this.history[mode] = d.history.map(item => {
+                    const num = parseInt(typeof item.number === 'number' ? item.number : item.winning_number, 10);
+                    return {
+                        period: String(item.period || item.period_id || ''),
+                        number: num,
+                        color: item.color || item.winning_color || this.getColorForNumber(num),
+                        size: item.size || item.winning_size || (num >= 5 ? 'Big' : 'Small')
+                    };
+                }).filter(item => item.period && !isNaN(item.number));
+                this.renderHistory();
+                this.renderTrend();
+            }
+        } catch (e) {
+            console.warn('Could not load Win Go history from server:', e);
+        }
+    }
+
     init() {
         this.startTimer();
+        this.loadHistory(this.currentMode);
 
         const syncCurrent = async () => {
             try {
-                const res = await fetch('/api/game/current');
+                const res = await fetch(`/api/game/current?mode=${this.currentMode}`, { cache: 'no-store' });
                 const d = await res.json();
-                if (d.success && this.currentMode === '30s') {
-                    this.currentPeriod = d.period;
-                    this.remainingSeconds = d.remainingSeconds;
+                if (d.success) {
+                    this.currentPeriod = String(d.period || d.currentPeriod);
+                    // Synchronize clock drift if off by > 1s or if timer reached zero
+                    if (Math.abs(this.remainingSeconds - d.remainingSeconds) > 1 || this.remainingSeconds <= 0) {
+                        this.remainingSeconds = d.remainingSeconds;
+                    }
                     this.isLocked = d.isLocked;
                     this.updateTimerDisplay();
                     if (this.isLocked) this.handleBettingLock();
-                    else this.handleBettingUnlock();
+                    else if (!this._isDrawing) this.handleBettingUnlock();
                 }
             } catch (e) {}
         };
         syncCurrent();
-        setInterval(syncCurrent, 3000);
+        setInterval(syncCurrent, 2500);
     }
 
     switchMode(mode) {
         if (!this.modeDurations[mode]) return;
         this.currentMode = mode;
         this.remainingSeconds = this.modeDurations[mode];
-        this.currentPeriod = this.generatePeriodNumber();
+        this.currentPeriod = this.generatePeriodNumber(mode);
         this.isLocked = false;
+        this._isDrawing = false;
         this.renderAll();
+        this.loadHistory(mode);
+
+        fetch(`/api/game/current?mode=${mode}`, { cache: 'no-store' })
+            .then(r => r.json())
+            .then(d => {
+                if (d.success && this.currentMode === mode) {
+                    this.currentPeriod = String(d.period || d.currentPeriod);
+                    this.remainingSeconds = d.remainingSeconds;
+                    this.isLocked = d.isLocked;
+                    this.renderAll();
+                }
+            })
+            .catch(() => {});
     }
 
     startTimer() {
@@ -121,20 +149,21 @@ class WinGoGame {
                 if (window.sound && this.remainingSeconds % 5 === 0) window.sound.tick('wingo');
             }
 
-            // Draw period end
-            if (this.remainingSeconds <= 0) {
-                this.drawPeriodResult();
-                this.remainingSeconds = this.modeDurations[this.currentMode];
-                this.currentPeriod = String(parseInt(this.currentPeriod) + 1);
-                this.isLocked = false;
-                this.handleBettingUnlock();
+            // Draw period end: 100% Server Authoritative!
+            if (this.remainingSeconds <= 0 && !this._isDrawing) {
+                this._isDrawing = true;
+                const periodToDraw = this.currentPeriod;
+                this.handleBettingLock();
+                this.drawPeriodResult(periodToDraw).finally(() => {
+                    this._isDrawing = false;
+                });
             }
         }, 1000);
     }
 
     updateTimerDisplay() {
-        const m = Math.floor(this.remainingSeconds / 60);
-        const s = this.remainingSeconds % 60;
+        const m = Math.floor(Math.max(0, this.remainingSeconds) / 60);
+        const s = Math.max(0, this.remainingSeconds) % 60;
         const timeStr = `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
         
         const timerEl = document.getElementById('wingo-timer');
@@ -190,69 +219,114 @@ class WinGoGame {
         }
     }
 
-    async drawPeriodResult() {
-        const periodForDraw = this.currentPeriod;
-        let resultNumber = Math.floor(Math.random() * 10);
+    async drawPeriodResult(periodToDraw) {
+        const periodForDraw = String(periodToDraw || this.currentPeriod);
 
-        // Fetch Admin 1-Click Manual Force / House-Edge rigging settings live!
+        // Fetch official result from centralized server!
+        const record = await this.fetchServerRoundResult(periodForDraw);
+
+        if (record) {
+            if (!this.history[this.currentMode]) this.history[this.currentMode] = [];
+            const existingIdx = this.history[this.currentMode].findIndex(h => String(h.period) === String(record.period));
+            if (existingIdx >= 0) {
+                this.history[this.currentMode][existingIdx] = record;
+            } else {
+                this.history[this.currentMode].unshift(record);
+            }
+            if (this.history[this.currentMode].length > 30) {
+                this.history[this.currentMode].length = 30;
+            }
+
+            // Show Draw Animation popup/toast
+            this.showDrawReveal(record);
+
+            // Check and settle user bets on this period
+            this.evaluateUserBets(record);
+
+            // Sync user profile / wallet balance from central server
+            if (this.sm && this.sm.fetchUserProfile) {
+                setTimeout(() => this.sm.fetchUserProfile(), 1200);
+            }
+
+            // Refresh UI tables
+            this.renderHistory();
+            this.renderTrend();
+            this.renderMyBets();
+        }
+
+        // Advance to next period cleanly from server
         try {
-            const res = await fetch('/api/game/all-rigging', { cache: 'no-store' });
-            const rig = await res.json();
-            if (rig.success) {
-                const currentMode = rig.wingo_mode || 'house_edge';
-                if (currentMode === 'manual' && rig.wingo_manual_number !== '' && !isNaN(parseInt(rig.wingo_manual_number, 10))) {
-                    resultNumber = Math.max(0, Math.min(9, parseInt(rig.wingo_manual_number, 10)));
-                } else if (currentMode === 'house_edge') {
-                    // Pick number 0-9 with lowest payout against pending bets for this period
-                    const activeBets = this.userBets.filter(b => b.period === periodForDraw && b.status === 'Pending');
-                    if (activeBets.length > 0) {
-                        let bestNum = resultNumber;
-                        let minPay = Infinity;
-                        for (let n = 0; n <= 9; n++) {
-                            const c = this.getColorForNumber(n);
-                            const sz = n >= 5 ? 'big' : 'small';
-                            let pay = 0;
-                            for (const b of activeBets) {
-                                if (b.selectType === 'number' && parseInt(b.selectValue) === n) pay += b.totalBet * 9;
-                                else if (b.selectType === 'size' && b.selectValue === sz) pay += b.totalBet * 2;
-                                else if (b.selectType === 'color') {
-                                    if (b.selectValue === 'green' && (c === 'green' || c === 'green-violet')) pay += b.totalBet * (c === 'green' ? 2 : 1.5);
-                                    if (b.selectValue === 'red' && (c === 'red' || c === 'red-violet')) pay += b.totalBet * (c === 'red' ? 2 : 1.5);
-                                    if (b.selectValue === 'violet' && (n === 0 || n === 5)) pay += b.totalBet * 4.5;
-                                }
-                            }
-                            if (pay < minPay) { minPay = pay; bestNum = n; }
-                        }
-                        resultNumber = bestNum;
-                    }
+            const res = await fetch(`/api/game/current?mode=${this.currentMode}`, { cache: 'no-store' });
+            const d = await res.json();
+            if (d.success) {
+                this.currentPeriod = String(d.period || d.currentPeriod);
+                this.remainingSeconds = d.remainingSeconds;
+                this.isLocked = d.isLocked;
+            } else {
+                this.remainingSeconds = this.modeDurations[this.currentMode];
+                this.currentPeriod = this.generatePeriodNumber(this.currentMode);
+                this.isLocked = false;
+            }
+        } catch (e) {
+            this.remainingSeconds = this.modeDurations[this.currentMode];
+            this.currentPeriod = this.generatePeriodNumber(this.currentMode);
+            this.isLocked = false;
+        }
+
+        if (!this.isLocked) {
+            this.handleBettingUnlock();
+        }
+        this.updateTimerDisplay();
+    }
+
+    async fetchServerRoundResult(period) {
+        const pidStr = String(period);
+        // Query server round-result up to 5 times (interval 500ms)
+        for (let attempt = 0; attempt < 5; attempt++) {
+            try {
+                const res = await fetch(`/api/game/round-result?period=${pidStr}&mode=${this.currentMode}`, { cache: 'no-store' });
+                const d = await res.json();
+                if (d.success && d.drawn) {
+                    const num = parseInt(d.number, 10);
+                    return {
+                        period: String(d.period || pidStr),
+                        number: num,
+                        color: d.color || this.getColorForNumber(num),
+                        size: d.size || (num >= 5 ? 'Big' : 'Small')
+                    };
+                }
+            } catch (e) {}
+            await new Promise(r => setTimeout(r, 500));
+        }
+
+        // Fallback 1: Query server history
+        try {
+            const hRes = await fetch(`/api/game/history?mode=${this.currentMode}`, { cache: 'no-store' });
+            const hData = await hRes.json();
+            if (hData.success && Array.isArray(hData.history)) {
+                const found = hData.history.find(h => String(h.period || h.period_id) === pidStr);
+                if (found) {
+                    const num = parseInt(typeof found.number === 'number' ? found.number : found.winning_number, 10);
+                    return {
+                        period: pidStr,
+                        number: num,
+                        color: found.color || found.winning_color || this.getColorForNumber(num),
+                        size: found.size || found.winning_size || (num >= 5 ? 'Big' : 'Small')
+                    };
                 }
             }
         } catch (e) {}
 
-        const color = this.getColorForNumber(resultNumber);
-        const size = resultNumber >= 5 ? 'Big' : 'Small';
-
-        const record = {
-            period: periodForDraw,
-            number: resultNumber,
-            color: color,
-            size: size
+        // Fallback 2: Deterministic period hash fallback (100% identical on all devices even if offline!)
+        let hash = 0;
+        for (let i = 0; i < pidStr.length; i++) hash = (hash * 31 + pidStr.charCodeAt(i)) & 0xffffffff;
+        const detNum = Math.abs(hash) % 10;
+        return {
+            period: pidStr,
+            number: detNum,
+            color: this.getColorForNumber(detNum),
+            size: detNum >= 5 ? 'Big' : 'Small'
         };
-
-        this.history[this.currentMode].unshift(record);
-        if (this.history[this.currentMode].length > 10) {
-            this.history[this.currentMode].length = 10;
-        }
-
-        // Show Draw Animation popup/toast
-        this.showDrawReveal(record);
-
-        // Check user bets on this period
-        this.evaluateUserBets(record);
-
-        // Refresh tables
-        this.renderHistory();
-        this.renderMyBets();
     }
 
     showDrawReveal(record) {
@@ -437,8 +511,8 @@ class WinGoGame {
                 }
                 serverDeducted = true;
                 serverWillSettle = Boolean(d.serverSettled);
-                if (d.period_id && this.currentMode === '30s') {
-                    this.currentPeriod = d.period_id;
+                if (d.period_id) {
+                    this.currentPeriod = String(d.period_id);
                 }
                 const serverBal = typeof d.balance === 'number' ? d.balance
                     : (typeof d.newBalance === 'number' ? d.newBalance
@@ -496,7 +570,7 @@ class WinGoGame {
         let wonAny = false;
 
         this.userBets.forEach(bet => {
-            if (bet.period === drawResult.period && bet.status === 'Pending') {
+            if (String(bet.period) === String(drawResult.period) && String(bet.status).toLowerCase() === 'pending') {
                 let isWin = false;
                 let multiplier = 0;
 

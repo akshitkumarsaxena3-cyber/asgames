@@ -270,7 +270,10 @@
                             <button type="button" class="num-pick-btn" data-wnum="8" style="border-bottom:3px solid #ef4444;" onclick="setManualNumber(8)">8</button>
                             <button type="button" class="num-pick-btn" data-wnum="9" style="border-bottom:3px solid #10b981;" onclick="setManualNumber(9)">9</button>
                         </div>
-                        <p id="manual-status" style="font-size: 13px; color: #10b981; font-weight: 700; margin-top:6px;"></p>
+                        <div style="margin-top:10px; display:flex; gap:10px; align-items:center;">
+                            <button type="button" class="btn-action" style="background:#334155; color:#cbd5e1; padding:7px 14px; font-size:12px; font-weight:700; border-radius:8px;" onclick="revertToHouseEdge()">↩️ Cancel Manual Force (Revert to Auto House Profit)</button>
+                        </div>
+                        <p id="manual-status" style="font-size: 13px; color: #10b981; font-weight: 700; margin-top:8px;"></p>
                     </div>
 
                     <div style="margin-top: 24px;">
@@ -905,13 +908,23 @@
                 }
 
                 const currentWingoMode = d.gameMode || 'house_edge';
-                const badgeTxt = currentWingoMode === 'house_edge' ? 'Smart House-Edge (Profit Max)' : (currentWingoMode === 'random' ? 'Fair Random RNG' : 'Manual Force');
-                document.getElementById('current-mode-badge').textContent = `Active: ${badgeTxt}` + (d.manualNumber !== '' ? ` (Forced #${d.manualNumber})` : '');
+                const hasManual = d.manualNumber !== '' && d.manualNumber !== null && d.manualNumber !== undefined;
+                const badgeTxt = hasManual 
+                    ? `🎯 Armed Manual Force (Next: #${d.manualNumber})`
+                    : (currentWingoMode === 'house_edge' ? 'Smart House-Edge (Profit Max)' : (currentWingoMode === 'random' ? 'Fair Random RNG' : 'Manual Force'));
+                document.getElementById('current-mode-badge').textContent = `Active: ${badgeTxt}`;
                 
                 ['random', 'house', 'manual'].forEach(m => document.getElementById('chip-' + m).classList.remove('active'));
-                if (currentWingoMode === 'random') document.getElementById('chip-random').classList.add('active');
-                if (currentWingoMode === 'house_edge') document.getElementById('chip-house').classList.add('active');
-                if (currentWingoMode === 'manual') document.getElementById('chip-manual').classList.add('active');
+                if (hasManual || currentWingoMode === 'manual') document.getElementById('chip-manual').classList.add('active');
+                else if (currentWingoMode === 'random') document.getElementById('chip-random').classList.add('active');
+                else document.getElementById('chip-house').classList.add('active');
+
+                document.querySelectorAll('.num-pick-btn').forEach(b => {
+                    const active = hasManual && parseInt(b.dataset.wnum, 10) === parseInt(d.manualNumber, 10);
+                    b.style.background = active ? '#f5c443' : '';
+                    b.style.color = active ? '#1a1202' : '';
+                    b.style.transform = active ? 'scale(1.08)' : '';
+                });
 
                 // Live Wagers
                 document.getElementById('wag-green').textContent = `₹${d.wagers.green || 0}`;
@@ -1026,9 +1039,33 @@
             });
             const col = num === 0 ? '🔴 Red + 🟣 Violet' : (num === 5 ? '🟢 Green + 🟣 Violet' : ([1,3,7,9].includes(num) ? '🟢 GREEN' : '🔴 RED'));
             const sz = num >= 5 ? 'BIG' : 'SMALL';
-            document.getElementById('manual-status').textContent = d.success
-                ? `✓ FORCED NEXT ROUND: Number ${num} (${col} • ${sz})${labelExtra ? ' — ' + labelExtra : ''}!`
-                : '✗ Error setting forced outcome.';
+            const statusEl = document.getElementById('manual-status');
+            if (statusEl) {
+                statusEl.textContent = d.success
+                    ? `✓ ARMED FOR NEXT DRAW: Number ${num} (${col} • ${sz})${labelExtra ? ' — ' + labelExtra : ''}! All phones will get this exact outcome!`
+                    : '✗ Error setting forced outcome.';
+                statusEl.style.color = d.success ? '#10b981' : '#ef4444';
+            }
+            refreshOverview();
+        }
+
+        async function revertToHouseEdge() {
+            const res = await fetch('/api/admin/control', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'x-admin-key': adminKey },
+                body: JSON.stringify({ mode: 'house_edge', manual_number: '' })
+            });
+            const d = await res.json();
+            document.querySelectorAll('.num-pick-btn').forEach(b => {
+                b.style.background = '';
+                b.style.color = '';
+                b.style.transform = '';
+            });
+            const statusEl = document.getElementById('manual-status');
+            if (statusEl) {
+                statusEl.textContent = '✓ Reverted to Smart House-Edge (Profit Max). Lowest payout will win!';
+                statusEl.style.color = '#10b981';
+            }
             refreshOverview();
         }
 
@@ -1042,7 +1079,7 @@
             };
             const list = pools[choice] || [1];
             const picked = list[Math.floor(Math.random() * list.length)];
-            setManualNumber(picked, `1-Click ${choice.toUpperCase()}`);
+            setManualNumber(picked, `1-Click Force ${choice.toUpperCase()}`);
         }
 
         async function loadUsers() {

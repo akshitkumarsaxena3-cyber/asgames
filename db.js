@@ -259,6 +259,39 @@ class DataStore {
                 }
             }
 
+            if (Array.isArray(remote.game_rounds)) {
+                if (!Array.isArray(this.data.game_rounds)) this.data.game_rounds = [];
+                for (const rg of remote.game_rounds) {
+                    const pid = String(rg.period || rg.period_id || '');
+                    if (!pid) continue;
+                    const num = parseInt(typeof rg.number === 'number' ? rg.number : rg.winning_number, 10);
+                    if (isNaN(num)) continue;
+                    const col = rg.color || rg.winning_color;
+                    const sz = rg.size || rg.winning_size || (num >= 5 ? 'Big' : 'Small');
+                    const existingIdx = this.data.game_rounds.findIndex(g => g.period_id === pid || g.period === pid);
+                    const roundObj = {
+                        period_id: pid,
+                        period: pid,
+                        game_mode: rg.game_mode || '30s',
+                        winning_number: num,
+                        number: num,
+                        winning_color: col,
+                        color: col,
+                        winning_size: sz,
+                        size: sz,
+                        created_at: rg.created_at || new Date().toISOString()
+                    };
+                    if (existingIdx >= 0) {
+                        this.data.game_rounds[existingIdx] = roundObj;
+                    } else {
+                        this.data.game_rounds.push(roundObj);
+                    }
+                }
+                if (this.data.game_rounds.length > 200) {
+                    this.data.game_rounds = this.data.game_rounds.slice(-200);
+                }
+            }
+
             if (Array.isArray(remote.game_history)) {
                 if (!Array.isArray(this.data.game_history)) this.data.game_history = [];
                 for (const rh of remote.game_history) {
@@ -327,6 +360,7 @@ class DataStore {
                 users: this.data.users,
                 transactions: this.data.transactions,
                 bets: this.data.bets.slice(-100),
+                game_rounds: (this.data.game_rounds || []).slice(-100),
                 game_history: (this.data.game_history || []).slice(-300),
                 macrodroid_payments: (this.data.macrodroid_payments || []).slice(-200),
                 settings: this.data.settings,
@@ -503,12 +537,22 @@ class DataStore {
         // 1. Bets by period and status
         if (sql.includes('FROM bets WHERE period_id = ? AND status = ?')) {
             const [period, status] = params;
-            return this.data.bets.filter(b => b.period_id === String(period) && b.status === status);
+            return this.data.bets.filter(b => (String(b.period_id || b.period) === String(period)) && b.status === status);
         }
 
         // 2. Game rounds history
         if (sql.includes('FROM game_rounds ORDER BY created_at DESC')) {
-            return [...this.data.game_rounds].reverse().slice(0, 30);
+            return [...this.data.game_rounds].reverse().slice(0, 30).map(r => ({
+                ...r,
+                period: r.period || r.period_id,
+                period_id: r.period_id || r.period,
+                number: typeof r.number === 'number' ? r.number : r.winning_number,
+                winning_number: typeof r.winning_number === 'number' ? r.winning_number : r.number,
+                color: r.color || r.winning_color,
+                winning_color: r.winning_color || r.color,
+                size: r.size || r.winning_size,
+                winning_size: r.winning_size || r.size
+            }));
         }
 
         // 3. User bets
@@ -601,13 +645,19 @@ class DataStore {
         // 2. Insert Game Round
         if (sql.includes('INSERT') && sql.includes('game_rounds')) {
             const [period_id, game_mode, winning_number, winning_color, winning_size] = params;
-            const existingIdx = this.data.game_rounds.findIndex(g => g.period_id === String(period_id));
+            const pidStr = String(period_id);
+            const numInt = parseInt(winning_number, 10);
+            const existingIdx = this.data.game_rounds.findIndex(g => String(g.period_id || g.period) === pidStr);
             const roundObj = {
-                period_id: String(period_id),
-                game_mode,
-                winning_number: parseInt(winning_number),
+                period_id: pidStr,
+                period: pidStr,
+                game_mode: game_mode || '30s',
+                winning_number: numInt,
+                number: numInt,
                 winning_color,
+                color: winning_color,
                 winning_size,
+                size: winning_size,
                 created_at: new Date().toISOString()
             };
             if (existingIdx >= 0) {
@@ -615,7 +665,7 @@ class DataStore {
             } else {
                 this.data.game_rounds.push(roundObj);
             }
-            if (this.data.game_rounds.length > 100) this.data.game_rounds.shift();
+            if (this.data.game_rounds.length > 200) this.data.game_rounds.shift();
             this.save();
             return { changes: 1 };
         }

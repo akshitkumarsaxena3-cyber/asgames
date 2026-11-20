@@ -130,21 +130,45 @@ async function requireAdmin(req, res, next) {
 }
 
 // ========================================================
-// SERVER GAME ENGINE (WIN GO 30S)
+// SERVER GAME ENGINE (WIN GO 30S, 1M, 3M, 5M) - 100% SERVER AUTHORITATIVE
 // ========================================================
-let currentPeriod = generatePeriodNumber();
-let remainingSeconds = 30;
-let isLocked = false;
-let currentRoundBets = []; // cached wagers for live admin view
+const WINGO_MODES = {
+    '30s': { duration: 30, prefix: '1' },
+    '1m':  { duration: 60, prefix: '2' },
+    '3m':  { duration: 180, prefix: '3' },
+    '5m':  { duration: 300, prefix: '5' }
+};
 
-function generatePeriodNumber() {
-    const now = new Date();
-    const y = now.getFullYear();
-    const m = String(now.getMonth() + 1).padStart(2, '0');
-    const d = String(now.getDate()).padStart(2, '0');
-    const sec = Math.floor((now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds()) / 30);
-    return `${y}${m}${d}100${String(sec).padStart(4, '0')}`;
+function getWinGoPeriodInfo(mode = '30s', nowMs = Date.now()) {
+    const cfg = WINGO_MODES[mode] || WINGO_MODES['30s'];
+    const duration = cfg.duration;
+    const nowSec = Math.floor(nowMs / 1000);
+    const remaining = duration - (nowSec % duration);
+    const isLocked = remaining <= 5;
+
+    const d = new Date(nowMs);
+    const y = d.getUTCFullYear();
+    const m = String(d.getUTCMonth() + 1).padStart(2, '0');
+    const day = String(d.getUTCDate()).padStart(2, '0');
+    const secInDay = d.getUTCHours() * 3600 + d.getUTCMinutes() * 60 + d.getUTCSeconds();
+    const daySlot = Math.floor(secInDay / duration) + 1;
+    const period = `${y}${m}${day}${cfg.prefix}${String(daySlot).padStart(4, '0')}`;
+
+    return {
+        mode,
+        duration,
+        period,
+        remainingSeconds: remaining,
+        isLocked,
+        serverTime: nowMs
+    };
 }
+
+let info30 = getWinGoPeriodInfo('30s');
+let currentPeriod = info30.period;
+let remainingSeconds = info30.remainingSeconds;
+let isLocked = info30.isLocked;
+let currentRoundBets = []; // cached wagers for live admin view
 
 function getColorForNumber(num) {
     if (num === 0) return 'red-violet';
@@ -153,129 +177,193 @@ function getColorForNumber(num) {
     return 'red';
 }
 
-// Game countdown timer loop
-setInterval(async () => {
-    remainingSeconds--;
-
-    if (remainingSeconds <= 5 && !isLocked) {
-        isLocked = true;
-    }
-
-    if (remainingSeconds <= 0) {
-        // Draw Result
-        await drawServerRound();
-        remainingSeconds = 30;
-        currentPeriod = String(parseInt(currentPeriod) + 1);
-        isLocked = false;
-        currentRoundBets = [];
-    }
-}, 1000);
-
-async function drawServerRound() {
+// Universal Round Drawer with Admin Manual Force & Smart House Edge
+async function drawServerRound(specificPeriod = null, mode = '30s') {
     try {
-        const periodToDraw = currentPeriod;
+        const cfg = WINGO_MODES[mode] || WINGO_MODES['30s'];
+        const periodToDraw = specificPeriod || getWinGoPeriodInfo(mode, Date.now() - cfg.duration * 1000).period;
+        const pidStr = String(periodToDraw);
 
-        // 1. Fetch Admin Mode (Default: house_edge - Smart House Profit Max)
+        // 1. Check if already drawn in DB
+        const existing = (DB.data.game_rounds || []).find(r => 
+            (String(r.period_id || r.period) === pidStr) && (r.game_mode === mode || !r.game_mode)
+        );
+        if (existing) {
+            const num = parseInt(typeof existing.number === 'number' ? existing.number : existing.winning_number, 10);
+            return {
+                period: pidStr,
+                period_id: pidStr,
+                number: num,
+                winning_number: num,
+                color: existing.color || existing.winning_color || getColorForNumber(num),
+                winning_color: existing.color || existing.winning_color || getColorForNumber(num),
+                size: existing.size || existing.winning_size || (num >= 5 ? 'Big' : 'Small'),
+                winning_size: existing.size || existing.winning_size || (num >= 5 ? 'Big' : 'Small'),
+                game_mode: mode,
+                created_at: existing.created_at
+            };
+        }
+
+        // 2. Fetch Admin Settings
         const modeSetting = await DB.get('SELECT value FROM settings WHERE key = ?', ['game_mode']);
         const manualSetting = await DB.get('SELECT value FROM settings WHERE key = ?', ['manual_number']);
+        const activeMode = (modeSetting && modeSetting.value) ? modeSetting.value : 'house_edge';
 
-        const mode = (modeSetting && modeSetting.value) ? modeSetting.value : 'house_edge';
         let winningNum = Math.floor(Math.random() * 10);
 
-        // Fetch all bets on this period
-        const periodBets = await DB.all('SELECT * FROM bets WHERE period_id = ? AND status = ?', [periodToDraw, 'pending']);
+        // Fetch all pending bets for this period
+        const periodBets = (DB.data.bets || []).filter(b => 
+            (String(b.period_id || b.period) === pidStr) && (b.status === 'pending' || !b.status)
+        );
 
-        if (mode === 'manual' && manualSetting && manualSetting.value !== '') {
-            winningNum = parseInt(manualSetting.value);
-            // Reset manual after drawing and revert back to house_edge (Max Profit default)
+        if (activeMode === 'manual' && manualSetting && manualSetting.value !== '') {
+            // ADMIN 1-CLICK FORCE ACTIVE
+            winningNum = parseInt(manualSetting.value, 10);
+            if (isNaN(winningNum) || winningNum < 0 || winningNum > 9) {
+                winningNum = Math.floor(Math.random() * 10);
+            }
+            // Consume manual override and revert back to house_edge for subsequent rounds
             await DB.run('UPDATE settings SET value = ? WHERE key = ?', ['', 'manual_number']);
             await DB.run('UPDATE settings SET value = ? WHERE key = ?', ['house_edge', 'game_mode']);
-        } else if (mode === 'house_edge' && periodBets.length > 0) {
-            // Smart House Edge: Find the number 0-9 that pays out the minimum
-            let lowestPayout = Infinity;
-            let bestNumber = 0;
+            console.log(`[Win Go ${mode}] Admin Manual Force executed for #${pidStr}: Number ${winningNum}`);
+        } else if (activeMode === 'house_edge') {
+            // SMART HOUSE EDGE (PROFIT MAX): Pick number 0-9 with lowest total payout across all player bets
+            if (periodBets.length > 0) {
+                let lowestPayout = Infinity;
+                let bestNumbers = [];
 
-            for (let testNum = 0; testNum <= 9; testNum++) {
-                const testColor = getColorForNumber(testNum);
-                const testSize = testNum >= 5 ? 'Big' : 'Small';
-                let totalPayout = 0;
+                for (let testNum = 0; testNum <= 9; testNum++) {
+                    const testColor = getColorForNumber(testNum);
+                    const testSize = testNum >= 5 ? 'Big' : 'Small';
+                    let totalPayout = 0;
 
-                for (const bet of periodBets) {
-                    if (bet.select_type === 'number' && parseInt(bet.select_value) === testNum) {
-                        totalPayout += bet.amount * 9;
-                    } else if (bet.select_type === 'color') {
-                        if (bet.select_value === 'green') {
-                            if (testColor === 'green') totalPayout += bet.amount * 2;
-                            else if (testColor === 'green-violet') totalPayout += bet.amount * 1.5;
-                        } else if (bet.select_value === 'red') {
-                            if (testColor === 'red') totalPayout += bet.amount * 2;
-                            else if (testColor === 'red-violet') totalPayout += bet.amount * 1.5;
-                        } else if (bet.select_value === 'violet' && (testNum === 0 || testNum === 5)) {
-                            totalPayout += bet.amount * 4.5;
+                    for (const bet of periodBets) {
+                        const amt = parseFloat(bet.amount || 0);
+                        const selVal = String(bet.select_value || bet.select_val || '').toLowerCase();
+                        const selType = String(bet.select_type || '');
+
+                        if (selType === 'number' && parseInt(selVal, 10) === testNum) {
+                            totalPayout += amt * 9;
+                        } else if (selType === 'color') {
+                            if (selVal === 'green') {
+                                if (testColor === 'green') totalPayout += amt * 2;
+                                else if (testColor === 'green-violet') totalPayout += amt * 1.5;
+                            } else if (selVal === 'red') {
+                                if (testColor === 'red') totalPayout += amt * 2;
+                                else if (testColor === 'red-violet') totalPayout += amt * 1.5;
+                            } else if (selVal === 'violet' && (testNum === 0 || testNum === 5)) {
+                                totalPayout += amt * 4.5;
+                            }
+                        } else if (selType === 'size' && selVal === testSize.toLowerCase()) {
+                            totalPayout += amt * 2;
                         }
-                    } else if (bet.select_type === 'size' && bet.select_value.toLowerCase() === testSize.toLowerCase()) {
-                        totalPayout += bet.amount * 2;
+                    }
+
+                    if (totalPayout < lowestPayout) {
+                        lowestPayout = totalPayout;
+                        bestNumbers = [testNum];
+                    } else if (totalPayout === lowestPayout) {
+                        bestNumbers.push(testNum);
                     }
                 }
-
-                if (totalPayout < lowestPayout) {
-                    lowestPayout = totalPayout;
-                    bestNumber = testNum;
-                }
+                winningNum = bestNumbers[Math.floor(Math.random() * bestNumbers.length)];
             }
-            winningNum = bestNumber;
         }
 
         const color = getColorForNumber(winningNum);
         const size = winningNum >= 5 ? 'Big' : 'Small';
 
-        // 2. Save round in DB
+        // 3. Save official round to database
         await DB.run(`INSERT OR REPLACE INTO game_rounds (period_id, game_mode, winning_number, winning_color, winning_size) VALUES (?, ?, ?, ?, ?)`,
-            [periodToDraw, '30s', winningNum, color, size]);
+            [pidStr, mode, winningNum, color, size]);
 
-        // 3. Resolve Bets & Payouts
+        // 4. Resolve Bets & Payouts in DB
         for (const bet of periodBets) {
             let isWin = false;
             let mult = 0;
+            const amt = parseFloat(bet.amount || 0);
+            const selVal = String(bet.select_value || bet.select_val || '').toLowerCase();
+            const selType = String(bet.select_type || '');
 
-            if (bet.select_type === 'color') {
-                if (bet.select_value === 'green') {
+            if (selType === 'color') {
+                if (selVal === 'green') {
                     if (color === 'green') { isWin = true; mult = 2.0; }
                     else if (color === 'green-violet') { isWin = true; mult = 1.5; }
-                } else if (bet.select_value === 'red') {
+                } else if (selVal === 'red') {
                     if (color === 'red') { isWin = true; mult = 2.0; }
                     else if (color === 'red-violet') { isWin = true; mult = 1.5; }
-                } else if (bet.select_value === 'violet' && (winningNum === 0 || winningNum === 5)) {
+                } else if (selVal === 'violet' && (winningNum === 0 || winningNum === 5)) {
                     isWin = true; mult = 4.5;
                 }
-            } else if (bet.select_type === 'number') {
-                if (parseInt(bet.select_value) === winningNum) {
+            } else if (selType === 'number') {
+                if (parseInt(selVal, 10) === winningNum) {
                     isWin = true; mult = 9.0;
                 }
-            } else if (bet.select_type === 'size') {
-                if (bet.select_value.toLowerCase() === size.toLowerCase()) {
+            } else if (selType === 'size') {
+                if (selVal === size.toLowerCase()) {
                     isWin = true; mult = 2.0;
                 }
             }
 
             if (isWin) {
-                const payout = Math.floor(bet.amount * mult * 0.98 * 100) / 100;
+                const payout = Math.floor(amt * mult * 0.98 * 100) / 100;
                 await DB.run('UPDATE bets SET status = ?, payout = ? WHERE id = ?', ['won', payout, bet.id]);
                 await DB.run('UPDATE users SET balance = balance + ? WHERE id = ?', [payout, bet.user_id]);
                 await DB.run(`INSERT INTO transactions (id, user_id, type, amount, status, details) VALUES (?, ?, ?, ?, ?, ?)`,
-                    ['TX' + Date.now() + Math.floor(Math.random() * 999), bet.user_id, 'win', payout, 'approved', `Win Go Period #${periodToDraw}`]);
+                    ['TX' + Date.now() + Math.floor(Math.random() * 999), bet.user_id, 'win', payout, 'approved', `Win Go ${mode} Period #${pidStr}`]);
             } else {
                 await DB.run('UPDATE bets SET status = ?, payout = 0 WHERE id = ?', ['lost', bet.id]);
             }
 
-            // 4. Distribute 3-Tier Referral Commissions
-            await distributeReferralCommissions(bet.user_id, bet.amount);
+            // Distribute 3-Tier Referral Commissions
+            await distributeReferralCommissions(bet.user_id, amt);
         }
 
+        return {
+            period: pidStr,
+            period_id: pidStr,
+            number: winningNum,
+            winning_number: winningNum,
+            color,
+            winning_color: color,
+            size,
+            winning_size: size,
+            game_mode: mode,
+            created_at: new Date().toISOString()
+        };
     } catch (err) {
-        console.error('Error drawing round:', err);
+        console.error('Error drawing server round:', err);
+        return null;
     }
 }
+
+// Game countdown timer loop - continuous 1-second server sync
+setInterval(async () => {
+    try {
+        const inf30 = getWinGoPeriodInfo('30s');
+        currentPeriod = inf30.period;
+        remainingSeconds = inf30.remainingSeconds;
+        isLocked = inf30.isLocked;
+
+        // When 30s period finishes (rollover at remainingSeconds === 30), draw previous round
+        if (remainingSeconds === 30) {
+            currentRoundBets = [];
+            const prev30 = getWinGoPeriodInfo('30s', Date.now() - 30000).period;
+            await drawServerRound(prev30, '30s');
+        }
+
+        // Also check 1m, 3m, 5m rollovers
+        for (const m of ['1m', '3m', '5m']) {
+            const inf = getWinGoPeriodInfo(m);
+            if (inf.remainingSeconds === inf.duration) {
+                const prev = getWinGoPeriodInfo(m, Date.now() - inf.duration * 1000).period;
+                await drawServerRound(prev, m);
+            }
+        }
+    } catch (e) {
+        console.error('Win Go interval loop error:', e);
+    }
+}, 1000);
 
 async function distributeReferralCommissions(userId, betAmount) {
     try {
@@ -316,18 +404,31 @@ async function distributeReferralCommissions(userId, betAmount) {
 }
 
 // Seed initial history if empty
-setTimeout(async () => {
+async function seedInitialHistory(mode = '30s') {
     try {
-        const count = await DB.get('SELECT COUNT(*) as cnt FROM game_rounds');
-        if (count && count.cnt < 10) {
-            let base = parseInt(currentPeriod) - 20;
-            for (let i = 0; i < 20; i++) {
-                const num = Math.floor(Math.random() * 10);
-                await DB.run(`INSERT OR IGNORE INTO game_rounds (period_id, game_mode, winning_number, winning_color, winning_size) VALUES (?, ?, ?, ?, ?)`,
-                    [String(base + i), '30s', num, getColorForNumber(num), num >= 5 ? 'Big' : 'Small']);
+        const cfg = WINGO_MODES[mode] || WINGO_MODES['30s'];
+        const existing = (DB.data.game_rounds || []).filter(r => r.game_mode === mode || (!r.game_mode && mode === '30s'));
+        if (existing.length < 15) {
+            const now = Date.now();
+            for (let i = 15; i >= 1; i--) {
+                const pastTs = now - i * cfg.duration * 1000;
+                const pastPeriod = getWinGoPeriodInfo(mode, pastTs).period;
+                const already = (DB.data.game_rounds || []).find(r => (String(r.period_id || r.period) === pastPeriod));
+                if (!already) {
+                    let hash = 0;
+                    for (let c = 0; c < pastPeriod.length; c++) hash = (hash * 31 + pastPeriod.charCodeAt(c)) & 0xffffffff;
+                    const num = Math.abs(hash) % 10;
+                    await DB.run(`INSERT OR IGNORE INTO game_rounds (period_id, game_mode, winning_number, winning_color, winning_size) VALUES (?, ?, ?, ?, ?)`,
+                        [pastPeriod, mode, num, getColorForNumber(num), num >= 5 ? 'Big' : 'Small']);
+                }
             }
         }
     } catch (e) { }
+}
+
+setTimeout(() => {
+    seedInitialHistory('30s');
+    seedInitialHistory('1m');
 }, 1000);
 
 // ========================================================
@@ -558,12 +659,59 @@ app.post('/api/auth/forgot-password', async (req, res) => {
 // GAME APIS
 // ========================================================
 app.get('/api/game/current', (req, res) => {
+    const mode = String(req.query.mode || '30s');
+    const info = getWinGoPeriodInfo(mode);
     res.json({
         success: true,
-        period: currentPeriod,
-        remainingSeconds: remainingSeconds,
-        isLocked: isLocked
+        mode,
+        period: info.period,
+        currentPeriod: info.period,
+        remainingSeconds: info.remainingSeconds,
+        isLocked: info.isLocked,
+        serverTime: Date.now()
     });
+});
+
+app.get('/api/game/round-result', async (req, res) => {
+    try {
+        const mode = String(req.query.mode || '30s');
+        const period = String(req.query.period || '').trim();
+        if (!period) return res.status(400).json({ success: false, message: 'Missing period parameter' });
+
+        let round = (DB.data.game_rounds || []).find(r => 
+            (String(r.period_id || r.period) === period) && 
+            (!req.query.mode || r.game_mode === mode || !r.game_mode)
+        );
+
+        if (!round) {
+            // Draw immediately if needed
+            round = await drawServerRound(period, mode);
+        }
+
+        if (round) {
+            const num = parseInt(typeof round.number === 'number' ? round.number : round.winning_number, 10);
+            const col = round.color || round.winning_color || getColorForNumber(num);
+            const sz = round.size || round.winning_size || (num >= 5 ? 'Big' : 'Small');
+            return res.json({
+                success: true,
+                drawn: true,
+                period: String(round.period || round.period_id),
+                period_id: String(round.period || round.period_id),
+                number: num,
+                winning_number: num,
+                color: col,
+                winning_color: col,
+                size: sz,
+                winning_size: sz,
+                game_mode: round.game_mode || mode,
+                created_at: round.created_at
+            });
+        }
+
+        return res.json({ success: false, drawn: false, message: 'Drawing in progress, please retry...' });
+    } catch (e) {
+        res.status(500).json({ success: false, message: e.message });
+    }
 });
 
 app.post('/api/game/bet', requireAuth, async (req, res) => {
@@ -571,19 +719,19 @@ app.post('/api/game/bet', requireAuth, async (req, res) => {
         const { period_id, select_type, select_value, amount, game_mode } = req.body;
         const mode = String(game_mode || '30s');
         const betAmount = parseFloat(amount);
+        const info = getWinGoPeriodInfo(mode);
 
-        // Only enforce the 30s server lock on 30s mode; never fail due to client timezone/period drift!
-        if (mode === '30s' && isLocked) {
+        if (info.isLocked || info.remainingSeconds <= 5) {
             return res.json({ success: false, message: 'Betting is locked for last 5 seconds! Wait for next round.' });
         }
         if (!betAmount || betAmount < 1) {
-            return res.json({ success: false, message: 'Invalid bet amount' });
+            return res.json({ success: false, message: 'Invalid bet amount (Minimum ₹1)' });
         }
         if (req.user.balance < betAmount) {
             return res.json({ success: false, message: 'Insufficient balance! Please recharge.' });
         }
 
-        const effectivePeriod = mode === '30s' ? currentPeriod : String(period_id || currentPeriod);
+        const effectivePeriod = info.period;
 
         // Deduct balance ONCE
         await DB.run('UPDATE users SET balance = balance - ? WHERE id = ?', [betAmount, req.user.id]);
@@ -612,7 +760,7 @@ app.post('/api/game/bet', requireAuth, async (req, res) => {
             balance: finalBal,
             newBalance: finalBal,
             period_id: effectivePeriod,
-            serverSettled: (mode === '30s')
+            serverSettled: true
         });
     } catch (e) {
         res.status(500).json({ success: false, message: e.message });
@@ -621,8 +769,33 @@ app.post('/api/game/bet', requireAuth, async (req, res) => {
 
 app.get('/api/game/history', async (req, res) => {
     try {
-        const history = await DB.all('SELECT * FROM game_rounds ORDER BY created_at DESC LIMIT 30');
-        res.json({ success: true, history });
+        const mode = String(req.query.mode || '30s');
+        let history = await DB.all('SELECT * FROM game_rounds ORDER BY created_at DESC LIMIT 30');
+        if (!history || history.length < 10) {
+            await seedInitialHistory(mode);
+            history = await DB.all('SELECT * FROM game_rounds ORDER BY created_at DESC LIMIT 30');
+        }
+        const filtered = (history || []).filter(r => r.game_mode === mode || (!r.game_mode && mode === '30s'));
+        const listToReturn = filtered.length >= 5 ? filtered : history;
+        const formatted = listToReturn.map(r => {
+            const num = parseInt(typeof r.number === 'number' ? r.number : r.winning_number, 10);
+            const col = r.color || r.winning_color || getColorForNumber(num);
+            const sz = r.size || r.winning_size || (num >= 5 ? 'Big' : 'Small');
+            const pid = String(r.period || r.period_id);
+            return {
+                period: pid,
+                period_id: pid,
+                number: num,
+                winning_number: num,
+                color: col,
+                winning_color: col,
+                size: sz,
+                winning_size: sz,
+                game_mode: r.game_mode || mode,
+                created_at: r.created_at
+            };
+        });
+        res.json({ success: true, history: formatted });
     } catch (e) {
         res.status(500).json({ success: false, message: e.message });
     }

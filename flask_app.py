@@ -13,7 +13,8 @@ import random
 import smtplib
 import threading
 from email.mime.text import MIMEText
-from datetime import datetime, timedelta
+import math
+from datetime import datetime, timedelta, timezone
 from flask import Flask, request, jsonify, send_from_directory
 
 OTP_STORE = {}  # email -> { 'code', 'purpose', 'expires_at' }
@@ -428,71 +429,158 @@ def reconcile_user_wallet_sqlite(conn, user_id):
 
 
 # ========================================================
-# GAME STATE & WIN-GO ENGINE
+# GAME STATE & WIN-GO ENGINE (100% SERVER AUTHORITATIVE)
 # ========================================================
+
+WINGO_MODES = {
+    '30s': {'duration': 30, 'prefix': '1'},
+    '1m':  {'duration': 60, 'prefix': '2'},
+    '3m':  {'duration': 180, 'prefix': '3'},
+    '5m':  {'duration': 300, 'prefix': '5'},
+}
 
 def determine_color(num):
     if num == 0:
-        return 'violet_red'
+        return 'red-violet'
     elif num == 5:
-        return 'violet_green'
+        return 'green-violet'
     elif num in [1, 3, 7, 9]:
         return 'green'
     else:
         return 'red'
 
-# Current period synchronized using wall-clock 30-second slots
-def get_current_period_info():
-    now = time.time()
-    slot = int(now // 30)
-    remaining = 30 - int(now % 30)
+# Current period synchronized using UTC wall-clock deterministic slots
+def get_current_period_info(mode='30s', now_ts=None):
+    if now_ts is None:
+        now_ts = time.time()
+    cfg = WINGO_MODES.get(mode, WINGO_MODES['30s'])
+    duration = cfg['duration']
+    now_sec = int(now_ts)
+    remaining = duration - (now_sec % duration)
     is_locked = remaining <= 5
-    # Base period format: YYYYMMDD + slot
-    today_str = datetime.now().strftime('%Y%m%d')
-    period = f"{today_str}{str(slot)[-5:]}"
-    return period, remaining, is_locked
 
-def draw_round_if_needed(period):
+    utc_dt = datetime.fromtimestamp(now_ts, timezone.utc)
+    y = utc_dt.strftime('%Y')
+    m = utc_dt.strftime('%m')
+    day = utc_dt.strftime('%d')
+    sec_in_day = utc_dt.hour * 3600 + utc_dt.minute * 60 + utc_dt.second
+    day_slot = (sec_in_day // duration) + 1
+    period = f"{y}{m}{day}{cfg['prefix']}{day_slot:04d}"
+
+    return {
+        'mode': mode,
+        'duration': duration,
+        'period': period,
+        'remainingSeconds': remaining,
+        'isLocked': is_locked,
+        'serverTime': int(now_ts * 1000)
+    }
+
+def draw_round_if_needed(period, mode='30s'):
+    if not period:
+        return None
+    period_str = str(period).strip()
     with get_db() as conn:
         cursor = conn.cursor()
-        cursor.execute('SELECT period FROM game_rounds WHERE period = ?', (period,))
-        if cursor.fetchone():
-            return  # Already drawn
+        cursor.execute('SELECT * FROM game_rounds WHERE period = ?', (period_str,))
+        row = cursor.fetchone()
+        if row:
+            d = dict(row)
+            num = int(d.get('number', 0))
+            col = d.get('color') or determine_color(num)
+            sz = 'Big' if num >= 5 else 'Small'
+            return {
+                'period': period_str,
+                'period_id': period_str,
+                'number': num,
+                'winning_number': num,
+                'color': col,
+                'winning_color': col,
+                'size': sz,
+                'winning_size': sz,
+                'game_mode': mode,
+                'created_at': d.get('created_at', '')
+            }
 
         # Check admin settings
         cursor.execute('SELECT value FROM settings WHERE key = ?', ('game_mode',))
-        row = cursor.fetchone()
-        mode = row['value'] if row else 'random'
+        m_row = cursor.fetchone()
+        current_mode = m_row['value'] if m_row else 'house_edge'
 
         cursor.execute('SELECT value FROM settings WHERE key = ?', ('manual_number',))
-        row = cursor.fetchone()
-        manual_num = row['value'] if row else ''
+        man_row = cursor.fetchone()
+        manual_num = man_row['value'] if man_row else ''
 
         winning_num = random.randint(0, 9)
-        if mode == 'manual' and manual_num != '':
+
+        # Check pending bets on this period
+        cursor.execute('SELECT * FROM bets WHERE (period = ? OR id LIKE ?) AND status = "pending"', (period_str, f"%{period_str}%"))
+        period_bets = cursor.fetchall()
+
+        if current_mode == 'manual' and manual_num != '':
             try:
                 winning_num = int(manual_num)
+                if winning_num < 0 or winning_num > 9:
+                    winning_num = random.randint(0, 9)
             except:
                 winning_num = random.randint(0, 9)
+            # Clear manual override and revert back to house_edge for subsequent draws
+            cursor.execute('UPDATE settings SET value = "" WHERE key = "manual_number"')
+            cursor.execute('UPDATE settings SET value = "house_edge" WHERE key = "game_mode"')
+        elif current_mode == 'house_edge' and period_bets:
+            # Smart House Edge (Profit Max): Pick number 0-9 with lowest total payout across all bets
+            lowest_payout = float('inf')
+            best_numbers = []
+
+            for test_num in range(10):
+                test_color = determine_color(test_num)
+                test_size = 'big' if test_num >= 5 else 'small'
+                payout = 0.0
+
+                for b in period_bets:
+                    b_amt = float(b['amount'] or 0)
+                    stype = str(b['select_type'] or '')
+                    sval = str(b['select_val'] or '').lower()
+
+                    if stype == 'number' and sval == str(test_num):
+                        payout += b_amt * 9.0
+                    elif stype == 'color':
+                        if sval == 'green':
+                            if test_color == 'green': payout += b_amt * 2.0
+                            elif test_color == 'green-violet': payout += b_amt * 1.5
+                        elif sval == 'red':
+                            if test_color == 'red': payout += b_amt * 2.0
+                            elif test_color == 'red-violet': payout += b_amt * 1.5
+                        elif sval == 'violet' and (test_num == 0 or test_num == 5):
+                            payout += b_amt * 4.5
+                    elif stype == 'size' and sval == test_size:
+                        payout += b_amt * 2.0
+
+                if payout < lowest_payout:
+                    lowest_payout = payout
+                    best_numbers = [test_num]
+                elif payout == lowest_payout:
+                    best_numbers.append(test_num)
+
+            winning_num = random.choice(best_numbers) if best_numbers else random.randint(0, 9)
 
         color = determine_color(winning_num)
+        size = 'Big' if winning_num >= 5 else 'Small'
         premium_sum = random.randint(1000, 9999)
         now_iso = datetime.now().isoformat()
 
         cursor.execute(
-            'INSERT INTO game_rounds (period, number, color, premium_sum, created_at) VALUES (?, ?, ?, ?, ?)',
-            (period, winning_num, color, premium_sum, now_iso)
+            'INSERT OR REPLACE INTO game_rounds (period, number, color, premium_sum, created_at) VALUES (?, ?, ?, ?, ?)',
+            (period_str, winning_num, color, premium_sum, now_iso)
         )
 
         # Settle bets for this period
-        cursor.execute('SELECT * FROM bets WHERE period = ? AND status = "pending"', (period,))
-        bets = cursor.fetchall()
-        for b in bets:
+        for b in period_bets:
             b_id = b['id']
             u_id = b['user_id']
-            stype = b['select_type']
-            sval = str(b['select_val']).lower()
-            amt = float(b['amount'])
+            stype = str(b['select_type'] or '')
+            sval = str(b['select_val'] or '').lower()
+            amt = float(b['amount'] or 0)
             won = False
             win_amt = 0.0
 
@@ -500,13 +588,13 @@ def draw_round_if_needed(period):
                 won = True
                 win_amt = amt * 9.0
             elif stype == 'color':
-                if sval == 'green' and color in ['green', 'violet_green']:
+                if sval == 'green' and color in ['green', 'green-violet']:
                     won = True
-                    win_amt = amt * (1.5 if color == 'violet_green' else 2.0)
-                elif sval == 'red' and color in ['red', 'violet_red']:
+                    win_amt = amt * (1.5 if color == 'green-violet' else 2.0)
+                elif sval == 'red' and color in ['red', 'red-violet']:
                     won = True
-                    win_amt = amt * (1.5 if color == 'violet_red' else 2.0)
-                elif sval == 'violet' and color in ['violet_red', 'violet_green']:
+                    win_amt = amt * (1.5 if color == 'red-violet' else 2.0)
+                elif sval == 'violet' and color in ['red-violet', 'green-violet']:
                     won = True
                     win_amt = amt * 4.5
             elif stype == 'size':
@@ -520,12 +608,50 @@ def draw_round_if_needed(period):
             new_status = 'won' if won else 'lost'
             cursor.execute('UPDATE bets SET win_amount = ?, status = ? WHERE id = ?', (win_amt, new_status, b_id))
             if won and win_amt > 0:
-                apply_user_wallet_delta(conn, u_id, win_amt, 'win')
+                net_payout = math.floor(win_amt * 0.98 * 100) / 100
+                apply_user_wallet_delta(conn, u_id, net_payout, 'win')
                 cursor.execute(
                     'INSERT INTO transactions (id, user_id, type, amount, status, details, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
-                    (f"WIN_{int(time.time()*1000)}_{random.randint(100,999)}", u_id, 'win', win_amt, 'completed', f'Win Go Prize #{period}', now_iso)
+                    (f"WIN_{int(time.time()*1000)}_{random.randint(100,999)}", u_id, 'win', net_payout, 'completed', f'Win Go Prize #{period_str}', now_iso)
                 )
         conn.commit()
+
+        return {
+            'period': period_str,
+            'period_id': period_str,
+            'number': winning_num,
+            'winning_number': winning_num,
+            'color': color,
+            'winning_color': color,
+            'size': size,
+            'winning_size': size,
+            'game_mode': mode,
+            'created_at': now_iso
+        }
+
+def seed_initial_history_if_needed(mode='30s'):
+    cfg = WINGO_MODES.get(mode, WINGO_MODES['30s'])
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute('SELECT COUNT(*) as c FROM game_rounds')
+        row = cursor.fetchone()
+        cnt = row['c'] if row else 0
+        if cnt < 15:
+            now_ts = time.time()
+            now_iso = datetime.now().isoformat()
+            for i in range(15, 0, -1):
+                past_info = get_current_period_info(mode, now_ts - i * cfg['duration'])
+                p = past_info['period']
+                cursor.execute('SELECT period FROM game_rounds WHERE period = ?', (p,))
+                if not cursor.fetchone():
+                    h = 0
+                    for c in p: h = (h * 31 + ord(c)) & 0xffffffff
+                    num = abs(h) % 10
+                    cursor.execute(
+                        'INSERT OR IGNORE INTO game_rounds (period, number, color, premium_sum, created_at) VALUES (?, ?, ?, ?, ?)',
+                        (p, num, determine_color(num), 5000 + num * 100, now_iso)
+                    )
+            conn.commit()
 
 
 # ========================================================
@@ -975,14 +1101,47 @@ def api_referral_claim():
 
 @app.route('/api/game/current', methods=['GET'])
 def api_game_current():
-    period, remaining, is_locked = get_current_period_info()
+    mode = str(request.args.get('mode', '30s'))
+    info = get_current_period_info(mode)
+    prev_info = get_current_period_info(mode, time.time() - info['duration'])
+    draw_round_if_needed(prev_info['period'], mode)
     return jsonify({
         'success': True,
-        'period': period,
-        'currentPeriod': period,
-        'remainingSeconds': remaining,
-        'isLocked': is_locked
+        'mode': mode,
+        'period': info['period'],
+        'currentPeriod': info['period'],
+        'remainingSeconds': info['remainingSeconds'],
+        'isLocked': info['isLocked'],
+        'serverTime': info['serverTime']
     })
+
+@app.route('/api/game/round-result', methods=['GET'])
+def api_game_round_result():
+    mode = str(request.args.get('mode', '30s'))
+    period = str(request.args.get('period', '')).strip()
+    if not period:
+        return jsonify({'success': False, 'message': 'Missing period parameter'}), 400
+
+    round_data = draw_round_if_needed(period, mode)
+    if round_data:
+        num = int(round_data.get('number', 0))
+        col = round_data.get('color') or determine_color(num)
+        sz = round_data.get('size') or ('Big' if num >= 5 else 'Small')
+        return jsonify({
+            'success': True,
+            'drawn': True,
+            'period': str(round_data.get('period') or period),
+            'period_id': str(round_data.get('period') or period),
+            'number': num,
+            'winning_number': num,
+            'color': col,
+            'winning_color': col,
+            'size': sz,
+            'winning_size': sz,
+            'game_mode': mode,
+            'created_at': round_data.get('created_at', '')
+        })
+    return jsonify({'success': False, 'drawn': False, 'message': 'Drawing in progress...'})
 
 @app.route('/api/game/bet', methods=['POST'])
 def api_game_bet():
@@ -992,11 +1151,11 @@ def api_game_bet():
 
     data = request.get_json(silent=True) or {}
     game_mode = str(data.get('game_mode', '30s'))
-    period, remaining, is_locked = get_current_period_info()
-    if game_mode == '30s' and (is_locked or remaining <= 5):
+    info = get_current_period_info(game_mode)
+    if info['isLocked'] or info['remainingSeconds'] <= 5:
         return jsonify({'success': False, 'message': 'Round is locked for last 5 seconds! Please wait for next round.'}), 400
 
-    effective_period = period if game_mode == '30s' else str(data.get('period_id') or period)
+    effective_period = info['period']
     select_type = data.get('select_type')
     select_val = str(data.get('select_value') or data.get('select_val') or '').lower()
     amount = float(data.get('amount', 0))
@@ -1022,17 +1181,38 @@ def api_game_bet():
         )
         conn.commit()
 
-    return jsonify({'success': True, 'message': 'Bet placed successfully!', 'balance': new_bal, 'newBalance': new_bal, 'new_balance': new_bal, 'period_id': effective_period, 'serverSettled': (game_mode == '30s')})
+    return jsonify({'success': True, 'message': 'Bet placed successfully!', 'balance': new_bal, 'newBalance': new_bal, 'new_balance': new_bal, 'period_id': effective_period, 'serverSettled': True})
 
 @app.route('/api/game/history', methods=['GET'])
 def api_game_history():
-    period, _, _ = get_current_period_info()
-    draw_round_if_needed(str(int(period) - 1))
+    mode = str(request.args.get('mode', '30s'))
+    info = get_current_period_info(mode)
+    prev_info = get_current_period_info(mode, time.time() - info['duration'])
+    draw_round_if_needed(prev_info['period'], mode)
+    seed_initial_history_if_needed(mode)
 
     with get_db() as conn:
         cursor = conn.cursor()
-        cursor.execute('SELECT * FROM game_rounds ORDER BY period DESC LIMIT 50')
-        rows = [dict(r) for r in cursor.fetchall()]
+        cursor.execute('SELECT * FROM game_rounds ORDER BY created_at DESC, period DESC LIMIT 50')
+        rows = []
+        for r in cursor.fetchall():
+            d = dict(r)
+            num = int(d.get('number', 0))
+            col = d.get('color') or determine_color(num)
+            sz = d.get('size') or ('Big' if num >= 5 else 'Small')
+            p = str(d.get('period', ''))
+            rows.append({
+                'period': p,
+                'period_id': p,
+                'number': num,
+                'winning_number': num,
+                'color': col,
+                'winning_color': col,
+                'size': sz,
+                'winning_size': sz,
+                'game_mode': d.get('game_mode', mode),
+                'created_at': d.get('created_at', '')
+            })
 
     return jsonify({'success': True, 'history': rows})
 
@@ -2949,6 +3129,27 @@ def serve_static(filename):
     if os.path.exists(file_path):
         return send_from_directory(BASE_DIR, filename)
     return jsonify({'error': 'Not found'}), 404
+
+
+def start_wingo_daemon():
+    def loop():
+        time.sleep(2)
+        while True:
+            try:
+                now_ts = time.time()
+                for m in ['30s', '1m', '3m', '5m']:
+                    cfg = WINGO_MODES[m]
+                    if int(now_ts) % cfg['duration'] == 0:
+                        prev = get_current_period_info(m, now_ts - cfg['duration'])
+                        draw_round_if_needed(prev['period'], m)
+            except Exception:
+                pass
+            time.sleep(1)
+
+    t = threading.Thread(target=loop, daemon=True)
+    t.start()
+
+start_wingo_daemon()
 
 
 if __name__ == '__main__':
