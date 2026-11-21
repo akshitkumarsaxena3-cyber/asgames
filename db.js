@@ -172,8 +172,14 @@ class DataStore {
                         if (ru.password) localUser.password = ru.password;
                         if (typeof ru.deposit_balance === 'number') localUser.deposit_balance = ru.deposit_balance;
                         if (typeof ru.winning_balance === 'number') localUser.winning_balance = ru.winning_balance;
-                        if (typeof localUser.deposit_balance !== 'number' && typeof ru.balance === 'number') {
-                            localUser.balance = ru.balance;
+                        if (typeof ru.balance === 'number') {
+                            if (typeof ru.deposit_balance !== 'number' || typeof ru.winning_balance !== 'number') {
+                                if (ru.balance > (localUser.balance || 0) || (localUser.balance || 0) === 0) {
+                                    localUser.balance = ru.balance;
+                                    localUser.deposit_balance = undefined;
+                                    localUser.winning_balance = undefined;
+                                }
+                            }
                         }
                         if (ru.is_banned !== undefined) localUser.is_banned = ru.is_banned;
                         this.reconcileUserWallet(localUser);
@@ -421,19 +427,28 @@ class DataStore {
 
         const unwageredDeposit = Math.max(0, Math.round((totalDeposits - totalBets) * 100) / 100);
 
-        if (typeof user.deposit_balance === 'number' && typeof user.winning_balance === 'number') {
-            // Self-healing: if deposit_balance was somehow wiped to 0 upon logout/sync but unwagered deposit exists:
-            if (user.deposit_balance === 0 && unwageredDeposit > 0 && currentBal > 0) {
-                user.deposit_balance = Math.min(currentBal, unwageredDeposit);
+        const curDep = typeof user.deposit_balance === 'number' ? user.deposit_balance : null;
+        const curWin = typeof user.winning_balance === 'number' ? user.winning_balance : null;
+
+        if (curDep !== null && curWin !== null && (curDep + curWin) > 0) {
+            const sumSub = Math.round((curDep + curWin) * 100) / 100;
+            if (currentBal > sumSub) {
+                // Balance has grown from wins: credit difference to winning_balance
+                user.winning_balance = Math.round((curWin + (currentBal - sumSub)) * 100) / 100;
+            } else if (currentBal < sumSub && currentBal > 0) {
+                user.deposit_balance = Math.min(currentBal, curDep);
                 user.winning_balance = Math.max(0, Math.round((currentBal - user.deposit_balance) * 100) / 100);
-            } else {
-                user.balance = Math.round((user.deposit_balance + user.winning_balance) * 100) / 100;
             }
-        } else {
-            // First-time initialization:
+            user.balance = Math.round((user.deposit_balance + user.winning_balance) * 100) / 100;
+        } else if (currentBal > 0) {
+            // Sub-wallets were zero or uninitialized, but user has real balance: preserve user's money!
             user.deposit_balance = Math.min(currentBal, unwageredDeposit);
             user.winning_balance = Math.max(0, Math.round((currentBal - user.deposit_balance) * 100) / 100);
-            user.balance = Math.round((user.deposit_balance + user.winning_balance) * 100) / 100;
+            user.balance = currentBal;
+        } else {
+            user.deposit_balance = 0;
+            user.winning_balance = 0;
+            user.balance = 0;
         }
         return user;
     }
@@ -454,8 +469,8 @@ class DataStore {
 
         // 2. User by id
         if (sql.includes('FROM users WHERE id =')) {
-            const id = parseInt(params[0]);
-            return this.data.users.find(u => u.id === id) || null;
+            const id = parseInt(params[0], 10);
+            return this.data.users.find(u => u.id === id || (u.id < 100000 ? 100000 + u.id : u.id) === id) || null;
         }
 
         // 3. User by phone or email
@@ -671,12 +686,20 @@ class DataStore {
         }
 
         // 3. Update Bets (Won/Lost)
-        if (sql.includes('UPDATE bets SET status = ?, payout = ? WHERE id = ?')) {
-            const [status, payout, id] = params;
+        if (sql.includes('UPDATE bets SET status =') && sql.includes('WHERE id = ?')) {
+            let status = 'lost';
+            let payout = 0;
+            let id = '';
+            if (params.length === 3) {
+                [status, payout, id] = params;
+            } else if (params.length === 2) {
+                [status, id] = params;
+                payout = 0;
+            }
             const bet = this.data.bets.find(b => b.id === id);
             if (bet) {
                 bet.status = status;
-                bet.payout = parseFloat(payout);
+                bet.payout = parseFloat(payout || 0);
                 this.save();
             }
             return { changes: 1 };
@@ -710,9 +733,15 @@ class DataStore {
             user.balance = Math.round((user.deposit_balance + user.winning_balance) * 100) / 100;
         };
 
+        const findUserById = (targetId) => {
+            const tid = parseInt(targetId, 10);
+            if (isNaN(tid)) return null;
+            return this.data.users.find(u => u.id === tid || (u.id < 100000 ? 100000 + u.id : u.id) === tid) || null;
+        };
+
         if (sql.includes('UPDATE users SET balance = balance + ? WHERE id = ?')) {
             const [amt, id] = params;
-            const user = this.data.users.find(u => u.id === parseInt(id));
+            const user = findUserById(id);
             if (user) {
                 const isDep = sql.includes('deposit') || (params.length > 2 && params[2] === 'deposit');
                 applyUserWallet(user, amt, isDep, false);
@@ -722,7 +751,7 @@ class DataStore {
         }
         if (sql.includes('UPDATE users SET balance = balance - ? WHERE id = ?')) {
             const [amt, id] = params;
-            const user = this.data.users.find(u => u.id === parseInt(id));
+            const user = findUserById(id);
             if (user) {
                 const isWd = (params.length > 2 && params[2] === 'withdraw');
                 applyUserWallet(user, -amt, false, isWd);
@@ -732,7 +761,7 @@ class DataStore {
         }
         if (sql.includes('UPDATE users SET balance = MAX(0, balance + ?) WHERE id = ?')) {
             const [amt, id] = params;
-            const user = this.data.users.find(u => u.id === parseInt(id));
+            const user = findUserById(id);
             if (user) {
                 // Game delta (bet if amt < 0, win if amt > 0)
                 applyUserWallet(user, amt, false, false);
@@ -805,15 +834,27 @@ class DataStore {
 
         // 7. Insert Bet
         if (sql.includes('INSERT INTO bets')) {
-            const [id, user_id, period_id, select_type, select_value, amount] = params;
+            let id, user_id, period_id, game_mode, select_type, select_value, amount;
+            if (params.length >= 7) {
+                [id, user_id, period_id, game_mode, select_type, select_value, amount] = params;
+            } else {
+                [id, user_id, period_id, select_type, select_value, amount] = params;
+                game_mode = '30s';
+            }
+            const cleanAmt = parseFloat(amount) || 0;
+            const cleanType = String(select_type || '').toLowerCase();
+            const cleanVal = String(select_value || '').toLowerCase();
+            const cleanPid = String(period_id || '');
             const bet = {
                 id: String(id),
-                user_id: parseInt(user_id),
-                period_id: String(period_id),
-                game_mode: '30s',
-                select_type,
-                select_value: String(select_value),
-                amount: parseFloat(amount),
+                user_id: parseInt(user_id, 10),
+                period_id: cleanPid,
+                period: cleanPid,
+                game_mode: String(game_mode || '30s'),
+                select_type: cleanType,
+                select_value: cleanVal,
+                select_val: cleanVal,
+                amount: cleanAmt,
                 payout: 0,
                 status: 'pending',
                 created_at: new Date().toISOString()

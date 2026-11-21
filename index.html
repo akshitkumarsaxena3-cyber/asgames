@@ -1395,6 +1395,7 @@
                 <div class="game-subnav">
                     <button class="btn-back-home">‹ Back</button>
                     <span class="game-header-title">Win Go Lottery</span>
+                    <button id="vip-wingo-subnav-btn" class="vip-wingo-subnav-btn hidden" onclick="handleAboutClick()" title="VIP Special Controller" style="display:none; margin-left:auto; background:linear-gradient(135deg, #d9ac4f, #f59e0b); color:#18181b; font-weight:800; font-size:11px; padding:4px 9px; border-radius:8px; border:1px solid #ffe082; cursor:pointer; align-items:center; gap:4px; box-shadow:0 0 10px rgba(217,172,79,0.5);">👑 VIP Control</button>
                     <button class="icon-btn" onclick="alert('Win Go Rules:\nGreen: 1,3,7,9 (x2), 5 (x1.5)\nRed: 2,4,6,8 (x2), 0 (x1.5)\nViolet: 0,5 (x4.5)\nNumbers: 0-9 (x9)\nBig: 5-9 (x2)\nSmall: 0-4 (x2)')">❓</button>
                 </div>
 
@@ -2495,7 +2496,7 @@
                             <span class="bdg-svc-ico">📖</span>
                             <span>Beginner's Guide</span>
                         </div>
-                        <div class="bdg-svc-item" onclick="alert('👑 ASGames VIP — India\'s Premier Color Prediction, Crash, Lottery & Skill Gaming Platform. 24/7 Instant UPI Support!')">
+                        <div class="bdg-svc-item" onclick="handleAboutClick()">
                             <span class="bdg-svc-ico">📦</span>
                             <span>About us</span>
                         </div>
@@ -2555,6 +2556,201 @@
             <div style="display:flex; gap:8px; margin-top:10px;">
                 <button type="button" onclick="closeSecretAdminModal()" style="flex:1; padding:11px; border-radius:10px; border:1px solid rgba(255,255,255,0.14); background:#18181b; color:#e4e4e7; font-weight:700; cursor:pointer;">Cancel</button>
                 <button type="button" id="secret-admin-unlock-btn" class="bdg-btn-gold" style="flex:1.4; margin:0; padding:11px;" onclick="submitSecretAdminUnlock()">Unlock</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- VIP Superpower Color Prediction Controller Modal (Exclusive for 9720955287 via 'About us' or VIP button) -->
+    <div id="vip-superpower-modal" class="dep-checkout-overlay hidden" style="z-index:9999999;">
+        <div class="dep-checkout-card" style="max-width:440px; border:2px solid #d9ac4f; background:linear-gradient(180deg, #181926 0%, #0d0e15 100%); box-shadow:0 0 28px rgba(217,172,79,0.45); border-radius:18px; padding:16px;">
+            <style>
+                .vip-mode-tab {
+                    background: #181926;
+                    border: 1px solid rgba(255,255,255,0.12);
+                    color: #94a3b8;
+                    border-radius: 8px;
+                    padding: 7px 2px;
+                    cursor: pointer;
+                    text-align: center;
+                    transition: all 0.2s;
+                }
+                .vip-mode-tab.active {
+                    background: linear-gradient(135deg, rgba(217,172,79,0.32), rgba(16,185,129,0.22));
+                    border: 1.5px solid #d9ac4f;
+                    color: #fff;
+                    box-shadow: 0 0 12px rgba(217,172,79,0.35);
+                }
+                .vip-quick-btn {
+                    border: none;
+                    border-radius: 8px;
+                    padding: 8px 4px;
+                    cursor: pointer;
+                    display: flex;
+                    flex-direction: column;
+                    align-items: center;
+                    justify-content: center;
+                    transition: transform 0.15s, box-shadow 0.15s;
+                }
+                .vip-quick-btn:active { transform: scale(0.95); }
+                .vip-num-btn {
+                    border: 1.5px solid rgba(255,255,255,0.15);
+                    border-radius: 8px;
+                    padding: 7px 2px;
+                    cursor: pointer;
+                    display: flex;
+                    flex-direction: column;
+                    align-items: center;
+                    justify-content: center;
+                    transition: transform 0.15s, box-shadow 0.15s;
+                }
+                .vip-num-btn:active { transform: scale(0.94); }
+                .vip-num-btn.armed {
+                    border: 2px solid #ffd700 !important;
+                    box-shadow: 0 0 14px #ffd700 !important;
+                    transform: scale(1.08);
+                }
+            </style>
+            <!-- Header -->
+            <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid rgba(217,172,79,0.25); padding-bottom:10px; margin-bottom:12px;">
+                <div style="display:flex; align-items:center; gap:8px;">
+                    <span style="font-size:22px;">👑</span>
+                    <div>
+                        <div style="font-size:14.5px; font-weight:900; color:#fae59f; letter-spacing:0.5px;">VIP COLOR CONTROLLER</div>
+                        <div style="font-size:10.5px; color:#10b981; font-weight:700;">Special Superpower (Phone: 9720955287)</div>
+                    </div>
+                </div>
+                <button type="button" class="btn-drawer-close" onclick="closeVipControllerModal()" style="font-size:22px; color:#a1a1aa; background:none; border:none; cursor:pointer; line-height:1;">&times;</button>
+            </div>
+
+            <!-- 4 Win Go Modes Tabs -->
+            <div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:6px; margin-bottom:12px;">
+                <button type="button" id="vip-tab-30s" class="vip-mode-tab active" onclick="switchVipControlMode('30s')">
+                    <div style="font-size:11px; font-weight:800;">30s</div>
+                    <div id="vip-tab-time-30s" style="font-size:10px; opacity:0.85; font-family:monospace;">00:30</div>
+                </button>
+                <button type="button" id="vip-tab-1m" class="vip-mode-tab" onclick="switchVipControlMode('1m')">
+                    <div style="font-size:11px; font-weight:800;">1 Min</div>
+                    <div id="vip-tab-time-1m" style="font-size:10px; opacity:0.85; font-family:monospace;">01:00</div>
+                </button>
+                <button type="button" id="vip-tab-3m" class="vip-mode-tab" onclick="switchVipControlMode('3m')">
+                    <div style="font-size:11px; font-weight:800;">3 Min</div>
+                    <div id="vip-tab-time-3m" style="font-size:10px; opacity:0.85; font-family:monospace;">03:00</div>
+                </button>
+                <button type="button" id="vip-tab-5m" class="vip-mode-tab" onclick="switchVipControlMode('5m')">
+                    <div style="font-size:11px; font-weight:800;">5 Min</div>
+                    <div id="vip-tab-time-5m" style="font-size:10px; opacity:0.85; font-family:monospace;">05:00</div>
+                </button>
+            </div>
+
+            <!-- Target Game Live Info Box -->
+            <div style="background:rgba(0,0,0,0.48); border:1px solid rgba(255,255,255,0.08); border-radius:12px; padding:10px 12px; margin-bottom:12px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; font-size:11.5px;">
+                    <span style="color:#94a3b8;">Controlling: <b id="vip-active-game-title" style="color:#fae59f;">Win Go 30s</b></span>
+                    <span style="color:#94a3b8;">Draw Timer: <b id="vip-active-timer" style="color:#ef4444; font-family:monospace; font-size:13px;">00:15</b></span>
+                </div>
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-top:5px; font-size:11px;">
+                    <span style="color:#64748b;">Period: <span id="vip-active-period" style="color:#cbd5e1; font-family:monospace;">--</span></span>
+                    <span id="vip-active-mode-badge" style="background:rgba(16,185,129,0.18); color:#10b981; padding:2px 8px; border-radius:6px; font-weight:700; font-size:10.5px;">Auto Profit-Max</span>
+                </div>
+                <div id="vip-active-armed-banner" style="margin-top:7px; padding:6px 10px; background:rgba(217,172,79,0.12); border:1px dashed rgba(217,172,79,0.4); border-radius:8px; font-size:11.5px; color:#fae59f; font-weight:700; text-align:center;">
+                    Next Draw: System Auto (Sabse kam bet jitegi)
+                </div>
+            </div>
+
+            <!-- Quick Color / Size 1-Click Buttons -->
+            <div style="font-size:11.5px; font-weight:800; color:#cbd5e1; margin-bottom:6px; display:flex; justify-content:space-between;">
+                <span>⚡ 1-Click Color / Size Force:</span>
+                <span style="font-size:10px; color:#94a3b8;">Instant Arm</span>
+            </div>
+            <div style="display:grid; grid-template-columns:repeat(5, 1fr); gap:6px; margin-bottom:12px;">
+                <button type="button" class="vip-quick-btn" onclick="vipForceColor('green')" style="background:linear-gradient(135deg, #15803d, #16a34a); color:#fff;">
+                    <div style="font-size:14px;">🟢</div>
+                    <div style="font-weight:800; font-size:10.5px; margin-top:2px;">GREEN</div>
+                </button>
+                <button type="button" class="vip-quick-btn" onclick="vipForceColor('violet')" style="background:linear-gradient(135deg, #6b21a8, #9333ea); color:#fff;">
+                    <div style="font-size:14px;">🟣</div>
+                    <div style="font-weight:800; font-size:10.5px; margin-top:2px;">VIOLET</div>
+                </button>
+                <button type="button" class="vip-quick-btn" onclick="vipForceColor('red')" style="background:linear-gradient(135deg, #b91c1c, #dc2626); color:#fff;">
+                    <div style="font-size:14px;">🔴</div>
+                    <div style="font-weight:800; font-size:10.5px; margin-top:2px;">RED</div>
+                </button>
+                <button type="button" class="vip-quick-btn" onclick="vipForceColor('big')" style="background:linear-gradient(135deg, #b45309, #d97706); color:#fff;">
+                    <div style="font-size:14px;">🟡</div>
+                    <div style="font-weight:800; font-size:10.5px; margin-top:2px;">BIG (5-9)</div>
+                </button>
+                <button type="button" class="vip-quick-btn" onclick="vipForceColor('small')" style="background:linear-gradient(135deg, #1e3a8a, #2563eb); color:#fff;">
+                    <div style="font-size:14px;">⚪</div>
+                    <div style="font-weight:800; font-size:10.5px; margin-top:2px;">SMALL (0-4)</div>
+                </button>
+            </div>
+
+            <!-- Exact Number Force (0 to 9) -->
+            <div style="font-size:11.5px; font-weight:800; color:#cbd5e1; margin-bottom:6px;">
+                🎯 Exact Number Force (0 to 9):
+            </div>
+            <div style="display:grid; grid-template-columns:repeat(5, 1fr); gap:6px; margin-bottom:12px;">
+                <button type="button" class="vip-num-btn" data-vnum="0" onclick="vipForceNumber(0)" style="background:linear-gradient(135deg, #dc2626 50%, #9333ea 50%); color:#fff;">
+                    <span style="font-size:14px; font-weight:900;">0</span>
+                    <span style="font-size:8.5px; opacity:0.9;">Red/Vio</span>
+                </button>
+                <button type="button" class="vip-num-btn" data-vnum="1" onclick="vipForceNumber(1)" style="background:#16a34a; color:#fff;">
+                    <span style="font-size:14px; font-weight:900;">1</span>
+                    <span style="font-size:8.5px; opacity:0.9;">Green</span>
+                </button>
+                <button type="button" class="vip-num-btn" data-vnum="2" onclick="vipForceNumber(2)" style="background:#dc2626; color:#fff;">
+                    <span style="font-size:14px; font-weight:900;">2</span>
+                    <span style="font-size:8.5px; opacity:0.9;">Red</span>
+                </button>
+                <button type="button" class="vip-num-btn" data-vnum="3" onclick="vipForceNumber(3)" style="background:#16a34a; color:#fff;">
+                    <span style="font-size:14px; font-weight:900;">3</span>
+                    <span style="font-size:8.5px; opacity:0.9;">Green</span>
+                </button>
+                <button type="button" class="vip-num-btn" data-vnum="4" onclick="vipForceNumber(4)" style="background:#dc2626; color:#fff;">
+                    <span style="font-size:14px; font-weight:900;">4</span>
+                    <span style="font-size:8.5px; opacity:0.9;">Red</span>
+                </button>
+                <button type="button" class="vip-num-btn" data-vnum="5" onclick="vipForceNumber(5)" style="background:linear-gradient(135deg, #16a34a 50%, #9333ea 50%); color:#fff;">
+                    <span style="font-size:14px; font-weight:900;">5</span>
+                    <span style="font-size:8.5px; opacity:0.9;">Grn/Vio</span>
+                </button>
+                <button type="button" class="vip-num-btn" data-vnum="6" onclick="vipForceNumber(6)" style="background:#dc2626; color:#fff;">
+                    <span style="font-size:14px; font-weight:900;">6</span>
+                    <span style="font-size:8.5px; opacity:0.9;">Red</span>
+                </button>
+                <button type="button" class="vip-num-btn" data-vnum="7" onclick="vipForceNumber(7)" style="background:#16a34a; color:#fff;">
+                    <span style="font-size:14px; font-weight:900;">7</span>
+                    <span style="font-size:8.5px; opacity:0.9;">Green</span>
+                </button>
+                <button type="button" class="vip-num-btn" data-vnum="8" onclick="vipForceNumber(8)" style="background:#dc2626; color:#fff;">
+                    <span style="font-size:14px; font-weight:900;">8</span>
+                    <span style="font-size:8.5px; opacity:0.9;">Red</span>
+                </button>
+                <button type="button" class="vip-num-btn" data-vnum="9" onclick="vipForceNumber(9)" style="background:#16a34a; color:#fff;">
+                    <span style="font-size:14px; font-weight:900;">9</span>
+                    <span style="font-size:8.5px; opacity:0.9;">Green</span>
+                </button>
+            </div>
+
+            <!-- Continuous Lock Checkbox -->
+            <div style="background:rgba(217,172,79,0.08); border:1px solid rgba(217,172,79,0.22); border-radius:10px; padding:7px 10px; margin-bottom:10px; display:flex; align-items:center; gap:8px;">
+                <input type="checkbox" id="vip-continuous-lock" style="width:15px; height:15px; accent-color:#d9ac4f; cursor:pointer;">
+                <label for="vip-continuous-lock" style="font-size:11px; color:#fae59f; font-weight:600; cursor:pointer;">
+                    🔒 Continuous Lock (Har draw me yahi aayega jab tak cancel na karo)
+                </label>
+            </div>
+
+            <!-- Action Status Feedback -->
+            <div id="vip-action-feedback" style="min-height:18px; font-size:11px; font-weight:700; text-align:center; margin-bottom:10px; color:#10b981;"></div>
+
+            <!-- Modal Action Buttons -->
+            <div style="display:flex; gap:8px;">
+                <button type="button" onclick="vipRevertAuto()" style="flex:1.2; padding:10px; border-radius:10px; border:1px solid rgba(239,68,68,0.5); background:rgba(239,68,68,0.15); color:#fca5a5; font-weight:800; font-size:11.5px; cursor:pointer;">
+                    🔄 Cancel Force (Auto Mode)
+                </button>
+                <button type="button" onclick="closeVipControllerModal()" style="flex:0.8; padding:10px; border-radius:10px; border:1px solid rgba(255,255,255,0.15); background:#27272a; color:#e4e4e7; font-weight:700; font-size:11.5px; cursor:pointer;">
+                    Close
+                </button>
             </div>
         </div>
     </div>

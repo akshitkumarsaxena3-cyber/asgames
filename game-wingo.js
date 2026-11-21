@@ -580,7 +580,8 @@ class WinGoGame {
 
                 // 1. Color bet
                 if (bet.selectType === 'color') {
-                    if (bet.selectValue === 'green') {
+                    const selColor = String(bet.selectValue).toLowerCase();
+                    if (selColor === 'green') {
                         if (col === 'green') {
                             isWin = true;
                             multiplier = 2.0;
@@ -588,7 +589,7 @@ class WinGoGame {
                             isWin = true;
                             multiplier = 1.5;
                         }
-                    } else if (bet.selectValue === 'red') {
+                    } else if (selColor === 'red') {
                         if (col === 'red') {
                             isWin = true;
                             multiplier = 2.0;
@@ -596,8 +597,8 @@ class WinGoGame {
                             isWin = true;
                             multiplier = 1.5;
                         }
-                    } else if (bet.selectValue === 'violet') {
-                        if (col === 'red-violet' || col === 'green-violet') {
+                    } else if (selColor === 'violet') {
+                        if (col === 'red-violet' || col === 'green-violet' || col === 'violet') {
                             isWin = true;
                             multiplier = 4.5;
                         }
@@ -605,14 +606,14 @@ class WinGoGame {
                 }
                 // 2. Number bet
                 else if (bet.selectType === 'number') {
-                    if (parseInt(bet.selectValue) === num) {
+                    if (parseInt(bet.selectValue, 10) === num) {
                         isWin = true;
                         multiplier = 9.0;
                     }
                 }
                 // 3. Big / Small bet
                 else if (bet.selectType === 'size') {
-                    if (bet.selectValue === size) {
+                    if (String(bet.selectValue).toLowerCase() === String(size).toLowerCase()) {
                         isWin = true;
                         multiplier = 2.0;
                     }
@@ -718,43 +719,95 @@ class WinGoGame {
         `).join('');
     }
 
-    renderMyBets() {
+    async renderMyBets() {
         const container = document.getElementById('wingo-mybets-list');
         if (!container) return;
+
+        // Fetch live server bets for authenticated player
+        if (this.sm && this.sm.token) {
+            try {
+                const res = await fetch(`/api/game/my-bets?mode=${this.currentMode}`, {
+                    headers: { 'Authorization': `Bearer ${this.sm.token}` },
+                    cache: 'no-store'
+                });
+                const d = await res.json();
+                if (d.success && Array.isArray(d.bets)) {
+                    // Normalize server bets to userBets format
+                    this.userBets = d.bets.map(sb => ({
+                        id: sb.id,
+                        mode: sb.game_mode || '30s',
+                        period: String(sb.period_id || sb.period),
+                        selectType: sb.select_type,
+                        selectValue: String(sb.select_value || sb.select_val || ''),
+                        amount: parseFloat(sb.amount || 0),
+                        totalBet: parseFloat(sb.amount || 0),
+                        winAmount: parseFloat(sb.payout || 0),
+                        status: sb.status === 'won' ? 'Won' : (sb.status === 'lost' ? 'Lost' : 'Pending'),
+                        winningNumber: sb.winning_number,
+                        winningColor: sb.winning_color,
+                        winningSize: sb.winning_size,
+                        time: sb.created_at ? sb.created_at.replace('T', ' ').slice(11, 19) : ''
+                    }));
+                }
+            } catch (e) {
+                console.warn('Could not fetch server bets:', e);
+            }
+        }
 
         const bets = this.userBets.filter(b => b.mode === this.currentMode).slice(0, 10);
         if (bets.length === 0) {
             container.innerHTML = `
-                <div class="empty-state">
-                    <div class="empty-icon">🎲</div>
-                    <p>No bets yet on Win Go ${this.currentMode}</p>
+                <div class="empty-state" style="padding:32px 16px; text-align:center;">
+                    <div class="empty-icon" style="font-size:42px; opacity:0.4; margin-bottom:8px;">🎲</div>
+                    <p style="color:#94a3b8; font-size:13px;">No bets yet on Win Go ${this.currentMode}. Place your first bet above!</p>
                 </div>
             `;
             return;
         }
 
         container.innerHTML = bets.map(b => {
-            const statusClass = b.status === 'Won' ? 'badge-won' : (b.status === 'Lost' ? 'badge-lost' : 'badge-pending');
-            const resultAmount = b.status === 'Won' ? `+₹${b.winAmount.toFixed(2)}` : (b.status === 'Lost' ? `-₹${b.totalBet.toFixed(2)}` : 'Waiting...');
+            const isWon = b.status === 'Won';
+            const isLost = b.status === 'Lost';
+            const statusClass = isWon ? 'badge-won' : (isLost ? 'badge-lost' : 'badge-pending');
+            const resultAmount = isWon ? `+₹${b.winAmount.toFixed(2)}` : (isLost ? `-₹${b.totalBet.toFixed(2)}` : 'Waiting draw...');
+            const profitColor = isWon ? '#10b981' : (isLost ? '#ef4444' : '#f59e0b');
+
+            // Format Selection badge
+            let selBadge = '';
+            const val = String(b.selectValue).toUpperCase();
+            if (val === 'GREEN') selBadge = `<span style="background:#10b981; color:#fff; padding:2px 8px; border-radius:4px; font-weight:800; font-size:11px;">🟢 GREEN</span>`;
+            else if (val === 'RED') selBadge = `<span style="background:#ef4444; color:#fff; padding:2px 8px; border-radius:4px; font-weight:800; font-size:11px;">🔴 RED</span>`;
+            else if (val === 'VIOLET') selBadge = `<span style="background:#8b5cf6; color:#fff; padding:2px 8px; border-radius:4px; font-weight:800; font-size:11px;">🟣 VIOLET</span>`;
+            else if (val === 'BIG') selBadge = `<span style="background:#f59e0b; color:#1a1202; padding:2px 8px; border-radius:4px; font-weight:800; font-size:11px;">🟡 BIG</span>`;
+            else if (val === 'SMALL') selBadge = `<span style="background:#3b82f6; color:#fff; padding:2px 8px; border-radius:4px; font-weight:800; font-size:11px;">🔵 SMALL</span>`;
+            else selBadge = `<span style="background:#d9ac4f; color:#1a1202; padding:2px 8px; border-radius:4px; font-weight:800; font-size:11px;">🎯 #${val}</span>`;
+
+            const resStr = (b.winningNumber !== null && b.winningNumber !== undefined)
+                ? `<span style="color:#fae59f; font-weight:700;">#${b.winningNumber}</span> (${b.winningColor || ''} • ${b.winningSize || ''})`
+                : `<span style="color:#94a3b8; font-size:11px;">Drawing...</span>`;
 
             return `
-                <div class="bet-card">
-                    <div class="bet-card-header">
-                        <span class="bet-period">Issue #${b.period.slice(-5)}</span>
-                        <span class="bet-status ${statusClass}">${b.status}</span>
+                <div class="bet-card" style="background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.07); border-radius:10px; padding:12px; margin-bottom:10px;">
+                    <div class="bet-card-header" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; border-bottom:1px solid rgba(255,255,255,0.06); padding-bottom:6px;">
+                        <span class="bet-period" style="font-family:monospace; color:#fae59f; font-weight:700; font-size:12px;">Issue #${String(b.period).slice(-5)}</span>
+                        <span class="bet-status ${statusClass}" style="font-size:11px; font-weight:800; padding:2px 8px; border-radius:4px;">${b.status}</span>
                     </div>
-                    <div class="bet-card-body">
+                    <div class="bet-card-body" style="display:grid; grid-template-columns:repeat(2, 1fr); gap:6px; font-size:12px;">
                         <div class="bet-detail">
-                            <span class="label">Select:</span>
-                            <span class="val-badge badge-${b.selectValue}">${String(b.selectValue).toUpperCase()}</span>
+                            <span class="label" style="color:#94a3b8;">Pick:</span>
+                            <span>${selBadge}</span>
                         </div>
                         <div class="bet-detail">
-                            <span class="label">Amount:</span>
-                            <span>₹${b.totalBet.toLocaleString('en-IN')}</span>
+                            <span class="label" style="color:#94a3b8;">Bet:</span>
+                            <span style="color:#fff; font-weight:700;">₹${b.totalBet.toLocaleString('en-IN')}</span>
                         </div>
                         <div class="bet-detail">
-                            <span class="label">Profit:</span>
-                            <span class="${b.status === 'Won' ? 'text-win' : (b.status === 'Lost' ? 'text-loss' : '')}">${resultAmount}</span>
+                            <span class="label" style="color:#94a3b8;">Result:</span>
+                            <span>${resStr}</span>
+                        </div>
+                        <div class="bet-detail">
+                            <span class="label" style="color:#94a3b8;">Profit:</span>
+                            <span style="color:${profitColor}; font-weight:800;">${resultAmount}</span>
                         </div>
                     </div>
                 </div>

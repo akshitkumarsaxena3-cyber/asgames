@@ -166,6 +166,28 @@
             from { transform: scale(0.9); opacity: 0; }
             to { transform: scale(1); opacity: 1; }
         }
+        /* Win Go 4-Game Selector Tabs */
+        .wingo-game-btn {
+            background: #1e293b;
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            color: #cbd5e1;
+            padding: 10px 8px;
+            border-radius: 10px;
+            cursor: pointer;
+            text-align: center;
+            transition: all 0.2s ease;
+        }
+        .wingo-game-btn:hover {
+            border-color: #d9ac4f;
+            background: #283548;
+        }
+        .wingo-game-btn.active {
+            background: linear-gradient(135deg, rgba(217,172,79,0.22), rgba(16,185,129,0.18));
+            border: 2px solid #d9ac4f;
+            color: #fff;
+            box-shadow: 0 0 14px rgba(217,172,79,0.3);
+            transform: translateY(-2px);
+        }
     </style>
 </head>
 <body>
@@ -227,23 +249,57 @@
             <!-- TAB 1: GAME CONTROL & RIGGING -->
             <div id="tab-control">
                 <div class="card">
+                    <!-- Win Go 4-Game Independent Mode Bar -->
+                    <div style="background: rgba(0,0,0,0.38); padding: 14px; border-radius: 12px; margin-bottom: 18px; border: 1px solid rgba(217,172,79,0.3);">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 10px; flex-wrap:wrap; gap:8px;">
+                            <span style="font-size:13px; font-weight:800; color:#fae59f; text-transform:uppercase; letter-spacing:0.5px;">🎮 4 Separate Win Go Game Controls:</span>
+                            <span id="selected-game-label" style="font-size:12.5px; color:#10b981; font-weight:700; background:rgba(16,185,129,0.12); padding:3px 10px; border-radius:6px; border:1px solid rgba(16,185,129,0.3);">Controlling: Win Go 30s</span>
+                        </div>
+                        <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px;">
+                            <button type="button" class="wingo-game-btn active" id="btn-ctrl-30s" onclick="switchWingoControl('30s')">
+                                <div style="font-size:13px; font-weight:800;">⏱️ Win Go 30s</div>
+                                <div id="sub-timer-30s" style="font-size:11.5px; opacity:0.85; margin-top:2px; font-family:monospace;">00:30</div>
+                                <div id="sub-mode-30s" style="font-size:10px; color:#fae59f; font-weight:600; margin-top:1px;">House-Edge</div>
+                            </button>
+                            <button type="button" class="wingo-game-btn" id="btn-ctrl-1m" onclick="switchWingoControl('1m')">
+                                <div style="font-size:13px; font-weight:800;">⏱️ Win Go 1 Min</div>
+                                <div id="sub-timer-1m" style="font-size:11.5px; opacity:0.85; margin-top:2px; font-family:monospace;">01:00</div>
+                                <div id="sub-mode-1m" style="font-size:10px; color:#fae59f; font-weight:600; margin-top:1px;">House-Edge</div>
+                            </button>
+                            <button type="button" class="wingo-game-btn" id="btn-ctrl-3m" onclick="switchWingoControl('3m')">
+                                <div style="font-size:13px; font-weight:800;">⏱️ Win Go 3 Min</div>
+                                <div id="sub-timer-3m" style="font-size:11.5px; opacity:0.85; margin-top:2px; font-family:monospace;">03:00</div>
+                                <div id="sub-mode-3m" style="font-size:10px; color:#fae59f; font-weight:600; margin-top:1px;">House-Edge</div>
+                            </button>
+                            <button type="button" class="wingo-game-btn" id="btn-ctrl-5m" onclick="switchWingoControl('5m')">
+                                <div style="font-size:13px; font-weight:800;">⏱️ Win Go 5 Min</div>
+                                <div id="sub-timer-5m" style="font-size:11.5px; opacity:0.85; margin-top:2px; font-family:monospace;">05:00</div>
+                                <div id="sub-mode-5m" style="font-size:10px; color:#fae59f; font-weight:600; margin-top:1px;">House-Edge</div>
+                            </button>
+                        </div>
+                    </div>
+
                     <div class="card-title">
-                        <span>Win Go Outcome Decision Engine</span>
-                        <span id="current-mode-badge" style="color: #10b981; font-size: 12px;">Active: Smart House-Edge (Profit Max)</span>
+                        <span id="wingo-panel-title">Win Go Outcome Decision Engine (30s)</span>
+                        <span id="current-mode-badge" style="color: #10b981; font-size: 12px;">Active: Sabse Kam Bet Win (Profit Max)</span>
                     </div>
 
                     <div class="mode-row">
+                        <div class="mode-chip" id="chip-lowest" onclick="setGameMode('lowest_bet')">
+                            <h4>📉 Sabse Kam Bet Win</h4>
+                            <p>Auto-picks outcome paying lowest/zero bets (Max Profit)</p>
+                        </div>
+                        <div class="mode-chip" id="chip-house" onclick="setGameMode('house_edge')">
+                            <h4>💰 Smart House-Edge</h4>
+                            <p>Balanced profit calculation</p>
+                        </div>
                         <div class="mode-chip" id="chip-random" onclick="setGameMode('random')">
                             <h4>🎲 Fair Random RNG</h4>
                             <p>Standard unbiased lottery draw</p>
                         </div>
-                        <div class="mode-chip" id="chip-house" onclick="setGameMode('house_edge')">
-                            <h4>📉 Smart House-Edge (Profit Max)</h4>
-                            <p>Auto-picks outcome paying lowest wagers</p>
-                        </div>
                         <div class="mode-chip" id="chip-manual" onclick="setGameMode('manual')">
                             <h4>🎯 1-Click Manual Force</h4>
-                            <p>Force exact winning number for next draw</p>
+                            <p>Force exact winning outcome</p>
                         </div>
                     </div>
 
@@ -270,8 +326,12 @@
                             <button type="button" class="num-pick-btn" data-wnum="8" style="border-bottom:3px solid #ef4444;" onclick="setManualNumber(8)">8</button>
                             <button type="button" class="num-pick-btn" data-wnum="9" style="border-bottom:3px solid #10b981;" onclick="setManualNumber(9)">9</button>
                         </div>
-                        <div style="margin-top:10px; display:flex; gap:10px; align-items:center;">
-                            <button type="button" class="btn-action" style="background:#334155; color:#cbd5e1; padding:7px 14px; font-size:12px; font-weight:700; border-radius:8px;" onclick="revertToHouseEdge()">↩️ Cancel Manual Force (Revert to Auto House Profit)</button>
+                        <div style="margin-top:12px; display:flex; flex-wrap:wrap; gap:12px; align-items:center;">
+                            <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:12.5px; color:#fae59f; font-weight:700; background:rgba(0,0,0,0.3); padding:7px 12px; border-radius:8px; border:1px solid rgba(250,229,159,0.3);">
+                                <input type="checkbox" id="chk-continuous-lock" onchange="toggleContinuousLock(this.checked)" style="transform:scale(1.2); cursor:pointer;">
+                                <span>🔒 Continuous Lock (Jab tak cancel na karein, har round me yahi number aayega)</span>
+                            </label>
+                            <button type="button" class="btn-action" style="background:#334155; color:#cbd5e1; padding:7px 14px; font-size:12px; font-weight:700; border-radius:8px;" onclick="revertToHouseEdge()">↩️ Cancel Manual Force (Revert to Sabse Kam Bet Win)</button>
                         </div>
                         <p id="manual-status" style="font-size: 13px; color: #10b981; font-weight: 700; margin-top:8px;"></p>
                     </div>
@@ -284,6 +344,33 @@
                             <div class="wager-box" style="cursor:pointer;" onclick="forceWinGoColor('red')" title="Click to Force RED"><div class="wager-title">🔴 Red</div><div class="wager-amt" id="wag-red">₹0</div></div>
                             <div class="wager-box" style="cursor:pointer;" onclick="forceWinGoColor('big')" title="Click to Force BIG"><div class="wager-title">🟡 Big</div><div class="wager-amt" id="wag-big">₹0</div></div>
                             <div class="wager-box" style="cursor:pointer;" onclick="forceWinGoColor('small')" title="Click to Force SMALL"><div class="wager-title">🔵 Small</div><div class="wager-amt" id="wag-small">₹0</div></div>
+                        </div>
+                    </div>
+
+                    <!-- RECENT PLAYER BETS TABLE (LAST 10-15 BETS WITH WIN / LOSE OUTCOME) -->
+                    <div style="margin-top: 24px;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 10px;">
+                            <h4 style="font-size: 14px; color: #fff; margin:0;">📋 Live Player Bets (Last 10 Bets — Selection &amp; Win/Lose Results):</h4>
+                            <button type="button" class="btn-action" style="background:#334155; color:#fff; font-size:11px; padding:4px 10px;" onclick="loadRecentAdminBets()">↻ Refresh Bets</button>
+                        </div>
+                        <div class="table-wrap" style="overflow-x:auto;">
+                            <table style="width:100%; border-collapse:collapse; font-size:12px;">
+                                <thead>
+                                    <tr style="background:rgba(0,0,0,0.4); color:#94a3b8; text-align:left;">
+                                        <th style="padding:8px 10px;">Time</th>
+                                        <th style="padding:8px 10px;">Player</th>
+                                        <th style="padding:8px 10px;">Game</th>
+                                        <th style="padding:8px 10px;">Period</th>
+                                        <th style="padding:8px 10px;">Selection</th>
+                                        <th style="padding:8px 10px;">Bet Amount</th>
+                                        <th style="padding:8px 10px;">Drawn Result</th>
+                                        <th style="padding:8px 10px;">Outcome</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="wingo-recent-bets-tbody">
+                                    <tr><td colspan="8" style="text-align:center; padding:16px; color:#94a3b8;">Loading recent player bets...</td></tr>
+                                </tbody>
+                            </table>
                         </div>
                     </div>
                 </div>
@@ -850,14 +937,16 @@
             document.getElementById('login-view').classList.add('hidden');
             document.getElementById('dashboard-view').classList.remove('hidden');
             refreshOverview();
+            loadRecentAdminBets();
             setInterval(refreshOverview, 2000);
             setInterval(() => {
+                if (currentAdminTab === 'control') loadRecentAdminBets();
                 if (currentAdminTab === 'deposits') loadDeposits();
                 if (currentAdminTab === 'withdrawals') loadWithdrawals();
                 if (currentAdminTab === 'users') loadUsers();
                 if (currentAdminTab === 'history') loadAllHistory();
                 loadAdminChats(currentAdminTab !== 'chats');
-            }, 4000);
+            }, 3000);
             loadAdminChats(true);
             loadAdminKingMarkets();
         }
@@ -882,6 +971,149 @@
             if (tab === 'sync') loadSyncStatus();
         }
 
+        let selectedWingoMode = '30s';
+        let latestOverviewData = null;
+
+        function switchWingoControl(mode) {
+            selectedWingoMode = mode;
+            ['30s', '1m', '3m', '5m'].forEach(m => {
+                const btn = document.getElementById('btn-ctrl-' + m);
+                if (btn) {
+                    if (m === mode) btn.classList.add('active');
+                    else btn.classList.remove('active');
+                }
+            });
+            const modeLabels = { '30s': 'Win Go 30s', '1m': 'Win Go 1 Min', '3m': 'Win Go 3 Min', '5m': 'Win Go 5 Min' };
+            const lbl = document.getElementById('selected-game-label');
+            if (lbl) lbl.textContent = `Controlling: ${modeLabels[mode] || mode}`;
+            const titleEl = document.getElementById('wingo-panel-title');
+            if (titleEl) titleEl.textContent = `Win Go Outcome Decision Engine (${modeLabels[mode] || mode})`;
+            loadRecentAdminBets();
+        }
+
+        function renderCurrentWingoModeUI() {
+            if (!latestOverviewData) return;
+            const d = latestOverviewData;
+            const wm = (d.wingoModes && d.wingoModes[selectedWingoMode]) ? d.wingoModes[selectedWingoMode] : {
+                period: d.currentPeriod,
+                remainingSeconds: d.remainingSeconds,
+                isLocked: d.isLocked,
+                gameMode: d.gameMode || 'lowest_bet',
+                manualNumber: d.manualNumber || '',
+                isLockActive: false,
+                wagers: d.wagers || { green: 0, red: 0, violet: 0, big: 0, small: 0 }
+            };
+
+            const currentWingoMode = wm.gameMode || 'lowest_bet';
+            const hasManual = wm.manualNumber !== '' && wm.manualNumber !== null && wm.manualNumber !== undefined;
+            const isLock = Boolean(wm.isLockActive);
+            const lockChk = document.getElementById('chk-continuous-lock');
+            if (lockChk) lockChk.checked = isLock;
+
+            const badgeTxt = hasManual 
+                ? `🎯 Armed Manual Force (${isLock ? '🔒 Continuous Lock' : '1-Shot'}) for ${selectedWingoMode.toUpperCase()} (Next: #${wm.manualNumber})`
+                : (currentWingoMode === 'lowest_bet' ? `📉 Sabse Kam Bet Win (Max Profit) for ${selectedWingoMode.toUpperCase()}` : (currentWingoMode === 'house_edge' ? `Smart House-Edge for ${selectedWingoMode.toUpperCase()}` : (currentWingoMode === 'random' ? `Fair Random RNG for ${selectedWingoMode.toUpperCase()}` : `Manual Force for ${selectedWingoMode.toUpperCase()}`)));
+            const badgeEl = document.getElementById('current-mode-badge');
+            if (badgeEl) badgeEl.textContent = `Active: ${badgeTxt}`;
+            
+            ['random', 'house', 'lowest', 'manual'].forEach(m => document.getElementById('chip-' + m)?.classList.remove('active'));
+            if (hasManual || currentWingoMode === 'manual') document.getElementById('chip-manual')?.classList.add('active');
+            else if (currentWingoMode === 'random') document.getElementById('chip-random')?.classList.add('active');
+            else if (currentWingoMode === 'house_edge') document.getElementById('chip-house')?.classList.add('active');
+            else document.getElementById('chip-lowest')?.classList.add('active');
+
+            document.querySelectorAll('.num-pick-btn').forEach(b => {
+                const active = hasManual && parseInt(b.dataset.wnum, 10) === parseInt(wm.manualNumber, 10);
+                b.style.background = active ? '#f5c443' : '';
+                b.style.color = active ? '#1a1202' : '';
+                b.style.transform = active ? 'scale(1.08)' : '';
+            });
+
+            // Live Wagers for this selected mode
+            const wags = wm.wagers || {};
+            document.getElementById('wag-green').textContent = `₹${wags.green || 0}`;
+            document.getElementById('wag-violet').textContent = `₹${wags.violet || 0}`;
+            document.getElementById('wag-red').textContent = `₹${wags.red || 0}`;
+            document.getElementById('wag-big').textContent = `₹${wags.big || 0}`;
+            document.getElementById('wag-small').textContent = `₹${wags.small || 0}`;
+
+            const statusEl = document.getElementById('manual-status');
+            if (statusEl) {
+                if (hasManual) {
+                    const num = parseInt(wm.manualNumber, 10);
+                    const col = num === 0 ? '🔴 Red + 🟣 Violet' : (num === 5 ? '🟢 Green + 🟣 Violet' : ([1,3,7,9].includes(num) ? '🟢 GREEN' : '🔴 RED'));
+                    const sz = num >= 5 ? 'BIG' : 'SMALL';
+                    statusEl.textContent = `✓ [${selectedWingoMode.toUpperCase()}] ARMED FOR NEXT DRAW: Number ${num} (${col} • ${sz})! ${isLock ? '🔒 Continuous Lock Active: Har round me yahi number aayega!' : '🎯 1-Shot: Sirf agli draw me aayega.'}`;
+                    statusEl.style.color = '#10b981';
+                } else if (currentWingoMode === 'lowest_bet') {
+                    statusEl.textContent = `✓ [${selectedWingoMode.toUpperCase()}] Sabse Kam Bet Win Mode Active: Jis number/color par sabse kam bet ya ₹0 laga hai, wahi win hoga!`;
+                    statusEl.style.color = '#fae59f';
+                } else {
+                    statusEl.textContent = '';
+                }
+            }
+        }
+
+        async function toggleContinuousLock(checked) {
+            await fetch('/api/admin/control', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'x-admin-key': adminKey },
+                body: JSON.stringify({ lock_force: checked, wingo_game: selectedWingoMode })
+            });
+            refreshOverview();
+        }
+
+        async function loadRecentAdminBets() {
+            try {
+                const res = await fetch(`/api/admin/recent-bets?mode=${selectedWingoMode}`, {
+                    headers: { 'x-admin-key': adminKey }
+                });
+                const d = await res.json();
+                const tbody = document.getElementById('wingo-recent-bets-tbody');
+                if (!tbody) return;
+                if (!d.bets || d.bets.length === 0) {
+                    tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; padding:16px; color:#94a3b8;">No recent bets on Win Go [${selectedWingoMode}]. Players ke bet lagate hi yahin live dikhegi!</td></tr>`;
+                    return;
+                }
+
+                tbody.innerHTML = d.bets.map(b => {
+                    const st = String(b.status || 'pending').toLowerCase();
+                    const isWon = st === 'won';
+                    const isLost = st === 'lost';
+                    const badgeCol = isWon ? '#10b981' : (isLost ? '#ef4444' : '#f59e0b');
+                    const badgeTxt = isWon ? `🏆 WON (+₹${b.payout.toFixed(2)})` : (isLost ? `❌ LOST (-₹${b.amount.toFixed(2)})` : `⏳ PENDING`);
+
+                    let selHtml = '';
+                    const sVal = String(b.select_value).toUpperCase();
+                    if (sVal === 'GREEN') selHtml = `<span style="background:#10b981; color:#fff; padding:2px 8px; border-radius:4px; font-weight:800;">🟢 GREEN</span>`;
+                    else if (sVal === 'RED') selHtml = `<span style="background:#ef4444; color:#fff; padding:2px 8px; border-radius:4px; font-weight:800;">🔴 RED</span>`;
+                    else if (sVal === 'VIOLET') selHtml = `<span style="background:#8b5cf6; color:#fff; padding:2px 8px; border-radius:4px; font-weight:800;">🟣 VIOLET</span>`;
+                    else if (sVal === 'BIG') selHtml = `<span style="background:#f59e0b; color:#1a1202; padding:2px 8px; border-radius:4px; font-weight:800;">🟡 BIG</span>`;
+                    else if (sVal === 'SMALL') selHtml = `<span style="background:#3b82f6; color:#fff; padding:2px 8px; border-radius:4px; font-weight:800;">🔵 SMALL</span>`;
+                    else selHtml = `<span style="background:#d9ac4f; color:#1a1202; padding:2px 8px; border-radius:4px; font-weight:800;">🎯 #${sVal}</span>`;
+
+                    const resHtml = (b.winning_number !== null && b.winning_number !== undefined)
+                        ? `<strong style="color:#fae59f;">#${b.winning_number}</strong> (${b.winning_color || ''} • ${b.winning_size || ''})`
+                        : `<span style="color:#94a3b8;">Drawing...</span>`;
+
+                    const timeStr = b.created_at ? b.created_at.replace('T', ' ').slice(11, 19) : '--:--:--';
+
+                    return `
+                        <tr style="border-bottom:1px solid rgba(255,255,255,0.06);">
+                            <td style="padding:8px 10px; color:#94a3b8;">${timeStr}</td>
+                            <td style="padding:8px 10px; font-weight:700; color:#fff;">${b.phone}</td>
+                            <td style="padding:8px 10px; color:#38bdf8; font-weight:700;">${b.game_mode}</td>
+                            <td style="padding:8px 10px; color:#cbd5e1; font-family:monospace;">#${String(b.period_id).slice(-5)}</td>
+                            <td style="padding:8px 10px;">${selHtml}</td>
+                            <td style="padding:8px 10px; font-weight:800; color:#fff;">₹${b.amount.toFixed(2)}</td>
+                            <td style="padding:8px 10px;">${resHtml}</td>
+                            <td style="padding:8px 10px;"><span style="color:${badgeCol}; font-weight:800; background:rgba(255,255,255,0.06); padding:3px 8px; border-radius:5px;">${badgeTxt}</span></td>
+                        </tr>
+                    `;
+                }).join('');
+            } catch (e) {}
+        }
+
         async function refreshOverview() {
             try {
                 const res = await fetch('/api/admin/overview', {
@@ -889,8 +1121,43 @@
                 });
                 const d = await res.json();
                 if (!d.success) return;
+                latestOverviewData = d;
 
-                document.getElementById('live-timer-status').textContent = `Period: ${d.currentPeriod} | 00:${String(d.remainingSeconds).padStart(2, '0')} ${d.isLocked ? '[LOCKED]' : ''}`;
+                // Update 4 Win Go Selector Tabs live timers and modes
+                if (d.wingoModes) {
+                    ['30s', '1m', '3m', '5m'].forEach(m => {
+                        const info = d.wingoModes[m];
+                        if (!info) return;
+                        const tEl = document.getElementById('sub-timer-' + m);
+                        const mEl = document.getElementById('sub-mode-' + m);
+                        if (tEl) {
+                            const mins = Math.floor(info.remainingSeconds / 60);
+                            const secs = info.remainingSeconds % 60;
+                            tEl.textContent = `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}` + (info.isLocked ? ' 🔒' : '');
+                            tEl.style.color = info.isLocked ? '#ef4444' : '#fae59f';
+                        }
+                        if (mEl) {
+                            if (info.manualNumber !== '' && info.manualNumber !== null && info.manualNumber !== undefined) {
+                                mEl.textContent = `🎯 Force #${info.manualNumber}`;
+                                mEl.style.color = '#34d399';
+                            } else if (info.gameMode === 'random') {
+                                mEl.textContent = '🎲 Fair RNG';
+                                mEl.style.color = '#60a5fa';
+                            } else {
+                                mEl.textContent = '📉 House Profit';
+                                mEl.style.color = '#fae59f';
+                            }
+                        }
+                    });
+                }
+
+                // Top live timer displays the selected game's countdown
+                const activeInfo = (d.wingoModes && d.wingoModes[selectedWingoMode]) ? d.wingoModes[selectedWingoMode] : d;
+                const actSecs = activeInfo.remainingSeconds !== undefined ? activeInfo.remainingSeconds : d.remainingSeconds;
+                const actMins = Math.floor(actSecs / 60);
+                const actRemaining = actSecs % 60;
+                document.getElementById('live-timer-status').textContent = `[Win Go ${selectedWingoMode}] Period: ${activeInfo.period || d.currentPeriod} | ${String(actMins).padStart(2, '0')}:${String(actRemaining).padStart(2, '0')} ${activeInfo.isLocked ? '[LOCKED]' : ''}`;
+
                 document.getElementById('stat-users').textContent = d.stats.users;
                 document.getElementById('stat-balance').textContent = `₹${d.stats.totalBalance.toFixed(2)}`;
                 document.getElementById('stat-deposits').textContent = d.stats.pendingDeposits;
@@ -907,31 +1174,8 @@
                     bWth.style.display = d.stats.pendingWithdrawals > 0 ? 'inline-block' : 'none';
                 }
 
-                const currentWingoMode = d.gameMode || 'house_edge';
-                const hasManual = d.manualNumber !== '' && d.manualNumber !== null && d.manualNumber !== undefined;
-                const badgeTxt = hasManual 
-                    ? `🎯 Armed Manual Force (Next: #${d.manualNumber})`
-                    : (currentWingoMode === 'house_edge' ? 'Smart House-Edge (Profit Max)' : (currentWingoMode === 'random' ? 'Fair Random RNG' : 'Manual Force'));
-                document.getElementById('current-mode-badge').textContent = `Active: ${badgeTxt}`;
-                
-                ['random', 'house', 'manual'].forEach(m => document.getElementById('chip-' + m).classList.remove('active'));
-                if (hasManual || currentWingoMode === 'manual') document.getElementById('chip-manual').classList.add('active');
-                else if (currentWingoMode === 'random') document.getElementById('chip-random').classList.add('active');
-                else document.getElementById('chip-house').classList.add('active');
-
-                document.querySelectorAll('.num-pick-btn').forEach(b => {
-                    const active = hasManual && parseInt(b.dataset.wnum, 10) === parseInt(d.manualNumber, 10);
-                    b.style.background = active ? '#f5c443' : '';
-                    b.style.color = active ? '#1a1202' : '';
-                    b.style.transform = active ? 'scale(1.08)' : '';
-                });
-
-                // Live Wagers
-                document.getElementById('wag-green').textContent = `₹${d.wagers.green || 0}`;
-                document.getElementById('wag-violet').textContent = `₹${d.wagers.violet || 0}`;
-                document.getElementById('wag-red').textContent = `₹${d.wagers.red || 0}`;
-                document.getElementById('wag-big').textContent = `₹${d.wagers.big || 0}`;
-                document.getElementById('wag-small').textContent = `₹${d.wagers.small || 0}`;
+                // Render current active mode card
+                renderCurrentWingoModeUI();
 
                 // Aviator Active Mode UI
                 const aviMode = d.aviatorMode || 'smart_profit';
@@ -1019,16 +1263,18 @@
             await fetch('/api/admin/control', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'x-admin-key': adminKey },
-                body: JSON.stringify({ mode })
+                body: JSON.stringify({ mode, wingo_game: selectedWingoMode })
             });
             refreshOverview();
         }
 
         async function setManualNumber(num, labelExtra = '') {
+            const lockChk = document.getElementById('chk-continuous-lock');
+            const isLock = lockChk ? lockChk.checked : false;
             const res = await fetch('/api/admin/control', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'x-admin-key': adminKey },
-                body: JSON.stringify({ mode: 'manual', manual_number: String(num) })
+                body: JSON.stringify({ mode: 'manual', manual_number: String(num), lock_force: isLock, wingo_game: selectedWingoMode })
             });
             const d = await res.json();
             document.querySelectorAll('.num-pick-btn').forEach(b => {
@@ -1042,7 +1288,7 @@
             const statusEl = document.getElementById('manual-status');
             if (statusEl) {
                 statusEl.textContent = d.success
-                    ? `✓ ARMED FOR NEXT DRAW: Number ${num} (${col} • ${sz})${labelExtra ? ' — ' + labelExtra : ''}! All phones will get this exact outcome!`
+                    ? `✓ [Win Go ${selectedWingoMode.toUpperCase()}] ARMED: Number ${num} (${col} • ${sz})${labelExtra ? ' — ' + labelExtra : ''}! ${isLock ? '🔒 Continuous Lock Active: Har round me yahi aayega!' : '🎯 1-Shot: Agli round me yahi aayega!'}`
                     : '✗ Error setting forced outcome.';
                 statusEl.style.color = d.success ? '#10b981' : '#ef4444';
             }
@@ -1053,7 +1299,7 @@
             const res = await fetch('/api/admin/control', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'x-admin-key': adminKey },
-                body: JSON.stringify({ mode: 'house_edge', manual_number: '' })
+                body: JSON.stringify({ mode: 'lowest_bet', manual_number: '', lock_force: false, wingo_game: selectedWingoMode })
             });
             const d = await res.json();
             document.querySelectorAll('.num-pick-btn').forEach(b => {
@@ -1061,9 +1307,11 @@
                 b.style.color = '';
                 b.style.transform = '';
             });
+            const lockChk = document.getElementById('chk-continuous-lock');
+            if (lockChk) lockChk.checked = false;
             const statusEl = document.getElementById('manual-status');
             if (statusEl) {
-                statusEl.textContent = '✓ Reverted to Smart House-Edge (Profit Max). Lowest payout will win!';
+                statusEl.textContent = `✓ [Win Go ${selectedWingoMode.toUpperCase()}] Reverted to Sabse Kam Bet Win (Profit Max). Lowest/zero bet outcome will win!`;
                 statusEl.style.color = '#10b981';
             }
             refreshOverview();

