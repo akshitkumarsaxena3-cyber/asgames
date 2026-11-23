@@ -206,21 +206,10 @@ class StateManager {
             }
         });
 
-        const depBal = (this.user && typeof this.user.deposit_balance === 'number')
-            ? this.user.deposit_balance
-            : (window._currentTurnoverInfo && typeof window._currentTurnoverInfo.deposit_balance === 'number' ? window._currentTurnoverInfo.deposit_balance : 0);
-        const winBal = (this.user && typeof this.user.winning_balance === 'number')
-            ? this.user.winning_balance
-            : (window._currentTurnoverInfo && typeof window._currentTurnoverInfo.winning_balance === 'number' ? window._currentTurnoverInfo.winning_balance : (this.user ? Math.max(0, this.balance - depBal) : 0));
-
-        const depEl = document.getElementById('wd-deposit-bal-val');
-        const winEl = document.getElementById('wd-winning-bal-val');
-        const walDepEl = document.getElementById('wal-deposit-amt');
-        const walWinEl = document.getElementById('wal-winning-amt');
-        if (depEl) depEl.textContent = `₹${Number(depBal || 0).toFixed(2)}`;
-        if (winEl) winEl.textContent = `₹${Number(winBal || 0).toFixed(2)}`;
-        if (walDepEl) walDepEl.textContent = `₹${Number(depBal || 0).toFixed(2)}`;
-        if (walWinEl) walWinEl.textContent = `₹${Number(winBal || 0).toFixed(2)}`;
+        const wdBalEl = document.getElementById('wd-withdrawable-val');
+        if (wdBalEl) wdBalEl.textContent = formatted;
+        const walMainEl = document.getElementById('wal-main-pct');
+        if (walMainEl) walMainEl.textContent = '100%';
     }
 
     async syncGameDelta(delta) {
@@ -555,17 +544,6 @@ class StateManager {
                 }
                 if (amt > this.balance) {
                     this.showToast('Insufficient wallet balance!', 'error');
-                    return;
-                }
-
-                // 2. Strict Winning Wallet Requirement Check
-                const winBal = window._currentTurnoverInfo && typeof window._currentTurnoverInfo.winning_balance === 'number'
-                    ? window._currentTurnoverInfo.winning_balance
-                    : (this.user && typeof this.user.winning_balance === 'number' ? this.user.winning_balance : this.balance);
-
-                if (amt > winBal) {
-                    const maxWd = Number(winBal || 0).toFixed(2);
-                    this.showToast(`Withdrawal sirf Winning Wallet se ho sakta hai! Aapka Winning balance ₹${maxWd} hai. Deposit wallet ka amount sirf bet lagane ke liye hai.`, 'warning');
                     return;
                 }
 
@@ -1026,11 +1004,16 @@ class StateManager {
                 if (d.success && d.transactions.length > 0) {
                     container.innerHTML = d.transactions.map(tx => {
                         const isCredit = ['deposit', 'win', 'commission'].includes(tx.type);
+                        const st = String(tx.status || 'pending').toLowerCase();
+                        const isApp = (st === 'approved' || st === 'completed');
+                        const isRej = (st === 'rejected');
+                        const stColor = isApp ? '#10b981' : (isRej ? '#ef4444' : '#f5c443');
+                        const stText = isApp ? 'COMPLETED' : (isRej ? 'REJECTED (REFUNDED)' : 'PENDING');
                         return `
                             <div class="tx-card">
                                 <div class="tx-left">
                                     <span class="tx-desc">${tx.type.toUpperCase()}: ${tx.details || ''}</span>
-                                    <span class="tx-time">${tx.created_at} | Status: <strong style="color:${tx.status === 'approved' ? '#10b981' : (tx.status === 'pending' ? '#f5c443' : '#ef4444')}">${tx.status.toUpperCase()}</strong></span>
+                                    <span class="tx-time">${(tx.created_at || '').replace('T', ' ').slice(0, 19)} | Status: <strong style="color:${stColor}; font-weight:800;">${stText}</strong></span>
                                 </div>
                                 <div class="tx-amount ${isCredit ? 'text-win' : 'text-loss'}">
                                     ${isCredit ? '+' : '-'}₹${tx.amount.toFixed(2)}
@@ -2519,29 +2502,13 @@ function updateWithdrawSummary() {
     const recvEl = document.getElementById('wd-received-val');
     const timeEl = document.getElementById('wd-time-val');
     const depEl = document.getElementById('wd-deposit-bal-val');
-    const winEl = document.getElementById('wd-winning-bal-val');
     const btn = document.getElementById('btn-submit-withdraw');
-
-    let depositBal = 0;
-    let winningBal = 0;
-    if (window._currentTurnoverInfo && typeof window._currentTurnoverInfo.winning_balance === 'number') {
-        depositBal = typeof window._currentTurnoverInfo.deposit_balance === 'number' ? window._currentTurnoverInfo.deposit_balance : 0;
-        winningBal = window._currentTurnoverInfo.winning_balance;
-    } else if (sm && sm.user && typeof sm.user.winning_balance === 'number') {
-        depositBal = typeof sm.user.deposit_balance === 'number' ? sm.user.deposit_balance : 0;
-        winningBal = sm.user.winning_balance;
-    } else if (sm && sm.user) {
-        depositBal = typeof sm.user.deposit_balance === 'number' ? sm.user.deposit_balance : 0;
-        winningBal = Math.max(0, bal - depositBal);
-    }
 
     const tds = Math.round(amt * 0.18 * 100) / 100;
     const net = Math.max(0, Math.round((amt - tds) * 100) / 100);
     const tdsEl = document.getElementById('wd-tds-val');
 
-    if (depEl) depEl.textContent = `₹${depositBal.toFixed(2)}`;
-    if (winEl) winEl.textContent = `₹${winningBal.toFixed(2)}`;
-    if (wBalEl) wBalEl.textContent = `₹${winningBal.toFixed(2)}`;
+    if (wBalEl) wBalEl.textContent = `₹${bal.toFixed(2)}`;
     if (tdsEl) tdsEl.textContent = `-₹${tds.toFixed(2)}`;
     if (recvEl) recvEl.textContent = `₹${net.toFixed(2)}`;
 
@@ -2559,7 +2526,7 @@ function updateWithdrawSummary() {
     }
 
     if (btn) {
-        if (amt >= 110 && amt <= winningBal && acc) btn.classList.add('ready');
+        if (amt >= 110 && amt <= bal && acc) btn.classList.add('ready');
         else btn.classList.remove('ready');
     }
 }
@@ -2567,21 +2534,11 @@ function updateWithdrawSummary() {
 function fillAllWithdrawBalance() {
     const sm = window.stateManager;
     const bal = sm ? Number(sm.balance || 0) : 0;
-    let winningBal = 0;
-    if (window._currentTurnoverInfo && typeof window._currentTurnoverInfo.winning_balance === 'number') {
-        winningBal = window._currentTurnoverInfo.winning_balance;
-    } else if (sm && sm.user && typeof sm.user.winning_balance === 'number') {
-        winningBal = sm.user.winning_balance;
-    } else if (sm && sm.user) {
-        const dep = Number(sm.user.deposit_balance || 0);
-        winningBal = Math.max(0, bal - dep);
-    }
-
-    const withdrawable = Math.floor(winningBal);
+    const withdrawable = Math.floor(bal);
     const inp = document.getElementById('withdraw-amount-input');
     if (inp) inp.value = withdrawable > 0 ? String(withdrawable) : '';
-    if (withdrawable <= 0 && sm) {
-        sm.showToast('Withdrawal sirf Winning Wallet se ho sakta hai! Game khel kar jeetein aur winning amount withdraw karein.', 'warning');
+    if (withdrawable < 110 && sm) {
+        sm.showToast(`Minimum withdrawal ₹110 hai! Aapka balance ₹${bal.toFixed(2)} hai.`, 'warning');
     }
     updateWithdrawSummary();
 }
@@ -2594,7 +2551,7 @@ async function loadWithdrawPageHistory(showAll = false) {
         const res = await fetch('/api/wallet/transactions', { headers: { 'Authorization': `Bearer ${sm.token}` } });
         const d = await res.json();
         const wds = (d.transactions || []).filter(t => t.type === 'withdraw');
-        const shown = showAll ? wds : wds.slice(0, 10);
+        const shown = showAll ? wds : wds.slice(0, 15);
         if (shown.length === 0) {
             listEl.innerHTML = `<div class="bdg-no-data" style="padding:28px 10px;"><div style="font-size:46px; opacity:0.35; margin-bottom:6px;">📜</div><div>No data</div></div>`;
             if (showAll) sm.showToast('No withdrawal records yet.', 'info');
@@ -2602,16 +2559,32 @@ async function loadWithdrawPageHistory(showAll = false) {
         }
         listEl.innerHTML = shown.map(t => {
             const st = String(t.status || 'pending').toLowerCase();
-            const stColor = (st === 'approved' || st === 'completed') ? '#10b981' : (st === 'rejected' ? '#ef4444' : '#f59e0b');
-            const stText = (st === 'approved' || st === 'completed') ? 'Completed' : (st === 'rejected' ? 'Rejected' : 'Pending');
+            const isApp = (st === 'approved' || st === 'completed');
+            const isRej = (st === 'rejected');
+            const stColor = isApp ? '#10b981' : (isRej ? '#ef4444' : '#f59e0b');
+            const stText = isApp ? '✅ Completed / Paid' : (isRej ? '❌ Rejected (Refunded)' : '⏳ Pending');
+
+            let reasonHtml = '';
+            if (isRej && t.details) {
+                let rText = '';
+                if (t.details.includes('| Reason:')) rText = t.details.split('| Reason:')[1].trim();
+                else if (t.details.includes('| Rejected:')) rText = t.details.split('| Rejected:')[1].trim();
+                if (rText) {
+                    reasonHtml = `<div style="color:#ef4444; font-size:11px; margin-top:3px; font-weight:700; background:rgba(239,68,68,0.1); padding:3px 7px; border-radius:4px; border:1px solid rgba(239,68,68,0.25);">⚠️ Reason: ${rText} (Money refunded to wallet)</div>`;
+                }
+            }
+
             return `
-                <div style="display:flex; justify-content:space-between; align-items:center; padding:10px 6px; border-bottom:1px solid rgba(255,255,255,0.06);">
-                    <div>
-                        <div style="color:#fff; font-weight:700; font-size:13px;">₹${parseFloat(t.amount || 0).toFixed(2)}</div>
-                        <div style="color:#94a3b8; font-size:11px;">${t.details || 'Withdrawal'}</div>
-                        <div style="color:#71717a; font-size:10px;">${(t.created_at || '').replace('T', ' ').slice(0, 19)}</div>
+                <div style="padding:10px 8px; border-bottom:1px solid rgba(255,255,255,0.06); background:rgba(0,0,0,0.22); border-radius:8px; margin-bottom:6px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <div>
+                            <div style="color:#fff; font-weight:800; font-size:13.5px;">₹${parseFloat(t.amount || 0).toFixed(2)}</div>
+                            <div style="color:#71717a; font-size:10px; margin-top:2px;">${(t.created_at || '').replace('T', ' ').slice(0, 19)}</div>
+                        </div>
+                        <span style="font-size:11px; font-weight:800; color:${stColor}; background:${isRej ? 'rgba(239,68,68,0.15)' : (isApp ? 'rgba(16,185,129,0.15)' : 'rgba(245,158,11,0.15)')}; border:1px solid ${stColor}; padding:3px 8px; border-radius:6px;">${stText}</span>
                     </div>
-                    <span style="font-size:11px; font-weight:700; color:${stColor}; background:rgba(255,255,255,0.05); padding:4px 9px; border-radius:6px;">${stText}</span>
+                    ${reasonHtml}
+                    <div style="color:#94a3b8; font-size:11px; margin-top:4px; word-break:break-all;">${t.details || 'Withdrawal'}</div>
                 </div>
             `;
         }).join('');

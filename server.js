@@ -1030,29 +1030,10 @@ function isWithdrawalTimeOpen() {
 
 function applyUserWalletDelta(user, delta, type = null) {
     if (!user) return;
-    if (typeof user.deposit_balance !== 'number' || typeof user.winning_balance !== 'number') {
-        DB.reconcileUserWallet(user);
-    }
     const d = parseFloat(delta);
-    if (d > 0) {
-        if (type === 'deposit') {
-            user.deposit_balance = Math.round((user.deposit_balance + d) * 100) / 100;
-        } else {
-            user.winning_balance = Math.round((user.winning_balance + d) * 100) / 100;
-        }
-    } else if (d < 0) {
-        const deduct = Math.abs(d);
-        if (type === 'withdraw') {
-            user.winning_balance = Math.max(0, Math.round((user.winning_balance - deduct) * 100) / 100);
-        } else {
-            // Bet: deduct from deposit_balance first, then winning_balance!
-            const fromDep = Math.min(user.deposit_balance, deduct);
-            const fromWin = Math.max(0, deduct - fromDep);
-            user.deposit_balance = Math.max(0, Math.round((user.deposit_balance - fromDep) * 100) / 100);
-            user.winning_balance = Math.max(0, Math.round((user.winning_balance - fromWin) * 100) / 100);
-        }
-    }
-    user.balance = Math.round((user.deposit_balance + user.winning_balance) * 100) / 100;
+    user.balance = Math.max(0, Math.round(((parseFloat(user.balance) || 0) + d) * 100) / 100);
+    user.winning_balance = user.balance;
+    user.deposit_balance = 0;
     return user;
 }
 
@@ -1070,21 +1051,10 @@ app.post('/api/wallet/withdraw', requireAuth, async (req, res) => {
             return res.json({ success: false, message: 'Insufficient wallet balance!' });
         }
 
-        // 2. Strict Winning Wallet Rule:
+        // Single unified wallet: user can withdraw from their wallet balance
         DB.reconcileUserWallet(req.user);
 
-        const winBal = parseFloat(req.user.winning_balance || 0);
-        if (withdrawAmt > winBal) {
-            return res.json({
-                success: false,
-                deposit_balance: req.user.deposit_balance,
-                winning_balance: winBal,
-                withdrawable_balance: winBal,
-                message: `Withdrawal sirf Winning Wallet se ho sakta hai! Aapka Winning Balance ₹${winBal.toFixed(2)} hai. Deposit Wallet (₹${(req.user.deposit_balance || 0).toFixed(2)}) se sirf games me bet lagayi ja sakti hai.`
-            });
-        }
-
-        // Deduct strictly from Winning Wallet
+        // Deduct from Wallet Balance
         applyUserWalletDelta(req.user, -withdrawAmt, 'withdraw');
         DB.save();
 
@@ -1114,8 +1084,9 @@ app.post('/api/wallet/withdraw', requireAuth, async (req, res) => {
         res.json({
             success: true,
             balance: req.user.balance,
-            winning_balance: req.user.winning_balance,
-            deposit_balance: req.user.deposit_balance,
+            winning_balance: req.user.balance,
+            deposit_balance: 0,
+            withdrawable_balance: req.user.balance,
             gross_amount: withdrawAmt,
             tds_amount: tdsAmt,
             net_amount: netAmt,
@@ -1133,10 +1104,10 @@ app.get('/api/wallet/turnover-status', requireAuth, async (req, res) => {
         res.json({
             success: true,
             balance: req.user.balance,
-            deposit_balance: req.user.deposit_balance || 0,
-            winning_balance: req.user.winning_balance || 0,
-            withdrawable_balance: req.user.winning_balance || 0,
-            withdrawableBalance: req.user.winning_balance || 0,
+            deposit_balance: 0,
+            winning_balance: req.user.balance,
+            withdrawable_balance: req.user.balance,
+            withdrawableBalance: req.user.balance,
             isTimeOpen: isWithdrawalTimeOpen()
         });
     } catch (e) {
@@ -1601,10 +1572,12 @@ app.post('/api/admin/reject-withdrawal', requireAdmin, async (req, res) => {
         const tx = await DB.get('SELECT * FROM transactions WHERE id = ?', [tx_id]);
         if (!tx || tx.status !== 'pending') return res.json({ success: false, message: 'Transaction not found or already processed' });
 
-        // Refund held balance
-        const rejDetail = reason ? ` | Rejected: ${reason}` : ' | Rejected by Admin';
+        // Refund held balance directly back to user
+        const rejReason = (reason && String(reason).trim()) ? String(reason).trim() : 'Rejected by Admin';
+        const rejDetail = ` | Reason: ${rejReason}`;
         await DB.run("UPDATE transactions SET status = 'rejected', details = details || ? WHERE id = ?", [rejDetail, tx_id]);
         await DB.run('UPDATE users SET balance = balance + ? WHERE id = ?', [tx.amount, tx.user_id]);
+        DB.save();
         DB.syncPushToPythonAnywhere().catch(() => {});
 
         res.json({ success: true, message: `Withdrawal rejected. ₹${tx.amount} refunded to user balance.` });

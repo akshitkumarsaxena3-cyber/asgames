@@ -401,29 +401,15 @@ def apply_user_wallet_delta(conn, user_id, delta, tx_type=None):
 
 def reconcile_user_wallet_sqlite(conn, user_id):
     c = conn.cursor()
-    c.execute('SELECT balance, deposit_balance, winning_balance FROM users WHERE id = ?', (user_id,))
+    c.execute('SELECT balance FROM users WHERE id = ?', (user_id,))
     u = c.fetchone()
     if not u:
         return 0.0, 0.0, 0.0
-    bal = float(u['balance'] or 0)
-
-    # Approved deposits
-    c.execute('SELECT COALESCE(SUM(amount), 0) as total_dep FROM transactions WHERE user_id = ? AND type = "deposit" AND (status = "approved" OR status = "completed")', (user_id,))
-    total_deposits = float(c.fetchone()['total_dep'] or 0)
-
-    # Total bets played
-    c.execute('SELECT COALESCE(SUM(bet_amount), 0) as total_bet FROM game_history WHERE user_id = ?', (user_id,))
-    gh_bets = float(c.fetchone()['total_bet'] or 0)
-    c.execute('SELECT COALESCE(SUM(amount), 0) as total_bet FROM bets WHERE user_id = ?', (user_id,))
-    wg_bets = float(c.fetchone()['total_bet'] or 0)
-    total_bets = max(gh_bets, wg_bets)
-
-    unwagered_dep = max(0.0, round(total_deposits - total_bets, 2))
-    dep_bal = min(bal, unwagered_dep)
-    win_bal = max(0.0, round(bal - dep_bal, 2))
-
+    bal = max(0.0, float(u['balance'] or 0))
+    dep_bal = 0.0
+    win_bal = bal
     try:
-        c.execute('UPDATE users SET deposit_balance = ?, winning_balance = ? WHERE id = ?', (dep_bal, win_bal, user_id))
+        c.execute('UPDATE users SET balance = ?, deposit_balance = 0, winning_balance = ? WHERE id = ?', (bal, bal, user_id))
     except Exception:
         pass
     return bal, dep_bal, win_bal
@@ -1043,21 +1029,14 @@ def api_withdraw():
         return jsonify({'success': False, 'message': 'Minimum withdrawal is ₹110'}), 400
 
     with get_db() as conn:
+        cursor = conn.cursor()
         current_bal, dep_bal, win_bal = reconcile_user_wallet_sqlite(conn, user['id'])
 
         if current_bal < amount:
             return jsonify({'success': False, 'message': f'Insufficient wallet balance! You have ₹{current_bal:.2f}'}), 400
 
-        if amount > win_bal:
-            return jsonify({
-                'success': False,
-                'deposit_balance': dep_bal,
-                'winning_balance': win_bal,
-                'withdrawable_balance': win_bal,
-                'message': f"Withdrawal sirf Winning Wallet se ho sakta hai! Aapka Winning Balance ₹{win_bal:.2f} hai. Deposit Wallet (₹{dep_bal:.2f}) se sirf games me bet lagayi ja sakti hai."
-            }), 400
-
-        new_bal, new_dep, new_win = apply_user_wallet_delta(conn, user['id'], -amount, 'withdraw')
+        new_bal = round(current_bal - amount, 2)
+        cursor.execute('UPDATE users SET balance = ?, winning_balance = ? WHERE id = ?', (new_bal, new_bal, user['id']))
         tds_amt = round(amount * 0.18, 2)
         net_amt = round(amount - tds_amt, 2)
         full_details = f"{details} | Gross: ₹{amount:.2f} | TDS 18%: -₹{tds_amt:.2f} | Net: ₹{net_amt:.2f}"
@@ -1069,7 +1048,7 @@ def api_withdraw():
         )
         conn.commit()
 
-    return jsonify({'success': True, 'balance': new_bal, 'winning_balance': new_win, 'deposit_balance': new_dep, 'gross_amount': amount, 'tds_amount': tds_amt, 'net_amount': net_amt, 'message': f'Withdrawal of ₹{amount:.2f} requested! (18% TDS: -₹{tds_amt:.2f} | Net to receive: ₹{net_amt:.2f}). Admin will approve & payout within working hours (10:00 AM - 08:00 PM).', 'tx_id': tx_id})
+    return jsonify({'success': True, 'balance': new_bal, 'winning_balance': new_bal, 'deposit_balance': 0, 'gross_amount': amount, 'tds_amount': tds_amt, 'net_amount': net_amt, 'message': f'Withdrawal of ₹{amount:.2f} requested! (18% TDS: -₹{tds_amt:.2f} | Net to receive: ₹{net_amt:.2f}). Admin will approve & payout within working hours (10:00 AM - 08:00 PM).', 'tx_id': tx_id})
 
 @app.route('/api/wallet/transactions', methods=['GET'])
 def api_my_transactions():
@@ -1748,6 +1727,9 @@ def api_admin_reject_withdrawal():
 
     data = request.get_json(silent=True) or {}
     tx_id = data.get('tx_id')
+    reason = (data.get('reason') or '').strip()
+    if not reason:
+        reason = 'Rejected by Admin'
 
     with get_db() as conn:
         cursor = conn.cursor()
@@ -1758,9 +1740,12 @@ def api_admin_reject_withdrawal():
 
         amt = float(tx['amount'])
         u_id = tx['user_id']
-        # Refund back to user winning balance
-        apply_user_wallet_delta(conn, u_id, amt, 'refund')
-        cursor.execute('UPDATE transactions SET status = "rejected" WHERE id = ?', (tx_id,))
+        rej_detail = f' | Reason: {reason}'
+        new_details = (tx['details'] or '') + rej_detail
+
+        # Refund held balance directly back to user balance
+        cursor.execute('UPDATE users SET balance = balance + ?, winning_balance = winning_balance + ? WHERE id = ?', (amt, amt, u_id))
+        cursor.execute('UPDATE transactions SET status = "rejected", details = ? WHERE id = ?', (new_details, tx_id))
         conn.commit()
 
     return jsonify({'success': True, 'message': f'Withdrawal rejected and ₹{amt} refunded to User #{u_id}!'})

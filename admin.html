@@ -1703,7 +1703,7 @@
                 }
 
                 return `
-                    <tr>
+                    <tr id="wth-row-${t.id}">
                         <td><span style="font-family:monospace; font-size:11px; color:#94a3b8;">${t.id}</span></td>
                         <td><strong style="color:#fff;">${t.phone}</strong></td>
                         <td>
@@ -1737,6 +1737,8 @@
                 const d = await res.json();
                 if (d.success) {
                     showAdminToast(d.message || 'Withdrawal approved & marked as Paid!', 'success');
+                    const r = document.getElementById('wth-row-' + txId);
+                    if (r) r.remove();
                 } else {
                     showAdminToast(d.message || 'Error approving withdrawal', 'error');
                 }
@@ -1759,6 +1761,8 @@
                 const d = await res.json();
                 if (d.success) {
                     showAdminToast(d.message || 'Withdrawal rejected & refunded.', 'success');
+                    const r = document.getElementById('wth-row-' + txId);
+                    if (r) r.remove();
                 } else {
                     showAdminToast(d.message || 'Error rejecting withdrawal', 'error');
                 }

@@ -392,64 +392,10 @@ class DataStore {
 
     reconcileUserWallet(user) {
         if (!user) return user;
-        const currentBal = Math.max(0, parseFloat(user.balance || 0));
-        const uid = Number(user.id);
-        const altUid = uid < 100000 ? uid + 100000 : uid - 100000;
-        const matchUser = (x) => Number(x.user_id) === uid || Number(x.user_id) === altUid;
-
-        // Total approved deposits from financial transactions
-        let totalDeposits = 0;
-        if (Array.isArray(this.data.transactions)) {
-            totalDeposits = this.data.transactions
-                .filter(t => matchUser(t) && t.type === 'deposit' && (t.status === 'approved' || t.status === 'completed'))
-                .reduce((sum, t) => sum + (parseFloat(t.amount || 0) || 0), 0);
-        }
-
-        // Total bets played across all games (Win Go, Aviator, King, Ludo, etc.)
-        let totalBets = 0;
-        if (Array.isArray(this.data.game_history)) {
-            totalBets += this.data.game_history
-                .filter(matchUser)
-                .reduce((sum, h) => sum + (parseFloat(h.bet_amount || 0) || 0), 0);
-        }
-        if (Array.isArray(this.data.bets)) {
-            const wgBets = this.data.bets
-                .filter(matchUser)
-                .reduce((sum, b) => sum + (parseFloat(b.amount || 0) || 0), 0);
-            totalBets = Math.max(totalBets, wgBets);
-        }
-        if (Array.isArray(this.data.king_bets)) {
-            const kgBets = this.data.king_bets
-                .filter(matchUser)
-                .reduce((sum, b) => sum + (parseFloat(b.amount || 0) || 0), 0);
-            totalBets += kgBets;
-        }
-
-        const unwageredDeposit = Math.max(0, Math.round((totalDeposits - totalBets) * 100) / 100);
-
-        const curDep = typeof user.deposit_balance === 'number' ? user.deposit_balance : null;
-        const curWin = typeof user.winning_balance === 'number' ? user.winning_balance : null;
-
-        if (curDep !== null && curWin !== null && (curDep + curWin) > 0) {
-            const sumSub = Math.round((curDep + curWin) * 100) / 100;
-            if (currentBal > sumSub) {
-                // Balance has grown from wins: credit difference to winning_balance
-                user.winning_balance = Math.round((curWin + (currentBal - sumSub)) * 100) / 100;
-            } else if (currentBal < sumSub && currentBal > 0) {
-                user.deposit_balance = Math.min(currentBal, curDep);
-                user.winning_balance = Math.max(0, Math.round((currentBal - user.deposit_balance) * 100) / 100);
-            }
-            user.balance = Math.round((user.deposit_balance + user.winning_balance) * 100) / 100;
-        } else if (currentBal > 0) {
-            // Sub-wallets were zero or uninitialized, but user has real balance: preserve user's money!
-            user.deposit_balance = Math.min(currentBal, unwageredDeposit);
-            user.winning_balance = Math.max(0, Math.round((currentBal - user.deposit_balance) * 100) / 100);
-            user.balance = currentBal;
-        } else {
-            user.deposit_balance = 0;
-            user.winning_balance = 0;
-            user.balance = 0;
-        }
+        const currentBal = Math.max(0, Math.round((parseFloat(user.balance || 0)) * 100) / 100);
+        user.balance = currentBal;
+        user.winning_balance = currentBal;
+        user.deposit_balance = 0;
         return user;
     }
 
@@ -705,32 +651,13 @@ class DataStore {
             return { changes: 1 };
         }
 
-        // 4. Update User Balance (+ or -) with 2-Wallet Architecture
+        // 4. Update User Balance (+ or -) with Unified Wallet (Single Balance Architecture)
         const applyUserWallet = (user, delta, isDeposit = false, isWithdraw = false) => {
             if (!user) return;
-            if (typeof user.deposit_balance !== 'number' || typeof user.winning_balance !== 'number') {
-                this.reconcileUserWallet(user);
-            }
             const d = parseFloat(delta);
-            if (d > 0) {
-                if (isDeposit) {
-                    user.deposit_balance = Math.round((user.deposit_balance + d) * 100) / 100;
-                } else {
-                    user.winning_balance = Math.round((user.winning_balance + d) * 100) / 100;
-                }
-            } else if (d < 0) {
-                const deduct = Math.abs(d);
-                if (isWithdraw) {
-                    user.winning_balance = Math.max(0, Math.round((user.winning_balance - deduct) * 100) / 100);
-                } else {
-                    // Bet: deduct from deposit_balance first, then winning_balance!
-                    const fromDep = Math.min(user.deposit_balance, deduct);
-                    const fromWin = Math.max(0, deduct - fromDep);
-                    user.deposit_balance = Math.max(0, Math.round((user.deposit_balance - fromDep) * 100) / 100);
-                    user.winning_balance = Math.max(0, Math.round((user.winning_balance - fromWin) * 100) / 100);
-                }
-            }
-            user.balance = Math.round((user.deposit_balance + user.winning_balance) * 100) / 100;
+            user.balance = Math.max(0, Math.round(((parseFloat(user.balance) || 0) + d) * 100) / 100);
+            user.winning_balance = user.balance;
+            user.deposit_balance = 0;
         };
 
         const findUserById = (targetId) => {
@@ -918,19 +845,21 @@ class DataStore {
             return { changes: 1 };
         }
 
-        // 11. Update Transaction Status
+        // 11. Update Transaction Status (Approve or Reject & Refund)
         if (sql.includes('UPDATE transactions SET status =')) {
-            if (sql.includes("'approved'")) {
-                const txId = params[0];
-                const tx = this.data.transactions.find(t => t.id === txId);
-                if (tx) tx.status = 'approved';
-                this.save();
-                return { changes: 1 };
-            }
-            if (sql.includes("'rejected'")) {
-                const txId = params[0];
-                const tx = this.data.transactions.find(t => t.id === txId);
-                if (tx) tx.status = 'rejected';
+            const isApproved = sql.includes("'approved'") || sql.includes('"approved"') || sql.includes("'completed'");
+            const isRejected = sql.includes("'rejected'") || sql.includes('"rejected"');
+            // WHERE id = ? is ALWAYS the last parameter in the SQL query!
+            const txId = params[params.length - 1];
+            const tx = this.data.transactions.find(t => t.id === txId);
+            if (tx) {
+                if (isApproved) tx.status = 'approved';
+                if (isRejected) {
+                    tx.status = 'rejected';
+                    if (sql.includes('details = details || ?') && params.length >= 2) {
+                        tx.details = (tx.details || '') + params[0];
+                    }
+                }
                 this.save();
                 return { changes: 1 };
             }
