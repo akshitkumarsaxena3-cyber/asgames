@@ -905,9 +905,9 @@ class StateManager {
             setTimeout(() => {
                 isSpinning = false;
                 spinBtn.disabled = false;
-                this.addBalance(prizeAmount, 'Lucky Wheel Bonus');
+                // Wheel is display-only ("khali dikhane ke liye hai"), never adds real wallet balance
                 if (window.sound) window.sound.jackpot();
-                this.showWinModal(prizeAmount, `Lucky Wheel Spin Prize!`);
+                this.showToast('Wheel spin completed! Invite friends for more spins.', 'info');
             }, 4100);
         };
     }

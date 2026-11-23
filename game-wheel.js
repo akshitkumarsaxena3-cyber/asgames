@@ -25,11 +25,15 @@ class InviteWheelGame {
         this.ledPhase = 0;
 
         // Persistent user wheel state
-        this.wheelAmount = Math.min(100, parseFloat(localStorage.getItem('asg_wheel_amt') || '0'));
+        // Display cash out target
+        this.cashOutTarget = 100;
+        // The wheel amount can NEVER reach the cashOutTarget, strictly capped below target
+        const maxCap = Math.max(0, Math.round((this.cashOutTarget - 0.15) * 100) / 100);
+        const savedAmt = parseFloat(localStorage.getItem('asg_wheel_amt') || '0');
+        this.wheelAmount = Math.min(maxCap, isNaN(savedAmt) ? 0 : savedAmt);
         const savedSpins = localStorage.getItem('asg_wheel_spins');
         this.spinsLeft = savedSpins !== null ? parseInt(savedSpins) : 3; // 3 Free Spins for new players!
         this.history = JSON.parse(localStorage.getItem('asg_wheel_hist') || '[]');
-        this.cashOutTarget = 100; // Cash out into real wallet at ₹100 (capped at ₹100)
 
         this.init();
     }
@@ -160,16 +164,36 @@ class InviteWheelGame {
 
     onSpinFinish(winIdx) {
         const slice = this.slices[winIdx];
-        const rawPrize = slice.min === slice.max
-            ? slice.min
-            : Math.floor(slice.min + Math.random() * (slice.max - slice.min + 1));
-        const prize = Math.min(100, rawPrize);
+        const target = this.cashOutTarget;
+        // Asymptote ceiling: amount can NEVER reach target, strictly leaving >= ₹0.15 gap
+        const maxCap = Math.max(0, Math.round((target - 0.15) * 100) / 100);
+        const remaining = Math.max(0, maxCap - this.wheelAmount);
 
-        this.wheelAmount = Math.min(100, Math.round((this.wheelAmount + prize) * 100) / 100);
+        // Diminishing returns curve: mathematically impossible to ever reach cash out requirement
+        let actualPrize = 0;
+        if (remaining > 35) {
+            actualPrize = Math.min(remaining - 15, Math.floor(15 + Math.random() * 20));
+        } else if (remaining > 15) {
+            actualPrize = Math.min(remaining - 5, Math.floor(4 + Math.random() * 6));
+        } else if (remaining > 3) {
+            actualPrize = Math.min(remaining - 1, Math.round((0.50 + Math.random() * 0.80) * 100) / 100);
+        } else if (remaining > 0.40) {
+            actualPrize = Math.min(remaining - 0.10, Math.round((0.05 + Math.random() * 0.10) * 100) / 100);
+        } else if (remaining > 0) {
+            actualPrize = Math.min(remaining, Math.round((0.01 + Math.random() * 0.02) * 100) / 100);
+        } else {
+            actualPrize = 0.00;
+        }
+
+        actualPrize = Math.max(0, Math.round(actualPrize * 100) / 100);
+
+        // Strict ceiling: wheelAmount can NEVER reach target
+        this.wheelAmount = Math.min(maxCap, Math.round((this.wheelAmount + actualPrize) * 100) / 100);
         localStorage.setItem('asg_wheel_amt', String(this.wheelAmount));
 
+        const displayPrize = actualPrize > 0 ? actualPrize : 0.01;
         this.history.unshift({
-            amount: prize,
+            amount: displayPrize,
             label: slice.label,
             time: new Date().toLocaleTimeString()
         });
@@ -178,35 +202,49 @@ class InviteWheelGame {
 
         this.updateUI();
         if (window.sound && window.sound.win) window.sound.win();
-        this.sm.showToast(`🎉 Lucky Wheel Won ₹${prize}.00! Total: ₹${this.wheelAmount.toFixed(2)}`, 'success');
+
+        if (actualPrize > 0) {
+            this.sm.showToast(`🎉 Lucky Wheel Won +₹${actualPrize.toFixed(2)}! Total: ₹${this.wheelAmount.toFixed(2)}`, 'success');
+        } else {
+            const need = (target - this.wheelAmount).toFixed(2);
+            this.sm.showToast(`🎡 So close! Only ₹${need} left to cash out! Invite 1 more friend for free spins!`, 'info');
+        }
     }
 
     cashOut() {
+        // Purely display simulation ("khali dikhane ke liye hai")
+        // Under NO circumstance does this ever credit real wallet balance!
         if (this.wheelAmount < this.cashOutTarget) {
             this.showInsufficientModal('cashout');
             return;
         }
 
-        const payout = Math.min(100, this.wheelAmount);
-        this.wheelAmount = 0;
-        localStorage.setItem('asg_wheel_amt', '0');
-        this.sm.addBalance(payout, `Invite Wheel Cash Out (₹${payout.toFixed(2)})`);
-        this.updateUI();
-        this.sm.showWinModal(payout, 'Invite Wheel Cash Out Credited!');
+        // Even if somehow wheelAmount reaches or exceeds target, NEVER add balance to wallet!
+        this.showInsufficientModal('audit');
     }
 
     showInsufficientModal(mode = 'cashout') {
         const modal = document.getElementById('wheel-insufficient-modal');
         const titleEl = document.getElementById('wheel-insuff-title');
         const msgEl = document.getElementById('wheel-insuff-msg');
-        const need = Math.max(0, this.cashOutTarget - this.wheelAmount).toFixed(2);
+        const need = Math.max(0.15, this.cashOutTarget - this.wheelAmount).toFixed(2);
         if (titleEl) {
-            titleEl.textContent = mode === 'spin' ? 'No free spins left' : 'Insufficient amount';
+            if (mode === 'spin') {
+                titleEl.textContent = 'No free spins left';
+            } else if (mode === 'audit') {
+                titleEl.textContent = 'Verification Required';
+            } else {
+                titleEl.textContent = 'Insufficient amount';
+            }
         }
         if (msgEl) {
-            msgEl.textContent = mode === 'spin'
-                ? `You need ₹${need} more to cash out. Invite friends to get free spins!`
-                : `You need ₹${need} more to cash out`;
+            if (mode === 'spin') {
+                msgEl.textContent = `You need ₹${need} more to cash out. Invite friends to get free spins!`;
+            } else if (mode === 'audit') {
+                msgEl.textContent = `Risk Control Audit: Invite 3 more active recharging friends to unlock cash out into your wallet.`;
+            } else {
+                msgEl.textContent = `You need ₹${need} more to cash out`;
+            }
         }
         if (modal) modal.classList.remove('hidden');
     }
