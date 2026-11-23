@@ -414,36 +414,77 @@ async function distributeReferralCommissions(userId, betAmount) {
         const user = await DB.get('SELECT referred_by FROM users WHERE id = ?', [userId]);
         if (!user || !user.referred_by) return;
 
-        // Tier 1 (0.6%)
+        // Tier 1 (0.6%, max ₹100 cap)
         const tier1User = await DB.get('SELECT id, referred_by FROM users WHERE invite_code = ?', [user.referred_by]);
         if (!tier1User) return;
-        const comm1 = Math.floor(betAmount * 0.006 * 100) / 100;
+        const comm1 = Math.min(100, Math.floor(betAmount * 0.006 * 100) / 100);
         if (comm1 > 0) {
-            await DB.run(`INSERT INTO commissions (user_id, downline_id, tier, bet_amount, commission) VALUES (?, ?, 1, ?, ?)`,
-                [tier1User.id, userId, betAmount, comm1]);
+            await DB.run(`INSERT INTO commissions (user_id, downline_id, tier, bet_amount, commission, type) VALUES (?, ?, ?, ?, ?, ?)`,
+                [tier1User.id, userId, 1, betAmount, comm1, 'bet']);
         }
 
-        // Tier 2 (0.18%)
+        // Tier 2 (0.18%, max ₹100 cap)
         if (!tier1User.referred_by) return;
         const tier2User = await DB.get('SELECT id, referred_by FROM users WHERE invite_code = ?', [tier1User.referred_by]);
         if (!tier2User) return;
-        const comm2 = Math.floor(betAmount * 0.0018 * 100) / 100;
+        const comm2 = Math.min(100, Math.floor(betAmount * 0.0018 * 100) / 100);
         if (comm2 > 0) {
-            await DB.run(`INSERT INTO commissions (user_id, downline_id, tier, bet_amount, commission) VALUES (?, ?, 2, ?, ?)`,
-                [tier2User.id, userId, betAmount, comm2]);
+            await DB.run(`INSERT INTO commissions (user_id, downline_id, tier, bet_amount, commission, type) VALUES (?, ?, ?, ?, ?, ?)`,
+                [tier2User.id, userId, 2, betAmount, comm2, 'bet']);
         }
 
-        // Tier 3 (0.05%)
+        // Tier 3 (0.05%, max ₹100 cap)
         if (!tier2User.referred_by) return;
         const tier3User = await DB.get('SELECT id FROM users WHERE invite_code = ?', [tier2User.referred_by]);
         if (!tier3User) return;
-        const comm3 = Math.floor(betAmount * 0.0005 * 100) / 100;
+        const comm3 = Math.min(100, Math.floor(betAmount * 0.0005 * 100) / 100);
         if (comm3 > 0) {
-            await DB.run(`INSERT INTO commissions (user_id, downline_id, tier, bet_amount, commission) VALUES (?, ?, 3, ?, ?)`,
-                [tier3User.id, userId, betAmount, comm3]);
+            await DB.run(`INSERT INTO commissions (user_id, downline_id, tier, bet_amount, commission, type) VALUES (?, ?, ?, ?, ?, ?)`,
+                [tier3User.id, userId, 3, betAmount, comm3, 'bet']);
         }
     } catch (e) {
         console.error('Referral commission error:', e);
+    }
+}
+
+async function distributeDepositCommission(userId, depositAmount) {
+    try {
+        const depAmt = parseFloat(depositAmount || 0);
+        if (depAmt <= 0) return;
+
+        const user = await DB.get('SELECT referred_by FROM users WHERE id = ?', [userId]);
+        if (!user || !user.referred_by) return;
+
+        // Tier 1 (5% of deposit, max ₹100 cap)
+        const tier1User = await DB.get('SELECT id, referred_by FROM users WHERE invite_code = ?', [user.referred_by]);
+        if (!tier1User) return;
+        const comm1 = Math.min(100, Math.floor(depAmt * 0.05 * 100) / 100);
+        if (comm1 > 0) {
+            await DB.run(`INSERT INTO commissions (user_id, downline_id, tier, bet_amount, commission, type) VALUES (?, ?, ?, ?, ?, ?)`,
+                [tier1User.id, userId, 1, depAmt, comm1, 'deposit']);
+        }
+
+        // Tier 2 (2% of deposit, max ₹100 cap)
+        if (!tier1User.referred_by) return;
+        const tier2User = await DB.get('SELECT id, referred_by FROM users WHERE invite_code = ?', [tier1User.referred_by]);
+        if (!tier2User) return;
+        const comm2 = Math.min(100, Math.floor(depAmt * 0.02 * 100) / 100);
+        if (comm2 > 0) {
+            await DB.run(`INSERT INTO commissions (user_id, downline_id, tier, bet_amount, commission, type) VALUES (?, ?, ?, ?, ?, ?)`,
+                [tier2User.id, userId, 2, depAmt, comm2, 'deposit']);
+        }
+
+        // Tier 3 (1% of deposit, max ₹100 cap)
+        if (!tier2User.referred_by) return;
+        const tier3User = await DB.get('SELECT id FROM users WHERE invite_code = ?', [tier2User.referred_by]);
+        if (!tier3User) return;
+        const comm3 = Math.min(100, Math.floor(depAmt * 0.01 * 100) / 100);
+        if (comm3 > 0) {
+            await DB.run(`INSERT INTO commissions (user_id, downline_id, tier, bet_amount, commission, type) VALUES (?, ?, ?, ?, ?, ?)`,
+                [tier3User.id, userId, 3, depAmt, comm3, 'deposit']);
+        }
+    } catch (e) {
+        console.error('Deposit commission distribution error:', e);
     }
 }
 
@@ -901,16 +942,19 @@ app.get('/api/game/my-bets', requireAuth, async (req, res) => {
 app.get('/api/referral/stats', requireAuth, async (req, res) => {
     try {
         const user = req.user;
-        const downline = await DB.all('SELECT phone, created_at, balance FROM users WHERE referred_by = ? ORDER BY created_at DESC', [user.invite_code]);
+        const downline = await DB.all('SELECT id, phone, created_at, balance FROM users WHERE referred_by = ? ORDER BY created_at DESC', [user.invite_code]);
         const commissions = await DB.all('SELECT * FROM commissions WHERE user_id = ?', [user.id]);
 
-        const totalEarned = commissions.reduce((sum, c) => sum + c.commission, 0);
-        const unclaimed = commissions.filter(c => c.claimed === 0).reduce((sum, c) => sum + c.commission, 0);
-        const totalTurnover = commissions.reduce((sum, c) => sum + c.bet_amount, 0);
+        const totalEarned = commissions.reduce((sum, c) => sum + (c.commission || 0), 0);
+        const unclaimed = commissions.filter(c => c.claimed === 0).reduce((sum, c) => sum + (c.commission || 0), 0);
+        const totalTurnover = commissions.reduce((sum, c) => sum + (c.bet_amount || 0), 0);
 
         const tier1Count = downline.length;
         const tier2Count = commissions.filter(c => c.tier === 2).length;
         const tier3Count = commissions.filter(c => c.tier === 3).length;
+
+        const cleanUnclaimed = Math.floor(unclaimed * 100) / 100;
+        const cleanEarned = Math.floor(totalEarned * 100) / 100;
 
         res.json({
             success: true,
@@ -921,11 +965,16 @@ app.get('/api/referral/stats', requireAuth, async (req, res) => {
             tier3Count,
             totalMembers: tier1Count + tier2Count + tier3Count,
             totalTurnover,
-            totalEarned,
-            unclaimedCommission: Math.floor(unclaimed * 100) / 100,
-            subordinates: downline.slice(0, 15).map(u => ({
-                phone: u.phone.replace(/(\d{3})\d{4}(\d{3})/, '$1****$2'),
-                date: u.created_at
+            totalEarned: cleanEarned,
+            unclaimedCommission: cleanUnclaimed,
+            unclaimed_commission: cleanUnclaimed,
+            totalCommission: cleanEarned,
+            total_commission: cleanEarned,
+            subordinates: downline.slice(0, 50).map(u => ({
+                id: u.id,
+                phone: (u.phone || '').replace(/(\d{3})\d{4}(\d{3})/, '$1****$2'),
+                date: u.created_at,
+                created_at: u.created_at
             }))
         });
     } catch (e) {
@@ -984,6 +1033,7 @@ app.post('/api/wallet/deposit', requireAuth, async (req, res) => {
             await DB.run(`INSERT INTO transactions (id, user_id, type, amount, status, details) VALUES (?, ?, ?, ?, ?, ?)`,
                 [txId, req.user.id, 'deposit', creditAmt, 'approved', `Channel: ${channel || 'UPI'} | UTR: ${cleanUtr} | Auto-verified via MacroDroid`]);
             await DB.run('UPDATE users SET balance = balance + ? WHERE id = ?', [creditAmt, req.user.id, 'deposit']);
+            await distributeDepositCommission(req.user.id, creditAmt);
 
             if (!Array.isArray(DB.data.macrodroid_logs)) DB.data.macrodroid_logs = [];
             DB.data.macrodroid_logs.unshift({
@@ -1529,6 +1579,7 @@ app.post('/api/admin/approve-deposit', requireAdmin, async (req, res) => {
 
         await DB.run("UPDATE transactions SET status = 'approved' WHERE id = ?", [tx_id]);
         await DB.run('UPDATE users SET balance = balance + ? WHERE id = ?', [tx.amount, tx.user_id, 'deposit']);
+        await distributeDepositCommission(tx.user_id, tx.amount);
 
         res.json({ success: true, message: `Deposit of ₹${tx.amount} approved! Balance credited.` });
     } catch (e) {
@@ -1900,6 +1951,7 @@ app.all(['/api/webhook/macrodroid', '/api/webhook/macrodroi'], async (req, res) 
             if (user) {
                 applyUserWalletDelta(user, creditedAmt, 'deposit');
             }
+            await distributeDepositCommission(pendingTx.user_id, creditedAmt);
 
             DB.data.macrodroid_payments.push({
                 id: 'MD' + Date.now(),
@@ -2019,12 +2071,13 @@ app.post('/api/gift/redeem', requireAuth, async (req, res) => {
         }
 
         gift.claimed_by.push(req.user.id);
-        await DB.run('UPDATE users SET balance = balance + ? WHERE id = ?', [gift.amount, req.user.id]);
+        const claimAmount = Math.min(100, Math.max(1, parseFloat(gift.amount || 50)));
+        await DB.run('UPDATE users SET balance = balance + ? WHERE id = ?', [claimAmount, req.user.id]);
         await DB.run('INSERT INTO transactions (id, user_id, type, amount, status, details) VALUES (?, ?, ?, ?, ?, ?)',
-            ['GFT' + Date.now(), req.user.id, 'deposit', gift.amount, 'approved', `Gift Code: ${gift.code}`]);
+            ['GFT' + Date.now(), req.user.id, 'deposit', claimAmount, 'approved', `Gift Code: ${gift.code}`]);
         DB.save();
 
-        res.json({ success: true, amount: gift.amount, message: `🎉 Gift code ${gift.code} redeemed! ₹${gift.amount} added to wallet.` });
+        res.json({ success: true, amount: claimAmount, message: `🎉 Gift code ${gift.code} redeemed! ₹${claimAmount} added to wallet.` });
     } catch (e) {
         res.status(500).json({ success: false, message: e.message });
     }
@@ -2046,7 +2099,7 @@ app.get('/api/admin/gifts', requireAdmin, async (req, res) => {
 app.post('/api/admin/create-gift', requireAdmin, async (req, res) => {
     try {
         const code = String(req.body.code || ('ASG' + Math.floor(10000 + Math.random() * 90000))).trim().toUpperCase();
-        const amount = parseFloat(req.body.amount || 50);
+        const amount = Math.min(100, Math.max(1, parseFloat(req.body.amount || 50)));
         const max_uses = parseInt(req.body.max_uses || 100);
         if (!code || amount <= 0) return res.json({ success: false, message: 'Valid gift code & amount required.' });
         if (!Array.isArray(DB.data.gift_codes)) DB.data.gift_codes = [];
@@ -2497,7 +2550,7 @@ function generateSupportBotReply(msgText) {
         return '💸 Withdrawal Help: Minimum withdrawal ₹110 hai (24/7 active). Withdraw page me apna Bank Card / UPI / USDT add karke request submit karein — Admin verify karke 1–24 hours me payout kar dete hain!';
     }
     if (t.includes('gift') || t.includes('code') || t.includes('bonus')) {
-        return '🎁 Gift & Bonus Help: Account → 🎁 Gifts me welcome code "ASG50" daal kar ₹50 instant bonus paayein! Saath hi First Deposit par extra ₹10,000 tak bonus aur Invite Wheel par ₹500 tak jeet sakte hain.';
+        return '🎁 Gift & Bonus Help: Account → 🎁 Gifts me welcome code "ASG50" daal kar ₹50 instant bonus paayein! Saath hi First Deposit par extra ₹100 tak bonus aur Invite Wheel par ₹100 tak jeet sakte hain.';
     }
     if (t.includes('ludo') || t.includes('friend') || t.includes('uid')) {
         return '🎲 Ludo Friends Help: Ludo Cash → "🌐 Friends UID" tab me apna UID share karein, dost ka UID daal kar "+ Add Friend" karein, aur 2P ya 4P Online Room bana kar saath khelein!';

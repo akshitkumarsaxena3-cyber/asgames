@@ -182,6 +182,19 @@ def init_db():
                 created_at TEXT
             )
         ''')
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS commissions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                downline_id INTEGER NOT NULL,
+                tier INTEGER NOT NULL,
+                bet_amount REAL NOT NULL,
+                commission REAL NOT NULL,
+                type TEXT DEFAULT 'deposit',
+                claimed INTEGER DEFAULT 0,
+                created_at TEXT NOT NULL
+            )
+        ''')
         cursor.execute(
             'INSERT OR IGNORE INTO gift_codes (code, amount, max_uses, claimed_by, created_at) VALUES (?, ?, ?, ?, ?)',
             ('ASG50', 50.0, 100, '[]', datetime.now().isoformat())
@@ -350,6 +363,10 @@ def init_db():
             cursor.execute('ALTER TABLE transactions ADD COLUMN net_amount REAL DEFAULT 0.0')
         except Exception:
             pass
+        try:
+            cursor.execute("ALTER TABLE commissions ADD COLUMN type TEXT DEFAULT 'deposit'")
+        except Exception:
+            pass
 
         # Ensure all new users automatically receive at least a 6-digit UID (>= 101001)
         cursor.execute('SELECT MAX(id) FROM users')
@@ -413,6 +430,63 @@ def reconcile_user_wallet_sqlite(conn, user_id):
     except Exception:
         pass
     return bal, dep_bal, win_bal
+
+def distribute_deposit_commissions(conn, user_id, deposit_amount):
+    try:
+        dep_amt = float(deposit_amount or 0)
+        if dep_amt <= 0:
+            return
+
+        cursor = conn.cursor()
+        cursor.execute('SELECT referred_by FROM users WHERE id = ?', (user_id,))
+        u = cursor.fetchone()
+        if not u or not u['referred_by']:
+            return
+
+        now_iso = datetime.now().isoformat()
+        ref1_code = u['referred_by']
+
+        # Tier 1 (5% of deposit, max ₹100 cap)
+        cursor.execute('SELECT id, referred_by FROM users WHERE invite_code = ?', (ref1_code,))
+        t1 = cursor.fetchone()
+        if not t1:
+            return
+        comm1 = min(100.0, round(dep_amt * 0.05, 2))
+        if comm1 > 0:
+            cursor.execute(
+                'INSERT INTO commissions (user_id, downline_id, tier, bet_amount, commission, type, claimed, created_at) VALUES (?, ?, 1, ?, ?, ?, 0, ?)',
+                (t1['id'], user_id, dep_amt, comm1, 'deposit', now_iso)
+            )
+
+        # Tier 2 (2% of deposit, max ₹100 cap)
+        if not t1['referred_by']:
+            return
+        cursor.execute('SELECT id, referred_by FROM users WHERE invite_code = ?', (t1['referred_by'],))
+        t2 = cursor.fetchone()
+        if not t2:
+            return
+        comm2 = min(100.0, round(dep_amt * 0.02, 2))
+        if comm2 > 0:
+            cursor.execute(
+                'INSERT INTO commissions (user_id, downline_id, tier, bet_amount, commission, type, claimed, created_at) VALUES (?, ?, 2, ?, ?, ?, 0, ?)',
+                (t2['id'], user_id, dep_amt, comm2, 'deposit', now_iso)
+            )
+
+        # Tier 3 (1% of deposit, max ₹100 cap)
+        if not t2['referred_by']:
+            return
+        cursor.execute('SELECT id FROM users WHERE invite_code = ?', (t2['referred_by'],))
+        t3 = cursor.fetchone()
+        if not t3:
+            return
+        comm3 = min(100.0, round(dep_amt * 0.01, 2))
+        if comm3 > 0:
+            cursor.execute(
+                'INSERT INTO commissions (user_id, downline_id, tier, bet_amount, commission, type, claimed, created_at) VALUES (?, ?, 3, ?, ?, ?, 0, ?)',
+                (t3['id'], user_id, dep_amt, comm3, 'deposit', now_iso)
+            )
+    except Exception as e:
+        print(f"Error distributing deposit commissions: {e}")
 
 
 # ========================================================
@@ -954,6 +1028,7 @@ def api_recharge():
                 (tx_id, user['id'], 'deposit', credit_amt, 'completed', f"Channel: {channel} | UTR: {clean_utr} | Auto-verified via MacroDroid", now_iso)
             )
             apply_user_wallet_delta(conn, user['id'], credit_amt, 'deposit')
+            distribute_deposit_commissions(conn, user['id'], credit_amt)
             cursor.execute(
                 'INSERT INTO macrodroid_logs (utr, amount, action, user_id, details, raw) VALUES (?, ?, ?, ?, ?, ?)',
                 (clean_utr, credit_amt, 'INSTANT_AUTO_CREDITED', user['id'], f"Player submitted UTR {clean_utr}. Matched existing bank payment! Credited ₹{credit_amt} instantly.", f"TxID: {tx_id}")
@@ -1089,15 +1164,40 @@ def api_referral_stats():
         return jsonify({'success': False, 'message': 'Unauthorized'}), 401
     with get_db() as conn:
         cursor = conn.cursor()
-        cursor.execute('SELECT id, phone, created_at FROM users WHERE referred_by = ?', (user['invite_code'],))
+        cursor.execute('SELECT id, phone, created_at, balance FROM users WHERE referred_by = ? ORDER BY created_at DESC', (user['invite_code'],))
         subordinates = [dict(r) for r in cursor.fetchall()]
+
+        cursor.execute('SELECT * FROM commissions WHERE user_id = ?', (user['id'],))
+        commissions = [dict(r) for r in cursor.fetchall()]
+
+        total_earned = round(sum(float(c['commission'] or 0) for c in commissions), 2)
+        unclaimed = round(sum(float(c['commission'] or 0) for c in commissions if int(c.get('claimed', 0)) == 0), 2)
+        total_turnover = round(sum(float(c['bet_amount'] or 0) for c in commissions), 2)
+
+        tier1_count = len(subordinates)
+        tier2_count = len([c for c in commissions if c.get('tier') == 2])
+        tier3_count = len([c for c in commissions if c.get('tier') == 3])
+
     return jsonify({
         'success': True,
         'invite_code': user['invite_code'],
-        'total_subordinates': len(subordinates),
-        'unclaimed_commission': 0.0,
-        'total_commission': 0.0,
-        'subordinates': subordinates
+        'invite_link': f"https://akshitkumarsaxena3-cyber.github.io/asgames/?r={user['invite_code']}",
+        'tier1Count': tier1_count,
+        'tier2Count': tier2_count,
+        'tier3Count': tier3_count,
+        'totalMembers': tier1_count + tier2_count + tier3_count,
+        'totalTurnover': total_turnover,
+        'totalEarned': total_earned,
+        'unclaimedCommission': unclaimed,
+        'unclaimed_commission': unclaimed,
+        'totalCommission': total_earned,
+        'total_commission': total_earned,
+        'subordinates': [{
+            'id': s['id'],
+            'phone': _re.sub(r'(\d{3})\d{4}(\d{3})', r'\1****\2', str(s['phone'])) if len(str(s.get('phone') or '')) >= 10 else s.get('phone'),
+            'date': s.get('created_at', ''),
+            'created_at': s.get('created_at', '')
+        } for s in subordinates[:50]]
     })
 
 @app.route('/api/referral/claim', methods=['POST'])
@@ -1105,7 +1205,23 @@ def api_referral_claim():
     user = get_current_user(request)
     if not user:
         return jsonify({'success': False, 'message': 'Unauthorized'}), 401
-    return jsonify({'success': False, 'message': 'No commission available to claim yet.'})
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute('SELECT id, commission FROM commissions WHERE user_id = ? AND claimed = 0', (user['id'],))
+        unclaimed_rows = cursor.fetchall()
+        total = round(sum(float(r['commission'] or 0) for r in unclaimed_rows), 2)
+        if total <= 0:
+            return jsonify({'success': False, 'message': 'No commission available to claim.'})
+
+        cursor.execute('UPDATE commissions SET claimed = 1 WHERE user_id = ? AND claimed = 0', (user['id'],))
+        apply_user_wallet_delta(conn, user['id'], total, 'deposit')
+        now_iso = datetime.now().isoformat()
+        cursor.execute(
+            'INSERT INTO transactions (id, user_id, type, amount, status, details, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+            (f"TX{int(time.time()*1000)}", user['id'], 'commission', total, 'approved', 'Referral Commission Claim', now_iso)
+        )
+        conn.commit()
+    return jsonify({'success': True, 'message': f'Successfully claimed ₹{total:.2f} referral commission!', 'claimed': total})
 
 
 # ========================================================
@@ -1663,6 +1779,7 @@ def api_admin_approve_deposit():
         amt = float(tx['amount'])
         u_id = tx['user_id']
         apply_user_wallet_delta(conn, u_id, amt, 'deposit')
+        distribute_deposit_commissions(conn, u_id, amt)
         cursor.execute('UPDATE transactions SET status = "completed" WHERE id = ?', (tx_id,))
         conn.commit()
 
@@ -2110,6 +2227,7 @@ def api_webhook_macrodroid():
             new_details = (pending_tx['details'] or '') + ' | Auto-approved by MacroDroid Webhook'
             c.execute('UPDATE transactions SET status = "completed", details = ? WHERE id = ?', (new_details, pending_tx['id']))
             apply_user_wallet_delta(conn, pending_tx['user_id'], credited_amt, 'deposit')
+            distribute_deposit_commissions(conn, pending_tx['user_id'], credited_amt)
             md_id = f"MD{int(time.time()*1000)}"
             c.execute(
                 'INSERT INTO macrodroid_payments (id, utr, amount, sender, raw_message, status, matched_user_id, matched_tx_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
@@ -2215,7 +2333,7 @@ def api_gift_redeem():
             return jsonify({'success': False, 'message': 'This gift code has reached its maximum claim limit!'}), 400
 
         claimed.append(user['id'])
-        amt = float(g['amount'])
+        amt = min(100.0, max(1.0, float(g['amount'])))
         c.execute('UPDATE gift_codes SET claimed_by = ? WHERE code = ?', (json.dumps(claimed), g['code']))
         apply_user_wallet_delta(conn, user['id'], amt, 'deposit')
         c.execute(
@@ -2258,7 +2376,7 @@ def api_admin_create_gift():
         return jsonify({'success': False, 'message': 'Unauthorized'}), 403
     data = request.get_json(silent=True) or {}
     code = str(data.get('code') or f"ASG{random.randint(10000,99999)}").strip().upper()
-    amount = float(data.get('amount', 50))
+    amount = min(100.0, max(1.0, float(data.get('amount', 50))))
     max_uses = int(data.get('max_uses', 100))
     if not code or amount <= 0:
         return jsonify({'success': False, 'message': 'Valid gift code & amount required.'}), 400
@@ -3157,6 +3275,9 @@ def api_sync_pull():
         cursor.execute('SELECT * FROM macrodroid_payments ORDER BY created_at DESC LIMIT 100')
         md_rows = [dict(r) for r in cursor.fetchall()]
 
+        cursor.execute('SELECT * FROM commissions ORDER BY id DESC LIMIT 500')
+        comm_rows = [dict(r) for r in cursor.fetchall()]
+
     return jsonify({
         'success': True,
         'users': users,
@@ -3166,7 +3287,8 @@ def api_sync_pull():
         'settings': settings,
         'gift_codes': gifts,
         'game_history': gh_rows,
-        'macrodroid_payments': md_rows
+        'macrodroid_payments': md_rows,
+        'commissions': comm_rows
     })
 
 @app.route('/api/sync/push', methods=['POST'])
@@ -3328,6 +3450,24 @@ def api_sync_push():
                 cursor.execute(
                     'INSERT INTO macrodroid_payments (id, utr, amount, sender, raw_message, status, matched_user_id, matched_tx_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
                     (mp_id, mp_utr, float(mp.get('amount', 0) or 0), mp.get('sender', ''), mp.get('raw_message', ''), mp.get('status', 'unclaimed'), mp.get('matched_user_id'), mp.get('matched_tx_id'), mp.get('created_at', datetime.now().isoformat()))
+                )
+
+        # Upsert Commissions
+        commissions_rows = data.get('commissions', [])
+        for c_row in commissions_rows:
+            c_id = c_row.get('id')
+            if not c_id:
+                continue
+            cursor.execute('SELECT id FROM commissions WHERE id = ?', (c_id,))
+            if cursor.fetchone():
+                cursor.execute(
+                    'UPDATE commissions SET claimed = ? WHERE id = ?',
+                    (int(c_row.get('claimed', 0)), c_id)
+                )
+            else:
+                cursor.execute(
+                    'INSERT INTO commissions (id, user_id, downline_id, tier, bet_amount, commission, type, claimed, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                    (c_id, c_row.get('user_id'), c_row.get('downline_id'), c_row.get('tier', 1), float(c_row.get('bet_amount', 0)), float(c_row.get('commission', 0)), c_row.get('type', 'deposit'), int(c_row.get('claimed', 0)), c_row.get('created_at', datetime.now().isoformat()))
                 )
 
         conn.commit()

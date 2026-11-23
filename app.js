@@ -253,6 +253,12 @@ class StateManager {
     }
 
     addBalance(amount, desc, skipServerSync = false) {
+        if (desc && typeof desc === 'string') {
+            const dLow = desc.toLowerCase();
+            if (dLow.includes('bonus') || dLow.includes('gift') || dLow.includes('reward') || dLow.includes('spin') || dLow.includes('wheel') || dLow.includes('check-in')) {
+                amount = Math.min(100, amount);
+            }
+        }
         this.balance = Math.round((this.balance + amount) * 100) / 100;
         if (this.user) {
             this.user.balance = this.balance;
@@ -877,7 +883,7 @@ class StateManager {
         const spinBtn = document.getElementById('btn-spin-wheel');
         if (!wheel || !spinBtn) return;
 
-        const prizes = [10, 50, 5, 100, 20, 500, 15, 200];
+        const prizes = [10, 50, 5, 100, 20, 75, 15, 30];
         let isSpinning = false;
         let currentRotation = 0;
 
@@ -887,7 +893,7 @@ class StateManager {
             spinBtn.disabled = true;
 
             const prizeIndex = Math.floor(Math.random() * prizes.length);
-            const prizeAmount = prizes[prizeIndex];
+            const prizeAmount = Math.min(100, prizes[prizeIndex]);
             const extraDegrees = 360 * 5 + (360 - (prizeIndex * (360 / prizes.length)) - 22.5);
             currentRotation += extraDegrees;
 
@@ -1433,14 +1439,14 @@ async function submitRegister() {
 // EXTRA FIRST DEPOSIT BONUS POPUP (AUTO AFTER LOGIN)
 // ========================================================
 const FIRST_DEPOSIT_TIERS = [
-    { deposit: 200000, bonus: 10000 },
-    { deposit: 100000, bonus: 5000 },
-    { deposit: 30000,  bonus: 2000 },
-    { deposit: 10000,  bonus: 600 },
-    { deposit: 3000,   bonus: 300 },
-    { deposit: 1000,   bonus: 150 },
-    { deposit: 500,    bonus: 100 },
-    { deposit: 300,    bonus: 60 },
+    { deposit: 200000, bonus: 100 },
+    { deposit: 100000, bonus: 100 },
+    { deposit: 30000,  bonus: 100 },
+    { deposit: 10000,  bonus: 100 },
+    { deposit: 3000,   bonus: 100 },
+    { deposit: 1000,   bonus: 100 },
+    { deposit: 500,    bonus: 80 },
+    { deposit: 300,    bonus: 50 },
     { deposit: 100,    bonus: 20 }
 ];
 
@@ -1517,16 +1523,16 @@ function goFdbActivity() {
 // AGENCY / PROMOTION SUB-VIEWS & INVITATION BONUS (10 TIERS)
 // ========================================================
 const INVITATION_BONUS_TIERS = [
-    { level: 1,  invitees: 1,    recharge: 300, reward: 55 },
-    { level: 2,  invitees: 3,    recharge: 300, reward: 155 },
-    { level: 3,  invitees: 10,   recharge: 300, reward: 555 },
-    { level: 4,  invitees: 30,   recharge: 300, reward: 1555 },
-    { level: 5,  invitees: 60,   recharge: 300, reward: 2955 },
-    { level: 6,  invitees: 100,  recharge: 300, reward: 5655 },
-    { level: 7,  invitees: 200,  recharge: 300, reward: 11555 },
-    { level: 8,  invitees: 500,  recharge: 300, reward: 28555 },
-    { level: 9,  invitees: 1000, recharge: 300, reward: 58555 },
-    { level: 10, invitees: 5000, recharge: 300, reward: 365555 }
+    { level: 1,  invitees: 1,    recharge: 300, reward: 20 },
+    { level: 2,  invitees: 3,    recharge: 300, reward: 35 },
+    { level: 3,  invitees: 10,   recharge: 300, reward: 50 },
+    { level: 4,  invitees: 30,   recharge: 300, reward: 65 },
+    { level: 5,  invitees: 60,   recharge: 300, reward: 75 },
+    { level: 6,  invitees: 100,  recharge: 300, reward: 85 },
+    { level: 7,  invitees: 200,  recharge: 300, reward: 90 },
+    { level: 8,  invitees: 500,  recharge: 300, reward: 95 },
+    { level: 9,  invitees: 1000, recharge: 300, reward: 100 },
+    { level: 10, invitees: 5000, recharge: 300, reward: 100 }
 ];
 
 function renderInvitationBonusCards() {
@@ -1598,8 +1604,9 @@ function claimInvitationBonus(level, reward, needed) {
     }
     claimed.push(level);
     localStorage.setItem('asg_invb_claimed', JSON.stringify(claimed));
-    sm.addBalance(reward, `Invitation Bonus Tier ${level}`);
-    sm.showWinModal(reward, `Invitation Bonus #${level} Unlocked!`);
+    const cappedReward = Math.min(100, reward);
+    sm.addBalance(cappedReward, `Invitation Bonus Tier ${level}`);
+    sm.showWinModal(cappedReward, `Invitation Bonus #${level} Unlocked!`);
     renderInvitationBonusCards();
 }
 

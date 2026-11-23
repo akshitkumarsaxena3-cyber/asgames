@@ -8,16 +8,16 @@ class InviteWheelGame {
         this.ctx = null;
         this.size = 320;
 
-        // Exact 8 slices matching the luxury Invite Wheel design
+        // Exact 8 slices matching the luxury Invite Wheel design (max bonus capped at ₹100)
         this.slices = [
-            { label: '₹198', min: 198, max: 198, icon: '💵', color: '#fde067', weight: 4 },
-            { label: '₹178', min: 178, max: 178, icon: '💵', color: '#fffdf2', weight: 6 },
-            { label: '₹98',  min: 98,  max: 98,  icon: '🪙', color: '#fde067', weight: 12 },
-            { label: '₹118', min: 118, max: 118, icon: '🪙', color: '#fffdf2', weight: 10 },
-            { label: '₹158', min: 158, max: 158, icon: '💵', color: '#fde067', weight: 7 },
+            { label: '₹100', min: 100, max: 100, icon: '💵', color: '#fde067', weight: 4 },
+            { label: '₹80',  min: 80,  max: 80,  icon: '💵', color: '#fffdf2', weight: 6 },
+            { label: '₹50',  min: 50,  max: 50,  icon: '🪙', color: '#fde067', weight: 12 },
+            { label: '₹75',  min: 75,  max: 75,  icon: '🪙', color: '#fffdf2', weight: 10 },
+            { label: '₹60',  min: 60,  max: 60,  icon: '💵', color: '#fde067', weight: 7 },
             { label: '₹0-10',min: 2,   max: 10,  icon: '🪙', color: '#fffdf2', weight: 28 },
-            { label: '₹38',  min: 38,  max: 38,  icon: '🪙', color: '#fde067', weight: 20 },
-            { label: '₹58',  min: 58,  max: 58,  icon: '🪙', color: '#fffdf2', weight: 13 }
+            { label: '₹25',  min: 25,  max: 25,  icon: '🪙', color: '#fde067', weight: 20 },
+            { label: '₹35',  min: 35,  max: 35,  icon: '🪙', color: '#fffdf2', weight: 13 }
         ];
 
         this.rotation = 0; // radians
@@ -25,11 +25,11 @@ class InviteWheelGame {
         this.ledPhase = 0;
 
         // Persistent user wheel state
-        this.wheelAmount = parseFloat(localStorage.getItem('asg_wheel_amt') || '0');
+        this.wheelAmount = Math.min(100, parseFloat(localStorage.getItem('asg_wheel_amt') || '0'));
         const savedSpins = localStorage.getItem('asg_wheel_spins');
         this.spinsLeft = savedSpins !== null ? parseInt(savedSpins) : 3; // 3 Free Spins for new players!
         this.history = JSON.parse(localStorage.getItem('asg_wheel_hist') || '[]');
-        this.cashOutTarget = 500; // Cash out into real wallet at ₹500 (exact BDG target!)
+        this.cashOutTarget = 100; // Cash out into real wallet at ₹100 (capped at ₹100)
 
         this.init();
     }
@@ -160,11 +160,12 @@ class InviteWheelGame {
 
     onSpinFinish(winIdx) {
         const slice = this.slices[winIdx];
-        const prize = slice.min === slice.max
+        const rawPrize = slice.min === slice.max
             ? slice.min
             : Math.floor(slice.min + Math.random() * (slice.max - slice.min + 1));
+        const prize = Math.min(100, rawPrize);
 
-        this.wheelAmount = Math.round((this.wheelAmount + prize) * 100) / 100;
+        this.wheelAmount = Math.min(100, Math.round((this.wheelAmount + prize) * 100) / 100);
         localStorage.setItem('asg_wheel_amt', String(this.wheelAmount));
 
         this.history.unshift({
@@ -186,7 +187,7 @@ class InviteWheelGame {
             return;
         }
 
-        const payout = this.wheelAmount;
+        const payout = Math.min(100, this.wheelAmount);
         this.wheelAmount = 0;
         localStorage.setItem('asg_wheel_amt', '0');
         this.sm.addBalance(payout, `Invite Wheel Cash Out (₹${payout.toFixed(2)})`);
@@ -257,8 +258,8 @@ class InviteWheelGame {
         alert(
             '🎡 INVITE WHEEL RULES:\n\n' +
             '1. Every player gets 3 FREE SPINS daily.\n' +
-            '2. Spin the wheel to win cash up to ₹198 per spin!\n' +
-            '3. Reach ₹500 and tap CASH OUT to transfer winnings straight to your main wallet.\n' +
+            '2. Spin the wheel to win cash up to ₹100 per spin!\n' +
+            '3. Reach ₹100 and tap CASH OUT to transfer winnings straight to your main wallet.\n' +
             '4. Share your Invite Link to get extra Free Spins!'
         );
     }
