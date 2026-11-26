@@ -620,6 +620,32 @@ async function distributeDepositCommission(userId, depositAmount) {
         const depAmt = parseFloat(depositAmount || 0);
         if (depAmt <= 0) return;
 
+        // 1. Extra First Deposit Bonus for Depositor on qualifying recharge
+        try {
+            const uObj = (DB.data.users || []).find(u => String(u.id) === String(userId));
+            const userTxList = (DB.data.transactions || []).filter(t => String(t.user_id) === String(userId));
+            const hasReceivedFdb = (uObj && uObj.first_deposit_bonus_received) || userTxList.some(t => t.details && t.details.includes('First Deposit Bonus'));
+
+            if (!hasReceivedFdb && depAmt >= 100) {
+                let fdbBonus = 0;
+                if (depAmt >= 1000) fdbBonus = 100;
+                else if (depAmt >= 500) fdbBonus = 80;
+                else if (depAmt >= 300) fdbBonus = 50;
+                else if (depAmt >= 100) fdbBonus = 20;
+
+                if (fdbBonus > 0) {
+                    if (uObj) uObj.first_deposit_bonus_received = 1;
+                    await DB.run('UPDATE users SET balance = balance + ? WHERE id = ?', [fdbBonus, userId, 'deposit']);
+                    await DB.run('INSERT INTO transactions (id, user_id, type, amount, status, details) VALUES (?, ?, ?, ?, ?, ?)',
+                        ['FDB' + Date.now(), userId, 'deposit', fdbBonus, 'approved', `Extra First Deposit Bonus (₹${fdbBonus}) on recharge of ₹${depAmt}`]);
+                    console.log(`[BONUS] Credited First Deposit Bonus of ₹${fdbBonus} to User #${userId}`);
+                }
+            }
+        } catch (fdbErr) {
+            console.error('First deposit bonus credit error:', fdbErr);
+        }
+
+        // 2. Distribute Referral Deposit Commission to Upliners (Directly credited to wallet upon deposit)
         const user = await DB.get('SELECT referred_by FROM users WHERE id = ?', [userId]);
         if (!user || !user.referred_by) return;
 
@@ -628,8 +654,12 @@ async function distributeDepositCommission(userId, depositAmount) {
         if (!tier1User) return;
         const comm1 = Math.min(100, Math.floor(depAmt * 0.05 * 100) / 100);
         if (comm1 > 0) {
-            await DB.run(`INSERT INTO commissions (user_id, downline_id, tier, bet_amount, commission, type) VALUES (?, ?, ?, ?, ?, ?)`,
-                [tier1User.id, userId, 1, depAmt, comm1, 'deposit']);
+            await DB.run(`INSERT INTO commissions (user_id, downline_id, tier, bet_amount, commission, type, claimed) VALUES (?, ?, ?, ?, ?, ?, 1)`,
+                [tier1User.id, userId, 1, depAmt, comm1, 'deposit', 1]);
+            await DB.run('UPDATE users SET balance = balance + ? WHERE id = ?', [comm1, tier1User.id]);
+            await DB.run('INSERT INTO transactions (id, user_id, type, amount, status, details) VALUES (?, ?, ?, ?, ?, ?)',
+                ['COMM' + Date.now() + '_1', tier1User.id, 'commission', comm1, 'approved', `Referral Deposit Commission (Tier 1, 5%) from User #${userId}`]);
+            console.log(`[COMMISSION] Direct credited ₹${comm1} to Tier 1 Referrer #${tier1User.id} on deposit of ₹${depAmt}`);
         }
 
         // Tier 2 (2% of deposit, max ₹100 cap)
@@ -638,8 +668,12 @@ async function distributeDepositCommission(userId, depositAmount) {
         if (!tier2User) return;
         const comm2 = Math.min(100, Math.floor(depAmt * 0.02 * 100) / 100);
         if (comm2 > 0) {
-            await DB.run(`INSERT INTO commissions (user_id, downline_id, tier, bet_amount, commission, type) VALUES (?, ?, ?, ?, ?, ?)`,
-                [tier2User.id, userId, 2, depAmt, comm2, 'deposit']);
+            await DB.run(`INSERT INTO commissions (user_id, downline_id, tier, bet_amount, commission, type, claimed) VALUES (?, ?, ?, ?, ?, ?, 1)`,
+                [tier2User.id, userId, 2, depAmt, comm2, 'deposit', 1]);
+            await DB.run('UPDATE users SET balance = balance + ? WHERE id = ?', [comm2, tier2User.id]);
+            await DB.run('INSERT INTO transactions (id, user_id, type, amount, status, details) VALUES (?, ?, ?, ?, ?, ?)',
+                ['COMM' + Date.now() + '_2', tier2User.id, 'commission', comm2, 'approved', `Referral Deposit Commission (Tier 2, 2%) from User #${userId}`]);
+            console.log(`[COMMISSION] Direct credited ₹${comm2} to Tier 2 Referrer #${tier2User.id} on deposit of ₹${depAmt}`);
         }
 
         // Tier 3 (1% of deposit, max ₹100 cap)
@@ -648,8 +682,12 @@ async function distributeDepositCommission(userId, depositAmount) {
         if (!tier3User) return;
         const comm3 = Math.min(100, Math.floor(depAmt * 0.01 * 100) / 100);
         if (comm3 > 0) {
-            await DB.run(`INSERT INTO commissions (user_id, downline_id, tier, bet_amount, commission, type) VALUES (?, ?, ?, ?, ?, ?)`,
-                [tier3User.id, userId, 3, depAmt, comm3, 'deposit']);
+            await DB.run(`INSERT INTO commissions (user_id, downline_id, tier, bet_amount, commission, type, claimed) VALUES (?, ?, ?, ?, ?, ?, 1)`,
+                [tier3User.id, userId, 3, depAmt, comm3, 'deposit', 1]);
+            await DB.run('UPDATE users SET balance = balance + ? WHERE id = ?', [comm3, tier3User.id]);
+            await DB.run('INSERT INTO transactions (id, user_id, type, amount, status, details) VALUES (?, ?, ?, ?, ?, ?)',
+                ['COMM' + Date.now() + '_3', tier3User.id, 'commission', comm3, 'approved', `Referral Deposit Commission (Tier 3, 1%) from User #${userId}`]);
+            console.log(`[COMMISSION] Direct credited ₹${comm3} to Tier 3 Referrer #${tier3User.id} on deposit of ₹${depAmt}`);
         }
     } catch (e) {
         console.error('Deposit commission distribution error:', e);

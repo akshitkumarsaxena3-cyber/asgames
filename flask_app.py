@@ -449,12 +449,39 @@ def distribute_deposit_commissions(conn, user_id, deposit_amount):
             return
 
         cursor = conn.cursor()
+        now_iso = datetime.now().isoformat()
+
+        # 1. Extra First Deposit Bonus for Depositor on qualifying recharge
+        try:
+            cursor.execute("SELECT COUNT(*) as cnt FROM transactions WHERE user_id = ? AND details LIKE '%First Deposit Bonus%'", (user_id,))
+            fdb_row = cursor.fetchone()
+            prior_fdb = (fdb_row['cnt'] if fdb_row else 0)
+            if prior_fdb == 0 and dep_amt >= 100:
+                fdb_bonus = 0.0
+                if dep_amt >= 1000:
+                    fdb_bonus = 100.0
+                elif dep_amt >= 500:
+                    fdb_bonus = 80.0
+                elif dep_amt >= 300:
+                    fdb_bonus = 50.0
+                elif dep_amt >= 100:
+                    fdb_bonus = 20.0
+
+                if fdb_bonus > 0:
+                    apply_wallet_delta(conn, user_id, fdb_bonus, 'deposit')
+                    cursor.execute(
+                        'INSERT INTO transactions (id, user_id, type, amount, status, details, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+                        (f"FDB{int(time.time()*1000)}", user_id, 'deposit', fdb_bonus, 'approved', f"Extra First Deposit Bonus (₹{fdb_bonus:.2f}) on recharge of ₹{dep_amt:.2f}", now_iso)
+                    )
+        except Exception as fdb_e:
+            print(f"Error crediting first deposit bonus: {fdb_e}")
+
+        # 2. Distribute Referral Deposit Commission to Upliners (Directly credited to wallet upon deposit)
         cursor.execute('SELECT referred_by FROM users WHERE id = ?', (user_id,))
         u = cursor.fetchone()
         if not u or not u['referred_by']:
             return
 
-        now_iso = datetime.now().isoformat()
         ref1_code = u['referred_by']
 
         # Tier 1 (5% of deposit, max ₹100 cap)
@@ -465,8 +492,13 @@ def distribute_deposit_commissions(conn, user_id, deposit_amount):
         comm1 = min(100.0, round(dep_amt * 0.05, 2))
         if comm1 > 0:
             cursor.execute(
-                'INSERT INTO commissions (user_id, downline_id, tier, bet_amount, commission, type, claimed, created_at) VALUES (?, ?, 1, ?, ?, ?, 0, ?)',
+                'INSERT INTO commissions (user_id, downline_id, tier, bet_amount, commission, type, claimed, created_at) VALUES (?, ?, 1, ?, ?, ?, 1, ?)',
                 (t1['id'], user_id, dep_amt, comm1, 'deposit', now_iso)
+            )
+            apply_wallet_delta(conn, t1['id'], comm1, 'commission')
+            cursor.execute(
+                'INSERT INTO transactions (id, user_id, type, amount, status, details, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+                (f"COMM{int(time.time()*1000)}_1", t1['id'], 'commission', comm1, 'approved', f"Referral Deposit Commission (Tier 1, 5%) from User #{user_id}", now_iso)
             )
 
         # Tier 2 (2% of deposit, max ₹100 cap)
@@ -479,8 +511,13 @@ def distribute_deposit_commissions(conn, user_id, deposit_amount):
         comm2 = min(100.0, round(dep_amt * 0.02, 2))
         if comm2 > 0:
             cursor.execute(
-                'INSERT INTO commissions (user_id, downline_id, tier, bet_amount, commission, type, claimed, created_at) VALUES (?, ?, 2, ?, ?, ?, 0, ?)',
+                'INSERT INTO commissions (user_id, downline_id, tier, bet_amount, commission, type, claimed, created_at) VALUES (?, ?, 2, ?, ?, ?, 1, ?)',
                 (t2['id'], user_id, dep_amt, comm2, 'deposit', now_iso)
+            )
+            apply_wallet_delta(conn, t2['id'], comm2, 'commission')
+            cursor.execute(
+                'INSERT INTO transactions (id, user_id, type, amount, status, details, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+                (f"COMM{int(time.time()*1000)}_2", t2['id'], 'commission', comm2, 'approved', f"Referral Deposit Commission (Tier 2, 2%) from User #{user_id}", now_iso)
             )
 
         # Tier 3 (1% of deposit, max ₹100 cap)
@@ -493,8 +530,13 @@ def distribute_deposit_commissions(conn, user_id, deposit_amount):
         comm3 = min(100.0, round(dep_amt * 0.01, 2))
         if comm3 > 0:
             cursor.execute(
-                'INSERT INTO commissions (user_id, downline_id, tier, bet_amount, commission, type, claimed, created_at) VALUES (?, ?, 3, ?, ?, ?, 0, ?)',
+                'INSERT INTO commissions (user_id, downline_id, tier, bet_amount, commission, type, claimed, created_at) VALUES (?, ?, 3, ?, ?, ?, 1, ?)',
                 (t3['id'], user_id, dep_amt, comm3, 'deposit', now_iso)
+            )
+            apply_wallet_delta(conn, t3['id'], comm3, 'commission')
+            cursor.execute(
+                'INSERT INTO transactions (id, user_id, type, amount, status, details, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+                (f"COMM{int(time.time()*1000)}_3", t3['id'], 'commission', comm3, 'approved', f"Referral Deposit Commission (Tier 3, 1%) from User #{user_id}", now_iso)
             )
     except Exception as e:
         print(f"Error distributing deposit commissions: {e}")

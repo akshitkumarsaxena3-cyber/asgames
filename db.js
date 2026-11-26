@@ -899,23 +899,29 @@ class DataStore {
 
         // 9. Insert Commission
         if (sql.includes('INSERT INTO commissions')) {
-            let user_id, downline_id, tier, bet_amount, commission, type;
-            if (params.length >= 6) {
+            let user_id, downline_id, tier, bet_amount, commission, type, claimed;
+            if (params.length >= 7) {
+                [user_id, downline_id, tier, bet_amount, commission, type, claimed] = params;
+            } else if (params.length === 6) {
                 [user_id, downline_id, tier, bet_amount, commission, type] = params;
+                claimed = (type === 'deposit') ? 1 : 0;
             } else if (params.length === 5) {
                 const tierMatch = sql.match(/VALUES\s*\(\s*\?,\s*\?,\s*(\d+)/i);
                 if (tierMatch) {
                     tier = parseInt(tierMatch[1]);
                     [user_id, downline_id, bet_amount, commission, type] = params;
+                    claimed = (type === 'deposit') ? 1 : 0;
                 } else {
                     [user_id, downline_id, tier, bet_amount, commission] = params;
                     type = 'bet';
+                    claimed = 0;
                 }
             } else {
                 const tierMatch = sql.match(/VALUES\s*\(\s*\?,\s*\?,\s*(\d+)/i);
                 tier = tierMatch ? parseInt(tierMatch[1]) : 1;
                 [user_id, downline_id, bet_amount, commission] = params;
                 type = 'bet';
+                claimed = 0;
             }
             const comm = {
                 id: this.data.nextCommissionId++,
@@ -925,7 +931,7 @@ class DataStore {
                 bet_amount: parseFloat(bet_amount || 0),
                 commission: parseFloat(commission || 0),
                 type: type || 'bet',
-                claimed: 0,
+                claimed: parseInt(claimed !== undefined ? claimed : (type === 'deposit' ? 1 : 0)),
                 created_at: new Date().toISOString()
             };
             this.data.commissions.push(comm);
