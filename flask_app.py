@@ -696,6 +696,7 @@ def draw_round_if_needed(period, mode='30s'):
 
             new_status = 'won' if won else 'lost'
             cursor.execute('UPDATE bets SET win_amount = ?, status = ? WHERE id = ?', (win_amt, new_status, b_id))
+            cursor.execute('UPDATE game_history SET win_amount = ?, status = ? WHERE id = ?', (win_amt, 'Won' if won else 'Lost', b_id))
             if won and win_amt > 0:
                 net_payout = math.floor(win_amt * 0.98 * 100) / 100
                 apply_user_wallet_delta(conn, u_id, net_payout, 'win')
@@ -1135,13 +1136,15 @@ def api_my_transactions():
     if not user:
         return jsonify({'success': False, 'message': 'Unauthorized'}), 401
 
+    uid = int(user['id'])
+    alt_uid = uid + 100000 if uid < 100000 else uid - 100000
     tx_type = request.args.get('type')
     with get_db() as conn:
         cursor = conn.cursor()
         if tx_type:
-            cursor.execute('SELECT * FROM transactions WHERE user_id = ? AND type = ? ORDER BY created_at DESC LIMIT 100', (user['id'], tx_type))
+            cursor.execute('SELECT * FROM transactions WHERE user_id IN (?, ?) AND type = ? ORDER BY created_at DESC LIMIT 100', (uid, alt_uid, tx_type))
         else:
-            cursor.execute('SELECT * FROM transactions WHERE user_id = ? ORDER BY created_at DESC LIMIT 100', (user['id'],))
+            cursor.execute('SELECT * FROM transactions WHERE user_id IN (?, ?) ORDER BY created_at DESC LIMIT 100', (uid, alt_uid))
         rows = [dict(r) for r in cursor.fetchall()]
 
     return jsonify({'success': True, 'transactions': rows})
@@ -1152,9 +1155,11 @@ def api_my_withdrawals():
     if not user:
         return jsonify({'success': False, 'message': 'Unauthorized'}), 401
 
+    uid = int(user['id'])
+    alt_uid = uid + 100000 if uid < 100000 else uid - 100000
     with get_db() as conn:
         cursor = conn.cursor()
-        cursor.execute('SELECT * FROM transactions WHERE user_id = ? AND type = "withdraw" ORDER BY created_at DESC LIMIT 100', (user['id'],))
+        cursor.execute('SELECT * FROM transactions WHERE user_id IN (?, ?) AND type = "withdraw" ORDER BY created_at DESC LIMIT 100', (uid, alt_uid))
         rows = [dict(r) for r in cursor.fetchall()]
 
     return jsonify({'success': True, 'withdrawals': rows, 'transactions': rows})
@@ -1174,6 +1179,15 @@ def api_sync_game_delta():
 
     with get_db() as conn:
         new_bal, new_dep, new_win = apply_user_wallet_delta(conn, user['id'], delta, 'game')
+        tx_type = 'win' if delta > 0 else 'bet'
+        game = str(data.get('game', 'Game')).strip()
+        details = str(data.get('details', '')).strip() or f"{game} {'Win' if delta > 0 else 'Bet'}"
+        tx_id = str(data.get('id', '')).strip() or f"TX{int(time.time()*1000)}{random.randint(100,999)}"
+        cursor = conn.cursor()
+        cursor.execute(
+            'INSERT INTO transactions (id, user_id, type, amount, status, details, created_at) VALUES (?, ?, ?, ?, "approved", ?, ?)',
+            (tx_id, user['id'], tx_type, abs(delta), details, datetime.now().isoformat())
+        )
         conn.commit()
 
     return jsonify({'success': True, 'balance': new_bal, 'deposit_balance': new_dep, 'winning_balance': new_win})
@@ -1317,7 +1331,7 @@ def api_game_bet():
 
     with get_db() as conn:
         cursor = conn.cursor()
-        cursor.execute('SELECT 1 FROM game_rounds WHERE (period_id = ? OR period = ?) AND (game_mode = ? OR game_mode IS NULL)', (effective_period, effective_period, game_mode))
+        cursor.execute('SELECT 1 FROM game_rounds WHERE period = ?', (effective_period,))
         if cursor.fetchone():
             return jsonify({'success': False, 'message': 'This round has already closed and drawn! Please wait for next round.'}), 400
         cursor.execute('SELECT balance FROM users WHERE id = ?', (user['id'],))
@@ -1333,6 +1347,15 @@ def api_game_bet():
         cursor.execute(
             'INSERT INTO bets (id, user_id, period, select_type, select_val, amount, win_amount, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
             (bet_id, user['id'], effective_period, select_type, select_val, amount, 0.0, 'pending', now_iso)
+        )
+        bet_detail = f"Win Go {game_mode} Period #{effective_period} • {select_val.upper()}"
+        cursor.execute(
+            'INSERT INTO transactions (id, user_id, type, amount, status, details, created_at) VALUES (?, ?, "bet", ?, "approved", ?, ?)',
+            (bet_id, user['id'], amount, bet_detail, now_iso)
+        )
+        cursor.execute(
+            'INSERT INTO game_history (id, user_id, game, detail, bet_amount, win_amount, status, created_at) VALUES (?, ?, "Win Go", ?, ?, 0.0, "Pending", ?)',
+            (bet_id, user['id'], f"{game_mode} • #{effective_period} • {select_val.upper()}", amount, now_iso)
         )
         conn.commit()
 
@@ -1377,10 +1400,22 @@ def api_game_my_bets():
     if not user:
         return jsonify({'success': False, 'message': 'Unauthorized'}), 401
 
+    uid = int(user['id'])
+    alt_uid = uid + 100000 if uid < 100000 else uid - 100000
     with get_db() as conn:
         cursor = conn.cursor()
-        cursor.execute('SELECT * FROM bets WHERE user_id = ? ORDER BY created_at DESC LIMIT 50', (user['id'],))
+        cursor.execute('SELECT * FROM bets WHERE user_id IN (?, ?) ORDER BY created_at DESC LIMIT 50', (uid, alt_uid))
         rows = [dict(r) for r in cursor.fetchall()]
+
+        for b in rows:
+            p = str(b.get('period') or '')
+            cursor.execute('SELECT number, color FROM game_rounds WHERE period = ?', (p,))
+            rnd = cursor.fetchone()
+            if rnd:
+                num = rnd['number']
+                b['winning_number'] = num
+                b['winning_color'] = rnd['color']
+                b['winning_size'] = 'Big' if (num is not None and num >= 5) else 'Small'
 
     return jsonify({'success': True, 'bets': rows})
 
@@ -3051,16 +3086,30 @@ def api_game_my_history():
         c = conn.cursor()
         c.execute('SELECT * FROM game_history WHERE user_id IN (?, ?) ORDER BY created_at DESC LIMIT 80', (uid, alt_uid))
         unified = [dict(r) for r in c.fetchall()]
-        seen = {h['id'] for h in unified}
+        seen = {str(h['id']) for h in unified}
+
         c.execute('SELECT * FROM bets WHERE user_id IN (?, ?) ORDER BY created_at DESC LIMIT 40', (uid, alt_uid))
-        for b in c.fetchall():
-            if b['id'] not in seen:
-                st = 'Won' if b['status'] == 'won' else ('Lost' if b['status'] == 'lost' else 'Pending')
+        bets = [dict(r) for r in c.fetchall()]
+        bets_map = {str(b['id']): b for b in bets}
+
+        for h in unified:
+            hid = str(h['id'])
+            if str(h.get('status', '')).lower() == 'pending' and hid in bets_map:
+                b = bets_map[hid]
+                b_st = str(b.get('status') or '').lower()
+                if b_st in ('won', 'lost'):
+                    h['status'] = 'Won' if b_st == 'won' else 'Lost'
+                    h['win_amount'] = float(b.get('win_amount') or 0)
+
+        for b in bets:
+            bid = str(b['id'])
+            if bid not in seen:
+                st = 'Won' if str(b['status']).lower() == 'won' else ('Lost' if str(b['status']).lower() == 'lost' else 'Pending')
                 unified.append({
                     'id': b['id'],
                     'user_id': user['id'],
                     'game': 'Win Go',
-                    'detail': f"Period #{b['period']} • {str(b['select_val']).upper()}",
+                    'detail': f"#{b['period']} • {str(b['select_val']).upper()}",
                     'bet_amount': float(b['amount'] or 0),
                     'win_amount': float(b['win_amount'] or 0),
                     'status': st,
@@ -3205,6 +3254,9 @@ def api_king_bet():
         c.execute('''INSERT INTO game_history (id, user_id, game, detail, bet_amount, win_amount, status, created_at)
                      VALUES (?, ?, "AS King", ?, ?, 0, "Pending", ?)''',
                   (bet_id, user['id'], f"{market.upper()} • {bet_type.upper()} {clean_num} ({mult}x)", amount, now_iso))
+        c.execute('''INSERT INTO transactions (id, user_id, type, amount, status, details, created_at)
+                     VALUES (?, ?, "bet", ?, "approved", ?, ?)''',
+                  (bet_id, user['id'], amount, f"AS King • {market.upper()} ({bet_type.upper()} {clean_num})", now_iso))
         conn.commit()
     return jsonify({
         'success': True,

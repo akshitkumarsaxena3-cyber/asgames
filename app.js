@@ -212,7 +212,7 @@ class StateManager {
         if (walMainEl) walMainEl.textContent = '100%';
     }
 
-    async syncGameDelta(delta) {
+    async syncGameDelta(delta, desc = '') {
         if (!this.token || !delta) return;
         this._syncLockUntil = Date.now() + 4000;
         try {
@@ -222,7 +222,11 @@ class StateManager {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${this.token}`
                 },
-                body: JSON.stringify({ delta })
+                body: JSON.stringify({
+                    delta,
+                    details: desc || (delta > 0 ? 'Game Win' : 'Game Bet'),
+                    game: (desc && desc.split(/[\s:•-]/)[0]) || 'Game'
+                })
             });
             const d = await res.json();
             if (d.success && typeof d.balance === 'number') {
@@ -267,7 +271,7 @@ class StateManager {
         }
         localStorage.setItem('asg_balance', this.balance);
         this.updateBalanceUI('up');
-        if (!skipServerSync) this.syncGameDelta(amount);
+        if (!skipServerSync) this.syncGameDelta(amount, desc);
     }
 
     deductBalance(amount, desc, skipServerSync = false) {
@@ -283,7 +287,7 @@ class StateManager {
         }
         localStorage.setItem('asg_balance', this.balance);
         this.updateBalanceUI('down');
-        if (!skipServerSync) this.syncGameDelta(-amount);
+        if (!skipServerSync) this.syncGameDelta(-amount, desc);
     }
 
     saveUserBet(bet) {
@@ -1006,25 +1010,29 @@ class StateManager {
         if (this.token) {
             try {
                 const res = await fetch('/api/wallet/transactions', {
-                    headers: { 'Authorization': `Bearer ${this.token}` }
+                    headers: { 'Authorization': `Bearer ${this.token}` },
+                    cache: 'no-store'
                 });
                 const d = await res.json();
-                if (d.success && d.transactions.length > 0) {
+                if (d.success && Array.isArray(d.transactions) && d.transactions.length > 0) {
                     container.innerHTML = d.transactions.map(tx => {
                         const isCredit = ['deposit', 'win', 'commission'].includes(tx.type);
+                        const isBet = tx.type === 'bet';
                         const st = String(tx.status || 'pending').toLowerCase();
                         const isApp = (st === 'approved' || st === 'completed');
                         const isRej = (st === 'rejected');
-                        const stColor = isApp ? '#10b981' : (isRej ? '#ef4444' : '#f5c443');
-                        const stText = isApp ? 'COMPLETED' : (isRej ? 'REJECTED (REFUNDED)' : 'PENDING');
+                        const stColor = isBet ? '#38bdf8' : (isApp ? '#10b981' : (isRej ? '#ef4444' : '#f5c443'));
+                        const stText = isBet ? 'BET PLACED' : (isApp ? 'COMPLETED' : (isRej ? 'REJECTED (REFUNDED)' : 'PENDING'));
+                        const txTitle = isBet ? 'BET' : tx.type.toUpperCase();
+                        const amt = Math.abs(parseFloat(tx.amount || 0));
                         return `
                             <div class="tx-card">
                                 <div class="tx-left">
-                                    <span class="tx-desc">${tx.type.toUpperCase()}: ${tx.details || ''}</span>
+                                    <span class="tx-desc">${txTitle}: ${tx.details || ''}</span>
                                     <span class="tx-time">${(tx.created_at || '').replace('T', ' ').slice(0, 19)} | Status: <strong style="color:${stColor}; font-weight:800;">${stText}</strong></span>
                                 </div>
                                 <div class="tx-amount ${isCredit ? 'text-win' : 'text-loss'}">
-                                    ${isCredit ? '+' : '-'}₹${tx.amount.toFixed(2)}
+                                    ${isCredit ? '+' : '-'}₹${amt.toFixed(2)}
                                 </div>
                             </div>
                         `;
@@ -2846,9 +2854,7 @@ async function loadUnifiedGameHistory() {
                 d.history.forEach(h => {
                     const hid = String(h.id);
                     serverIds.add(hid);
-                    if (!byId.has(hid) || byId.get(hid).status === 'Pending') {
-                        byId.set(hid, h);
-                    }
+                    byId.set(hid, h);
                 });
                 // Backfill any local records missing from server (e.g. after server restart)
                 localList.slice(0, 20).forEach(lh => {

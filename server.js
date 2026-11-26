@@ -353,9 +353,20 @@ async function drawServerRound(specificPeriod = null, mode = '30s') {
                 await DB.run('UPDATE bets SET status = ?, payout = ? WHERE id = ?', ['won', payout, bet.id]);
                 await DB.run('UPDATE users SET balance = balance + ? WHERE id = ?', [payout, bet.user_id]);
                 await DB.run(`INSERT INTO transactions (id, user_id, type, amount, status, details) VALUES (?, ?, ?, ?, ?, ?)`,
-                    ['TX' + Date.now() + Math.floor(Math.random() * 999), bet.user_id, 'win', payout, 'approved', `Win Go ${mode} Period #${pidStr}`]);
+                    ['TX' + Date.now() + Math.floor(Math.random() * 999), bet.user_id, 'win', payout, 'approved', `Win Go ${mode} Period #${pidStr} • Won ₹${payout}`]);
             } else {
                 await DB.run('UPDATE bets SET status = ?, payout = ? WHERE id = ?', ['lost', 0, bet.id]);
+            }
+
+            // Sync status to game_history
+            if (Array.isArray(DB.data.game_history)) {
+                const ghItem = DB.data.game_history.find(h => String(h.id) === String(bet.id));
+                if (ghItem) {
+                    ghItem.status = isWin ? 'Won' : 'Lost';
+                    ghItem.win_amount = isWin ? (Math.floor(amt * mult * 0.98 * 100) / 100) : 0;
+                    ghItem.winning_number = winningNum;
+                    ghItem.winning_color = color;
+                }
             }
 
             // Distribute 3-Tier Referral Commissions
@@ -852,6 +863,28 @@ app.post('/api/game/bet', requireAuth, async (req, res) => {
         await DB.run(`INSERT INTO bets (id, user_id, period_id, game_mode, select_type, select_value, amount, status) VALUES (?, ?, ?, ?, ?, ?, ?, 'pending')`,
             [betId, req.user.id, effectivePeriod, mode, select_type, String(select_value), betAmount]);
 
+        const nowIso = new Date().toISOString();
+        const betDetail = `Win Go ${mode} Period #${effectivePeriod} • ${String(select_value).toUpperCase()}`;
+
+        // 1. Record into transactions table for Account -> Transaction History
+        await DB.run(`INSERT INTO transactions (id, user_id, type, amount, status, details) VALUES (?, ?, 'bet', ?, 'approved', ?)`,
+            [betId, req.user.id, betAmount, betDetail]);
+
+        // 2. Record into game_history for Account -> Game History Modal
+        if (!Array.isArray(DB.data.game_history)) DB.data.game_history = [];
+        DB.data.game_history.unshift({
+            id: betId,
+            user_id: req.user.id,
+            game: 'Win Go',
+            detail: `${mode} • #${effectivePeriod} • ${String(select_value).toUpperCase()}`,
+            bet_amount: betAmount,
+            win_amount: 0,
+            status: 'Pending',
+            created_at: nowIso
+        });
+        if (DB.data.game_history.length > 800) DB.data.game_history = DB.data.game_history.slice(0, 800);
+        DB.save();
+
         // Cache for admin live board (for all Win Go game modes)
         if (!currentRoundBets[mode]) currentRoundBets[mode] = [];
         currentRoundBets[mode].push({
@@ -915,7 +948,10 @@ app.get('/api/game/history', async (req, res) => {
 app.get('/api/game/my-bets', requireAuth, async (req, res) => {
     try {
         const mode = req.query.mode;
-        let bets = (DB.data.bets || []).filter(b => b.user_id === req.user.id);
+        const uid = Number(req.user.id);
+        const altUid = uid < 100000 ? uid + 100000 : uid - 100000;
+        const matchUser = (x) => Number(x.user_id) === uid || Number(x.user_id) === altUid;
+        let bets = (DB.data.bets || []).filter(matchUser);
         if (mode) {
             bets = bets.filter(b => b.game_mode === mode || (!b.game_mode && mode === '30s'));
         }
@@ -1174,12 +1210,14 @@ app.get('/api/wallet/turnover-status', requireAuth, async (req, res) => {
 
 app.get('/api/wallet/transactions', requireAuth, async (req, res) => {
     try {
+        const uid = Number(req.user.id);
+        const altUid = uid < 100000 ? uid + 100000 : uid - 100000;
         const type = req.query.type;
         let list;
         if (type) {
-            list = await DB.all('SELECT * FROM transactions WHERE user_id = ? AND type = ? ORDER BY created_at DESC LIMIT 100', [req.user.id, type]);
+            list = await DB.all('SELECT * FROM transactions WHERE (user_id = ? OR user_id = ?) AND type = ? ORDER BY created_at DESC LIMIT 100', [uid, altUid, type]);
         } else {
-            list = await DB.all('SELECT * FROM transactions WHERE user_id = ? ORDER BY created_at DESC LIMIT 100', [req.user.id]);
+            list = await DB.all('SELECT * FROM transactions WHERE (user_id = ? OR user_id = ?) ORDER BY created_at DESC LIMIT 100', [uid, altUid]);
         }
         res.json({ success: true, transactions: list });
     } catch (e) {
@@ -1189,7 +1227,9 @@ app.get('/api/wallet/transactions', requireAuth, async (req, res) => {
 
 app.get('/api/wallet/withdrawals', requireAuth, async (req, res) => {
     try {
-        const list = await DB.all("SELECT * FROM transactions WHERE user_id = ? AND type = 'withdraw' ORDER BY created_at DESC LIMIT 100", [req.user.id]);
+        const uid = Number(req.user.id);
+        const altUid = uid < 100000 ? uid + 100000 : uid - 100000;
+        const list = await DB.all("SELECT * FROM transactions WHERE (user_id = ? OR user_id = ?) AND type = 'withdraw' ORDER BY created_at DESC LIMIT 100", [uid, altUid]);
         res.json({ success: true, withdrawals: list, transactions: list });
     } catch (e) {
         res.status(500).json({ success: false, message: e.message });
@@ -1208,6 +1248,15 @@ app.post('/api/wallet/sync-game-delta', requireAuth, async (req, res) => {
             });
         }
         await DB.run('UPDATE users SET balance = MAX(0, balance + ?) WHERE id = ?', [delta, req.user.id]);
+
+        // Record in transactions table
+        const gameName = req.body.game ? String(req.body.game) : 'Game';
+        const gameDetail = req.body.details ? String(req.body.details) : `${gameName} ${delta > 0 ? 'Win' : 'Bet'}`;
+        const txType = delta > 0 ? 'win' : 'bet';
+        const txId = req.body.id ? String(req.body.id) : ('TX' + Date.now() + Math.floor(Math.random() * 999));
+        await DB.run(`INSERT INTO transactions (id, user_id, type, amount, status, details) VALUES (?, ?, ?, ?, 'approved', ?)`,
+            [txId, req.user.id, txType, Math.abs(delta), gameDetail]);
+
         const updated = await DB.get('SELECT balance FROM users WHERE id = ?', [req.user.id]);
         res.json({
             success: true,
@@ -2732,15 +2781,17 @@ app.post('/api/game/log-history', requireAuth, async (req, res) => {
         const status = String(req.body.status || 'Pending');
         const created_at = req.body.created_at || new Date().toISOString();
 
-        const existing = DB.data.game_history.find(h => h.id === id && h.user_id === req.user.id);
+        const uid = Number(req.user.id);
+        const altUid = uid < 100000 ? uid + 100000 : uid - 100000;
+        const existing = DB.data.game_history.find(h => h.id === id && (Number(h.user_id) === uid || Number(h.user_id) === altUid));
         if (existing) {
             existing.status = status;
             existing.win_amount = win_amount;
             if (detail) existing.detail = detail;
         } else {
-            DB.data.game_history.push({
+            DB.data.game_history.unshift({
                 id,
-                user_id: req.user.id,
+                user_id: uid,
                 game,
                 detail,
                 bet_amount,
@@ -2748,7 +2799,7 @@ app.post('/api/game/log-history', requireAuth, async (req, res) => {
                 status,
                 created_at
             });
-            if (DB.data.game_history.length > 800) DB.data.game_history = DB.data.game_history.slice(-800);
+            if (DB.data.game_history.length > 800) DB.data.game_history = DB.data.game_history.slice(0, 800);
         }
         DB.save();
         res.json({ success: true });
@@ -2767,12 +2818,28 @@ app.get('/api/game/my-history', requireAuth, async (req, res) => {
         const unified = DB.data.game_history.filter(matchUser);
         const seen = new Set(unified.map(h => String(h.id)));
 
+        // Check if any pending unified items were settled in bets
+        const betsMap = new Map();
+        (DB.data.bets || []).filter(matchUser).forEach(b => {
+            betsMap.set(String(b.id), b);
+        });
+        unified.forEach(h => {
+            const b = betsMap.get(String(h.id));
+            if (b && String(h.status || '').toLowerCase() === 'pending') {
+                const bStatus = String(b.status || '').toLowerCase();
+                if (bStatus === 'won' || bStatus === 'lost') {
+                    h.status = bStatus === 'won' ? 'Won' : 'Lost';
+                    h.win_amount = parseFloat(b.payout || b.win_amount || 0);
+                }
+            }
+        });
+
         // Also include any server-side Win Go bets not already in game_history
         const wingoBets = (DB.data.bets || []).filter(b => matchUser(b) && !seen.has(String(b.id))).map(b => ({
             id: b.id,
             user_id: uid,
             game: 'Win Go',
-            detail: `Period #${b.period_id || b.period || ''} • ${String(b.select_value || b.select_val || '').toUpperCase()}`,
+            detail: `${b.game_mode || '30s'} • #${b.period_id || b.period || ''} • ${String(b.select_value || b.select_val || '').toUpperCase()}`,
             bet_amount: parseFloat(b.amount || 0),
             win_amount: parseFloat(b.payout || b.win_amount || 0),
             status: String(b.status || '').toLowerCase() === 'won' ? 'Won' : (String(b.status || '').toLowerCase() === 'lost' ? 'Lost' : 'Pending'),
@@ -3003,7 +3070,7 @@ app.post('/api/king/bet', requireAuth, async (req, res) => {
         DB.data.king_bets.push(betObj);
         if (DB.data.king_bets.length > 500) DB.data.king_bets = DB.data.king_bets.slice(-500);
 
-        DB.data.game_history.push({
+        DB.data.game_history.unshift({
             id: betId,
             user_id: req.user.id,
             game: 'AS King',
@@ -3013,6 +3080,11 @@ app.post('/api/king/bet', requireAuth, async (req, res) => {
             status: 'Pending',
             created_at: nowIso
         });
+
+        // Record in transactions
+        await DB.run(`INSERT INTO transactions (id, user_id, type, amount, status, details) VALUES (?, ?, 'bet', ?, 'approved', ?)`,
+            [betId, req.user.id, amount, `AS King ${market.toUpperCase()} • ${bet_type.toUpperCase()} ${cleanNum}`]);
+
         DB.save();
 
         res.json({
