@@ -2206,11 +2206,81 @@ function clearDepositAmount() {
 }
 window.clearDepositAmount = clearDepositAmount;
 
+const USDT_WALLETS = {
+    trc20: {
+        name: "TRC20 (Tron)",
+        address: "TCwpq6nk9KKs3FKgm9oGhw8pgKKjs7JnKa"
+    },
+    bep20: {
+        name: "BEP20 (BNB Smart Chain)",
+        address: "0x8f1794c280daA146Ca8A46c1b73716D9f3E52AE5"
+    },
+    polygon: {
+        name: "Polygon (POS)",
+        address: "0x8f1794c280daA146Ca8A46c1b73716D9f3E52AE5"
+    },
+    arbitrum: {
+        name: "Arbitrum One",
+        address: "0x8f1794c280daA146Ca8A46c1b73716D9f3E52AE5"
+    },
+    erc20: {
+        name: "ERC20 (Ethereum)",
+        address: "0x8f1794c280daA146Ca8A46c1b73716D9f3E52AE5"
+    },
+    solana: {
+        name: "Solana (SPL)",
+        address: "HdFgzjXMY1HLGh3ogAswvyrAAF5NFqKa61EDQB6krdVH"
+    }
+};
+window.USDT_WALLETS = USDT_WALLETS;
+
+function updateUsdtWalletNetwork() {
+    const netSelect = document.getElementById("usdtNetwork");
+    const selected = (netSelect ? netSelect.value : "trc20") || "trc20";
+    const pay = window._livePaymentDetails || {};
+    const liveWallets = pay.usdt_wallets || {};
+    const data = liveWallets[selected] || USDT_WALLETS[selected] || USDT_WALLETS.trc20;
+
+    const addrEl = document.getElementById("walletAddress");
+    const warnEl = document.getElementById("networkWarning");
+    const qrEl = document.getElementById("qrImage");
+    const copyBtnEl = document.getElementById("copyBtn");
+    const chLbl = document.getElementById('dep-pay-channel-lbl');
+
+    if (addrEl) addrEl.innerText = data.address;
+    if (warnEl) warnEl.innerText = "⚠️ Only send USDT via " + data.name + " network.";
+    if (qrEl) qrEl.src = "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=" + encodeURIComponent(data.address);
+    if (copyBtnEl) {
+        copyBtnEl.innerText = "Copy Address";
+        copyBtnEl.style.background = "#00b894";
+    }
+    window._selectedDepositChannel = "USDT-" + selected.toUpperCase();
+    if (chLbl) chLbl.textContent = window._selectedDepositChannel;
+}
+window.updateUsdtWalletNetwork = updateUsdtWalletNetwork;
+window.updateWallet = updateUsdtWalletNetwork;
+
+function copyUsdtAddress() {
+    const addr = document.getElementById("walletAddress")?.innerText || "";
+    if (navigator.clipboard && addr) {
+        navigator.clipboard.writeText(addr).catch(() => {});
+    }
+    const btn = document.getElementById("copyBtn");
+    if (btn) {
+        btn.innerText = "Copied! ✓";
+        btn.style.background = "#0984e3";
+    }
+    if (window.stateManager) window.stateManager.showToast('USDT Address Copied! ✓', 'success');
+}
+window.copyUsdtAddress = copyUsdtAddress;
+window.copyAddress = copyUsdtAddress;
+
 window._livePaymentDetails = {
     upi_id: 'akshit9908@barodampay',
     upi_name: 'AKSHIT KUMAR SAXENA',
     arpay_upi: 'manusaxena465267@ikwik',
-    usdt_address: 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t',
+    usdt_address: 'TCwpq6nk9KKs3FKgm9oGhw8pgKKjs7JnKa',
+    usdt_wallets: USDT_WALLETS,
     usdt_rate: 90.0,
     usdt_network: 'TRC20',
     qr_url: '/assets/deposit-qr.jpg'
@@ -2228,7 +2298,8 @@ async function fetchLivePaymentDetails() {
                 upi_id: d.upi_id || 'akshit9908@barodampay',
                 upi_name: d.upi_name || 'AKSHIT KUMAR SAXENA',
                 arpay_upi: d.arpay_upi || 'manusaxena465267@ikwik',
-                usdt_address: d.usdt_address || 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t',
+                usdt_address: d.usdt_address || 'TCwpq6nk9KKs3FKgm9oGhw8pgKKjs7JnKa',
+                usdt_wallets: d.usdt_wallets || USDT_WALLETS,
                 usdt_rate: parseFloat(d.usdt_rate) || 90.0,
                 usdt_network: d.usdt_network || 'TRC20',
                 qr_url: d.qr_url || '/assets/deposit-qr.jpg'
@@ -2405,6 +2476,12 @@ async function openDepositCheckoutSheet() {
 
     if (chLbl) chLbl.textContent = ch;
 
+    const usdtNetBox = document.getElementById('dep-usdt-network-box');
+    const intentSec = document.getElementById('dep-upi-intent-section');
+    const qrDiv = document.getElementById('dep-qr-section-divider');
+    const qrWrap = document.querySelector('.dep-checkout-qr-wrap');
+    const upiRow = document.querySelector('.dep-checkout-upi-row');
+
     if (isUsdt) {
         if (amtLbl) amtLbl.innerHTML = `<span style="color:#10b981;">${usdtAmt.toFixed(2)} USDT ₮</span>`;
         if (usdtInfoBox) {
@@ -2415,15 +2492,23 @@ async function openDepositCheckoutSheet() {
             if (coinsEl) coinsEl.textContent = `₹${coinAmt.toLocaleString('en-IN', { minimumFractionDigits: 2 })} Coins`;
         }
         if (switcher) switcher.style.display = 'none';
-        const usdtAddr = pay.usdt_address || 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t';
-        if (idLbl) idLbl.textContent = `Official ${ch || 'USDT-TRC20'} Wallet Address`;
-        if (idVal) idVal.textContent = usdtAddr;
-        if (qrImg) qrImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&margin=6&data=${encodeURIComponent(usdtAddr)}`;
+        if (intentSec) intentSec.style.display = 'none';
+        if (qrDiv) qrDiv.style.display = 'none';
+        if (qrWrap) qrWrap.style.display = 'none';
+        if (upiRow) upiRow.style.display = 'none';
+        if (usdtNetBox) usdtNetBox.style.display = 'block';
+
+        updateUsdtWalletNetwork();
+
         const utrInp = document.getElementById('recharge-utr-input');
         if (utrInp) utrInp.placeholder = 'Paste Blockchain TxID / Transaction Hash after transfer';
     } else {
         if (amtLbl) amtLbl.textContent = `₹${rawAmt.toFixed(2)}`;
         if (usdtInfoBox) usdtInfoBox.style.display = 'none';
+        if (usdtNetBox) usdtNetBox.style.display = 'none';
+        if (qrDiv) qrDiv.style.display = 'flex';
+        if (qrWrap) qrWrap.style.display = 'block';
+        if (upiRow) upiRow.style.display = 'flex';
         if (switcher) switcher.style.display = (pay.arpay_upi && pay.arpay_upi !== pay.upi_id) ? 'grid' : 'none';
         selectDepositUpiSlot(isArPay ? 2 : 1);
         const utrInp = document.getElementById('recharge-utr-input');

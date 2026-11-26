@@ -699,14 +699,43 @@
                             <input type="text" id="admin-pay-arpay" class="input-text" style="width:100%; margin:0;" placeholder="Leave blank to use Official UPI">
                         </div>
                         <div>
-                            <label style="font-size:11px; color:#94a3b8; display:block; margin-bottom:4px;">USDT (TRC20/BEP20) Wallet Address</label>
-                            <input type="text" id="admin-pay-usdt" class="input-text" style="width:100%; margin:0;" placeholder="T... TRC20 or 0x... BEP20 address">
-                        </div>
-                        <div>
                             <label style="font-size:11px; color:#fae59f; font-weight:700; display:block; margin-bottom:4px;">₮ USDT Conversion Rate (1 USDT = ₹ Coins)</label>
                             <div style="display:flex; align-items:center; gap:6px;">
                                 <span style="font-size:13px; color:#10b981; font-weight:800;">₹</span>
                                 <input type="number" step="0.1" id="admin-pay-usdt-rate" class="input-text" style="width:100%; margin:0; font-weight:800; color:#10b981;" placeholder="90.00" value="90.00">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- USDT Multi-Network Addresses Section -->
+                    <div style="background:#0b1329; border:1px solid rgba(16,185,129,0.3); border-radius:8px; padding:12px; margin-bottom:10px;">
+                        <div style="font-size:12px; font-weight:800; color:#34d399; margin-bottom:8px; display:flex; align-items:center; gap:6px;">
+                            <span>₮ USDT Multi-Network Wallet Addresses (6 Networks Supported)</span>
+                        </div>
+                        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(260px, 1fr)); gap:10px;">
+                            <div>
+                                <label style="font-size:11px; color:#cbd5e1; display:block; margin-bottom:3px;">1. TRC20 (Tron)</label>
+                                <input type="text" id="admin-pay-usdt" class="input-text" style="width:100%; margin:0; font-family:monospace; font-size:12px;" placeholder="TCwpq6nk9KKs3FKgm9oGhw8pgKKjs7JnKa">
+                            </div>
+                            <div>
+                                <label style="font-size:11px; color:#cbd5e1; display:block; margin-bottom:3px;">2. BEP20 (BNB Smart Chain)</label>
+                                <input type="text" id="admin-pay-usdt-bep20" class="input-text" style="width:100%; margin:0; font-family:monospace; font-size:12px;" placeholder="0x8f1794c280daA146Ca8A46c1b73716D9f3E52AE5">
+                            </div>
+                            <div>
+                                <label style="font-size:11px; color:#cbd5e1; display:block; margin-bottom:3px;">3. Polygon (POS)</label>
+                                <input type="text" id="admin-pay-usdt-polygon" class="input-text" style="width:100%; margin:0; font-family:monospace; font-size:12px;" placeholder="0x8f1794c280daA146Ca8A46c1b73716D9f3E52AE5">
+                            </div>
+                            <div>
+                                <label style="font-size:11px; color:#cbd5e1; display:block; margin-bottom:3px;">4. Arbitrum One</label>
+                                <input type="text" id="admin-pay-usdt-arbitrum" class="input-text" style="width:100%; margin:0; font-family:monospace; font-size:12px;" placeholder="0x8f1794c280daA146Ca8A46c1b73716D9f3E52AE5">
+                            </div>
+                            <div>
+                                <label style="font-size:11px; color:#cbd5e1; display:block; margin-bottom:3px;">5. ERC20 (Ethereum)</label>
+                                <input type="text" id="admin-pay-usdt-erc20" class="input-text" style="width:100%; margin:0; font-family:monospace; font-size:12px;" placeholder="0x8f1794c280daA146Ca8A46c1b73716D9f3E52AE5">
+                            </div>
+                            <div>
+                                <label style="font-size:11px; color:#cbd5e1; display:block; margin-bottom:3px;">6. Solana (SPL)</label>
+                                <input type="text" id="admin-pay-usdt-solana" class="input-text" style="width:100%; margin:0; font-family:monospace; font-size:12px;" placeholder="HdFgzjXMY1HLGh3ogAswvyrAAF5NFqKa61EDQB6krdVH">
                             </div>
                         </div>
                     </div>
@@ -2270,12 +2299,26 @@
                 const nameInp = document.getElementById('admin-pay-name');
                 const arInp = document.getElementById('admin-pay-arpay');
                 const usdtInp = document.getElementById('admin-pay-usdt');
+                const bepInp = document.getElementById('admin-pay-usdt-bep20');
+                const polyInp = document.getElementById('admin-pay-usdt-polygon');
+                const arbInp = document.getElementById('admin-pay-usdt-arbitrum');
+                const ercInp = document.getElementById('admin-pay-usdt-erc20');
+                const solInp = document.getElementById('admin-pay-usdt-solana');
                 const usdtRateInp = document.getElementById('admin-pay-usdt-rate');
                 const qrInp = document.getElementById('admin-pay-qr-url');
+
                 if (upiInp) upiInp.value = d.upi_id || '';
                 if (nameInp) nameInp.value = d.upi_name || 'ASGames';
                 if (arInp) arInp.value = (d.arpay_upi && d.arpay_upi !== d.upi_id) ? d.arpay_upi : '';
-                if (usdtInp) usdtInp.value = d.usdt_address || '';
+
+                const wallets = d.usdt_wallets || {};
+                if (usdtInp) usdtInp.value = d.usdt_address || wallets.trc20?.address || 'TCwpq6nk9KKs3FKgm9oGhw8pgKKjs7JnKa';
+                if (bepInp) bepInp.value = wallets.bep20?.address || '0x8f1794c280daA146Ca8A46c1b73716D9f3E52AE5';
+                if (polyInp) polyInp.value = wallets.polygon?.address || '0x8f1794c280daA146Ca8A46c1b73716D9f3E52AE5';
+                if (arbInp) arbInp.value = wallets.arbitrum?.address || '0x8f1794c280daA146Ca8A46c1b73716D9f3E52AE5';
+                if (ercInp) ercInp.value = wallets.erc20?.address || '0x8f1794c280daA146Ca8A46c1b73716D9f3E52AE5';
+                if (solInp) solInp.value = wallets.solana?.address || 'HdFgzjXMY1HLGh3ogAswvyrAAF5NFqKa61EDQB6krdVH';
+
                 if (usdtRateInp) usdtRateInp.value = d.usdt_rate || 90.0;
                 if (qrInp) qrInp.value = d.qr_url || '';
                 updateAdminQrPreview();
@@ -2335,6 +2378,11 @@
             const upi_name = (document.getElementById('admin-pay-name')?.value || 'ASGames').trim();
             const arpay_upi = (document.getElementById('admin-pay-arpay')?.value || '').trim();
             const usdt_address = (document.getElementById('admin-pay-usdt')?.value || '').trim();
+            const usdt_bep20 = (document.getElementById('admin-pay-usdt-bep20')?.value || '').trim();
+            const usdt_polygon = (document.getElementById('admin-pay-usdt-polygon')?.value || '').trim();
+            const usdt_arbitrum = (document.getElementById('admin-pay-usdt-arbitrum')?.value || '').trim();
+            const usdt_erc20 = (document.getElementById('admin-pay-usdt-erc20')?.value || '').trim();
+            const usdt_solana = (document.getElementById('admin-pay-usdt-solana')?.value || '').trim();
             const usdt_rate = parseFloat(document.getElementById('admin-pay-usdt-rate')?.value) || 90.0;
             const qr_url = (document.getElementById('admin-pay-qr-url')?.value || '').trim();
             const st = document.getElementById('pay-save-status');
@@ -2350,7 +2398,19 @@
                 const res = await fetch('/api/admin/payment-details', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', 'x-admin-key': adminKey },
-                    body: JSON.stringify({ upi_id, upi_name, arpay_upi, usdt_address, usdt_rate, qr_url })
+                    body: JSON.stringify({
+                        upi_id,
+                        upi_name,
+                        arpay_upi,
+                        usdt_address,
+                        usdt_bep20,
+                        usdt_polygon,
+                        usdt_arbitrum,
+                        usdt_erc20,
+                        usdt_solana,
+                        usdt_rate,
+                        qr_url
+                    })
                 });
                 const d = await res.json();
                 st.style.color = d.success ? '#10b981' : '#ef4444';

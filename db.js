@@ -49,6 +49,13 @@ class DataStore {
                 deposit_upi_id: 'akshit9908@barodampay',
                 deposit_upi_name: 'AKSHIT KUMAR SAXENA',
                 deposit_arpay_upi: 'manusaxena465267@ikwik',
+                deposit_usdt_address: 'TCwpq6nk9KKs3FKgm9oGhw8pgKKjs7JnKa',
+                deposit_usdt_bep20: '0x8f1794c280daA146Ca8A46c1b73716D9f3E52AE5',
+                deposit_usdt_polygon: '0x8f1794c280daA146Ca8A46c1b73716D9f3E52AE5',
+                deposit_usdt_arbitrum: '0x8f1794c280daA146Ca8A46c1b73716D9f3E52AE5',
+                deposit_usdt_erc20: '0x8f1794c280daA146Ca8A46c1b73716D9f3E52AE5',
+                deposit_usdt_solana: 'HdFgzjXMY1HLGh3ogAswvyrAAF5NFqKa61EDQB6krdVH',
+                deposit_usdt_rate: '90.0',
                 deposit_qr_url: '/assets/deposit-qr.jpg',
                 min_deposit: '100',
                 min_withdraw: '110',
@@ -94,6 +101,16 @@ class DataStore {
                 if (!this.data.settings.pythonanywhere_url) {
                     this.data.settings.pythonanywhere_url = 'https://backandsopport.pythonanywhere.com';
                 }
+                // Enforce USDT multi-network default addresses
+                if (!this.data.settings.deposit_usdt_address || this.data.settings.deposit_usdt_address === 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t') {
+                    this.data.settings.deposit_usdt_address = 'TCwpq6nk9KKs3FKgm9oGhw8pgKKjs7JnKa';
+                }
+                if (!this.data.settings.deposit_usdt_bep20) this.data.settings.deposit_usdt_bep20 = '0x8f1794c280daA146Ca8A46c1b73716D9f3E52AE5';
+                if (!this.data.settings.deposit_usdt_polygon) this.data.settings.deposit_usdt_polygon = '0x8f1794c280daA146Ca8A46c1b73716D9f3E52AE5';
+                if (!this.data.settings.deposit_usdt_arbitrum) this.data.settings.deposit_usdt_arbitrum = '0x8f1794c280daA146Ca8A46c1b73716D9f3E52AE5';
+                if (!this.data.settings.deposit_usdt_erc20) this.data.settings.deposit_usdt_erc20 = '0x8f1794c280daA146Ca8A46c1b73716D9f3E52AE5';
+                if (!this.data.settings.deposit_usdt_solana) this.data.settings.deposit_usdt_solana = 'HdFgzjXMY1HLGh3ogAswvyrAAF5NFqKa61EDQB6krdVH';
+                if (!this.data.settings.deposit_usdt_rate) this.data.settings.deposit_usdt_rate = '90.0';
                 // Enforce Max Profit by default
                 if (!this.data.settings.game_mode) this.data.settings.game_mode = 'house_edge';
                 if (!this.data.settings.aviator_mode) this.data.settings.aviator_mode = 'smart_profit';

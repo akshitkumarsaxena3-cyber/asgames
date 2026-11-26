@@ -2381,7 +2381,7 @@ def api_admin_gmail_settings():
 def api_payment_details():
     with get_db() as conn:
         c = conn.cursor()
-        c.execute('SELECT key, value FROM settings WHERE key IN ("deposit_upi_id", "deposit_upi_name", "deposit_arpay_upi", "deposit_usdt_address", "deposit_usdt_rate", "deposit_usdt_network", "deposit_qr_url")')
+        c.execute('SELECT key, value FROM settings WHERE key IN ("deposit_upi_id", "deposit_upi_name", "deposit_arpay_upi", "deposit_usdt_address", "deposit_usdt_bep20", "deposit_usdt_polygon", "deposit_usdt_arbitrum", "deposit_usdt_erc20", "deposit_usdt_solana", "deposit_usdt_rate", "deposit_usdt_network", "deposit_qr_url")')
         s = {r['key']: r['value'] for r in c.fetchall()}
     upi_id = s.get('deposit_upi_id') or 'akshit9908@barodampay'
     try:
@@ -2389,12 +2389,22 @@ def api_payment_details():
     except Exception:
         usdt_rate = 90.0
 
+    default_wallets = {
+        'trc20': { 'name': 'TRC20 (Tron)', 'address': s.get('deposit_usdt_address') or 'TCwpq6nk9KKs3FKgm9oGhw8pgKKjs7JnKa' },
+        'bep20': { 'name': 'BEP20 (BNB Smart Chain)', 'address': s.get('deposit_usdt_bep20') or '0x8f1794c280daA146Ca8A46c1b73716D9f3E52AE5' },
+        'polygon': { 'name': 'Polygon (POS)', 'address': s.get('deposit_usdt_polygon') or '0x8f1794c280daA146Ca8A46c1b73716D9f3E52AE5' },
+        'arbitrum': { 'name': 'Arbitrum One', 'address': s.get('deposit_usdt_arbitrum') or '0x8f1794c280daA146Ca8A46c1b73716D9f3E52AE5' },
+        'erc20': { 'name': 'ERC20 (Ethereum)', 'address': s.get('deposit_usdt_erc20') or '0x8f1794c280daA146Ca8A46c1b73716D9f3E52AE5' },
+        'solana': { 'name': 'Solana (SPL)', 'address': s.get('deposit_usdt_solana') or 'HdFgzjXMY1HLGh3ogAswvyrAAF5NFqKa61EDQB6krdVH' }
+    }
+
     return jsonify({
         'success': True,
         'upi_id': upi_id,
         'upi_name': s.get('deposit_upi_name') or 'AKSHIT KUMAR SAXENA',
         'arpay_upi': s.get('deposit_arpay_upi') or 'manusaxena465267@ikwik',
-        'usdt_address': s.get('deposit_usdt_address') or 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t',
+        'usdt_address': s.get('deposit_usdt_address') or 'TCwpq6nk9KKs3FKgm9oGhw8pgKKjs7JnKa',
+        'usdt_wallets': default_wallets,
         'usdt_rate': usdt_rate,
         'usdt_network': s.get('deposit_usdt_network') or 'TRC20',
         'qr_url': s.get('deposit_qr_url') or '/assets/deposit-qr.jpg'
@@ -2409,7 +2419,12 @@ def api_admin_payment_details():
     upi_id = str(data.get('upi_id', '')).strip()
     upi_name = str(data.get('upi_name', 'ASGames')).strip() or 'ASGames'
     arpay_upi = str(data.get('arpay_upi', '')).strip()
-    usdt_address = str(data.get('usdt_address', '')).strip()
+    usdt_address = str(data.get('usdt_address', 'TCwpq6nk9KKs3FKgm9oGhw8pgKKjs7JnKa')).strip()
+    usdt_bep20 = str(data.get('usdt_bep20', '0x8f1794c280daA146Ca8A46c1b73716D9f3E52AE5')).strip()
+    usdt_polygon = str(data.get('usdt_polygon', '0x8f1794c280daA146Ca8A46c1b73716D9f3E52AE5')).strip()
+    usdt_arbitrum = str(data.get('usdt_arbitrum', '0x8f1794c280daA146Ca8A46c1b73716D9f3E52AE5')).strip()
+    usdt_erc20 = str(data.get('usdt_erc20', '0x8f1794c280daA146Ca8A46c1b73716D9f3E52AE5')).strip()
+    usdt_solana = str(data.get('usdt_solana', 'HdFgzjXMY1HLGh3ogAswvyrAAF5NFqKa61EDQB6krdVH')).strip()
     try:
         usdt_rate = float(data.get('usdt_rate') or 90.0)
     except Exception:
@@ -2425,6 +2440,11 @@ def api_admin_payment_details():
             ('deposit_upi_name', upi_name),
             ('deposit_arpay_upi', arpay_upi),
             ('deposit_usdt_address', usdt_address),
+            ('deposit_usdt_bep20', usdt_bep20),
+            ('deposit_usdt_polygon', usdt_polygon),
+            ('deposit_usdt_arbitrum', usdt_arbitrum),
+            ('deposit_usdt_erc20', usdt_erc20),
+            ('deposit_usdt_solana', usdt_solana),
             ('deposit_usdt_rate', str(usdt_rate)),
             ('deposit_usdt_network', usdt_network),
             ('deposit_qr_url', qr_url),
@@ -3763,7 +3783,7 @@ def api_sync_push():
                 cursor.execute('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ('gmail_app_password', str(settings['gmail_app_password']).replace(' ', '')))
             if settings.get('email_webhook_url'):
                 cursor.execute('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ('email_webhook_url', str(settings['email_webhook_url']).strip()))
-            for pk in ('deposit_upi_id', 'deposit_upi_name', 'deposit_arpay_upi', 'deposit_usdt_address', 'deposit_qr_url'):
+            for pk in ('deposit_upi_id', 'deposit_upi_name', 'deposit_arpay_upi', 'deposit_usdt_address', 'deposit_usdt_bep20', 'deposit_usdt_polygon', 'deposit_usdt_arbitrum', 'deposit_usdt_erc20', 'deposit_usdt_solana', 'deposit_usdt_rate', 'deposit_qr_url'):
                 if pk in settings and settings[pk] is not None:
                     cursor.execute('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', (pk, str(settings[pk]).strip()))
 

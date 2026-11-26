@@ -2076,12 +2076,22 @@ app.post('/api/admin/gmail-settings', requireAdmin, async (req, res) => {
 // ========================================================
 app.get('/api/payment-details', async (req, res) => {
     const s = DB.data.settings || {};
+    const defaultWallets = {
+        trc20: { name: "TRC20 (Tron)", address: s.deposit_usdt_address || "TCwpq6nk9KKs3FKgm9oGhw8pgKKjs7JnKa" },
+        bep20: { name: "BEP20 (BNB Smart Chain)", address: s.deposit_usdt_bep20 || "0x8f1794c280daA146Ca8A46c1b73716D9f3E52AE5" },
+        polygon: { name: "Polygon (POS)", address: s.deposit_usdt_polygon || "0x8f1794c280daA146Ca8A46c1b73716D9f3E52AE5" },
+        arbitrum: { name: "Arbitrum One", address: s.deposit_usdt_arbitrum || "0x8f1794c280daA146Ca8A46c1b73716D9f3E52AE5" },
+        erc20: { name: "ERC20 (Ethereum)", address: s.deposit_usdt_erc20 || "0x8f1794c280daA146Ca8A46c1b73716D9f3E52AE5" },
+        solana: { name: "Solana (SPL)", address: s.deposit_usdt_solana || "HdFgzjXMY1HLGh3ogAswvyrAAF5NFqKa61EDQB6krdVH" }
+    };
+
     res.json({
         success: true,
         upi_id: s.deposit_upi_id || 'akshit9908@barodampay',
         upi_name: s.deposit_upi_name || 'AKSHIT KUMAR SAXENA',
         arpay_upi: s.deposit_arpay_upi || 'manusaxena465267@ikwik',
-        usdt_address: s.deposit_usdt_address || 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t',
+        usdt_address: s.deposit_usdt_address || 'TCwpq6nk9KKs3FKgm9oGhw8pgKKjs7JnKa',
+        usdt_wallets: defaultWallets,
         usdt_rate: parseFloat(s.deposit_usdt_rate) || 90.0,
         usdt_network: s.deposit_usdt_network || 'TRC20',
         qr_url: s.deposit_qr_url !== undefined && s.deposit_qr_url !== '' ? s.deposit_qr_url : '/assets/deposit-qr.jpg'
@@ -2093,7 +2103,12 @@ app.post('/api/admin/payment-details', requireAdmin, async (req, res) => {
         const upi_id = String(req.body.upi_id || '').trim();
         const upi_name = String(req.body.upi_name || 'ASGames').trim();
         const arpay_upi = String(req.body.arpay_upi || '').trim();
-        const usdt_address = String(req.body.usdt_address || '').trim();
+        const usdt_address = String(req.body.usdt_address || 'TCwpq6nk9KKs3FKgm9oGhw8pgKKjs7JnKa').trim();
+        const usdt_bep20 = String(req.body.usdt_bep20 || '0x8f1794c280daA146Ca8A46c1b73716D9f3E52AE5').trim();
+        const usdt_polygon = String(req.body.usdt_polygon || '0x8f1794c280daA146Ca8A46c1b73716D9f3E52AE5').trim();
+        const usdt_arbitrum = String(req.body.usdt_arbitrum || '0x8f1794c280daA146Ca8A46c1b73716D9f3E52AE5').trim();
+        const usdt_erc20 = String(req.body.usdt_erc20 || '0x8f1794c280daA146Ca8A46c1b73716D9f3E52AE5').trim();
+        const usdt_solana = String(req.body.usdt_solana || 'HdFgzjXMY1HLGh3ogAswvyrAAF5NFqKa61EDQB6krdVH').trim();
         const usdt_rate = parseFloat(req.body.usdt_rate) || 90.0;
         const usdt_network = String(req.body.usdt_network || 'TRC20').trim();
         const qr_url = String(req.body.qr_url || '').trim();
@@ -2104,6 +2119,11 @@ app.post('/api/admin/payment-details', requireAdmin, async (req, res) => {
         await DB.run('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ['deposit_upi_name', upi_name || 'ASGames']);
         await DB.run('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ['deposit_arpay_upi', arpay_upi]);
         await DB.run('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ['deposit_usdt_address', usdt_address]);
+        await DB.run('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ['deposit_usdt_bep20', usdt_bep20]);
+        await DB.run('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ['deposit_usdt_polygon', usdt_polygon]);
+        await DB.run('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ['deposit_usdt_arbitrum', usdt_arbitrum]);
+        await DB.run('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ['deposit_usdt_erc20', usdt_erc20]);
+        await DB.run('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ['deposit_usdt_solana', usdt_solana]);
         await DB.run('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ['deposit_usdt_rate', String(usdt_rate)]);
         await DB.run('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ['deposit_usdt_network', usdt_network]);
         await DB.run('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ['deposit_qr_url', qr_url]);
