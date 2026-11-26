@@ -492,15 +492,30 @@ class StateManager {
                 }
                 const amtInput = document.getElementById('recharge-amount-input');
                 const utrInput = document.getElementById('recharge-utr-input');
-                const amt = parseFloat(amtInput ? amtInput.value : 0);
+                const rawAmt = parseFloat(amtInput ? amtInput.value : 0);
                 const utr = utrInput ? utrInput.value.trim() : '';
 
-                if (!amt || amt < 100) {
-                    this.showToast('Minimum deposit is ₹100', 'warning');
-                    return;
+                const isUsdt = window._selectedDepositMethod === 'USDT';
+                const usdtRate = window._livePaymentDetails?.usdt_rate || 90.0;
+                let usdtAmt = 0;
+                let finalCoinAmt = rawAmt;
+
+                if (isUsdt) {
+                    usdtAmt = rawAmt;
+                    if (!usdtAmt || usdtAmt < 2) {
+                        this.showToast(`Minimum USDT deposit is 2 USDT (approx ₹${(2 * usdtRate).toFixed(0)} coins)`, 'warning');
+                        return;
+                    }
+                    finalCoinAmt = Math.round(usdtAmt * usdtRate * 100) / 100;
+                } else {
+                    if (!rawAmt || rawAmt < 100) {
+                        this.showToast('Minimum deposit is ₹100', 'warning');
+                        return;
+                    }
                 }
+
                 if (!utr || utr.length < 6) {
-                    this.showToast('Please enter your 12-digit UTR/Transaction ID', 'warning');
+                    this.showToast(isUsdt ? 'Please enter valid Blockchain TxID / Hash' : 'Please enter your 12-digit UTR/Transaction ID', 'warning');
                     return;
                 }
 
@@ -511,7 +526,13 @@ class StateManager {
                             'Content-Type': 'application/json',
                             'Authorization': `Bearer ${this.token}`
                         },
-                        body: JSON.stringify({ amount: amt, utr, channel: window._selectedDepositChannel || 'UPI-QR' })
+                        body: JSON.stringify({
+                            amount: finalCoinAmt,
+                            usdt_amount: isUsdt ? usdtAmt : null,
+                            usdt_rate: isUsdt ? usdtRate : null,
+                            channel: window._selectedDepositChannel || (isUsdt ? 'USDT-TRC20' : 'UPI-QR'),
+                            utr: utr
+                        })
                     });
                     const d = await res.json();
                     if (d.success) {
@@ -2007,7 +2028,8 @@ const DEPOSIT_CHANNEL_MAP = {
         { name: 'PhonePe/GPay', range: 'Balance:100 - 50K' }
     ],
     'USDT': [
-        { name: 'USDT-TRC20', range: 'Balance:100 - 50K' }
+        { name: 'USDT-TRC20', range: '1 USDT ≈ ₹90 Coins' },
+        { name: 'USDT-BEP20', range: '1 USDT ≈ ₹90 Coins' }
     ],
     'ARPay': [
         { name: 'ARPay (+1% Bonus)', range: 'Balance:100 - 50K' }
@@ -2018,6 +2040,33 @@ function selectDepositMethod(method, tileEl) {
     window._selectedDepositMethod = method;
     document.querySelectorAll('.dep-method-tile').forEach(t => t.classList.remove('active'));
     if (tileEl) tileEl.classList.add('active');
+
+    const isUsdt = method === 'USDT';
+    const inrGrid = document.getElementById('dep-amounts-inr-grid');
+    const usdtGrid = document.getElementById('dep-amounts-usdt-grid');
+    const calcBox = document.getElementById('dep-usdt-calculator-box');
+    const symEl = document.getElementById('dep-input-currency-symbol');
+    const inp = document.getElementById('recharge-amount-input');
+
+    if (isUsdt) {
+        if (inrGrid) inrGrid.style.display = 'none';
+        if (usdtGrid) usdtGrid.style.display = 'grid';
+        if (calcBox) calcBox.style.display = 'block';
+        if (symEl) symEl.textContent = '₮';
+        if (inp) {
+            inp.placeholder = '10 - 10,000 USDT';
+            inp.value = '50';
+        }
+    } else {
+        if (inrGrid) inrGrid.style.display = 'grid';
+        if (usdtGrid) usdtGrid.style.display = 'none';
+        if (calcBox) calcBox.style.display = 'none';
+        if (symEl) symEl.textContent = '₹';
+        if (inp && (inp.value === '50' || !inp.value)) {
+            inp.placeholder = '₹100.00 - ₹50,000.00';
+            inp.value = '500';
+        }
+    }
 
     const channels = DEPOSIT_CHANNEL_MAP[method] || [{ name: method, range: 'Balance:100 - 50K' }];
     window._selectedDepositChannel = channels[0].name;
@@ -2033,6 +2082,7 @@ function selectDepositMethod(method, tileEl) {
     }
     const footerMethod = document.getElementById('dep-footer-method');
     if (footerMethod) footerMethod.textContent = method;
+    updateDepositButtonState();
     if (window.sound) window.sound.click();
 }
 
@@ -2060,34 +2110,89 @@ function selectDepositAmount(amt, el) {
 }
 window.selectDepositAmount = selectDepositAmount;
 
+function selectUsdtDepositAmount(usdtAmt, el) {
+    const inp = document.getElementById('recharge-amount-input');
+    if (inp) {
+        inp.value = usdtAmt;
+    }
+    document.querySelectorAll('.dep-usdt-btn').forEach(b => {
+        const bAmt = parseFloat(b.dataset.usdt || '0');
+        b.classList.toggle('active', bAmt === parseFloat(usdtAmt));
+    });
+    if (el) el.classList.add('active');
+    updateDepositButtonState();
+    if (window.sound) window.sound.click();
+}
+window.selectUsdtDepositAmount = selectUsdtDepositAmount;
+
 function updateDepositButtonState() {
     const inp = document.getElementById('recharge-amount-input');
     const footerBtn = document.getElementById('dep-open-pay-btn');
     const cardBtn = document.getElementById('dep-card-pay-btn');
-    const amt = parseFloat(inp?.value || '0');
+    const isUsdt = window._selectedDepositMethod === 'USDT';
+    const pay = window._livePaymentDetails || {};
+    const usdtRate = pay.usdt_rate || 90.0;
+    const rawVal = parseFloat(inp?.value || '0');
 
-    if (amt >= 100) {
-        const formattedAmt = amt.toLocaleString('en-IN');
-        if (footerBtn) {
-            footerBtn.classList.add('ready');
-            footerBtn.classList.remove('disabled');
-            footerBtn.textContent = `Deposit ₹${formattedAmt}`;
+    if (isUsdt) {
+        const rateBadge = document.getElementById('dep-usdt-live-rate-badge');
+        if (rateBadge) rateBadge.textContent = `1 USDT = ₹${usdtRate.toFixed(2)} Coins`;
+
+        const coinsLbl = document.getElementById('dep-usdt-converted-coins-lbl');
+        const convertedCoins = Math.round(rawVal * usdtRate * 100) / 100;
+        if (coinsLbl) {
+            coinsLbl.innerHTML = `₹${convertedCoins.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <span style="font-size:12px; color:#38bdf8;">Coins</span>`;
         }
-        if (cardBtn) {
-            cardBtn.classList.add('ready');
-            cardBtn.classList.remove('disabled');
-            cardBtn.textContent = `⚡ Deposit ₹${formattedAmt}`;
+
+        if (rawVal >= 2) {
+            const formattedCoins = convertedCoins.toLocaleString('en-IN');
+            if (footerBtn) {
+                footerBtn.classList.add('ready');
+                footerBtn.classList.remove('disabled');
+                footerBtn.textContent = `Deposit ${rawVal} USDT (₹${formattedCoins} Coins)`;
+            }
+            if (cardBtn) {
+                cardBtn.classList.add('ready');
+                cardBtn.classList.remove('disabled');
+                cardBtn.textContent = `⚡ Deposit ${rawVal} USDT (₹${formattedCoins} Coins)`;
+            }
+        } else {
+            if (footerBtn) {
+                footerBtn.classList.remove('ready');
+                footerBtn.classList.add('disabled');
+                footerBtn.textContent = rawVal > 0 ? `Min 2 USDT` : `Deposit USDT`;
+            }
+            if (cardBtn) {
+                cardBtn.classList.remove('ready');
+                cardBtn.classList.add('disabled');
+                cardBtn.textContent = rawVal > 0 ? `Min 2 USDT (₹${(2 * usdtRate).toFixed(0)})` : `Enter USDT Amount`;
+            }
         }
     } else {
-        if (footerBtn) {
-            footerBtn.classList.remove('ready');
-            footerBtn.classList.add('disabled');
-            footerBtn.textContent = amt > 0 ? `Min ₹100` : `Deposit`;
-        }
-        if (cardBtn) {
-            cardBtn.classList.remove('ready');
-            cardBtn.classList.add('disabled');
-            cardBtn.textContent = amt > 0 ? `Deposit (Min ₹100)` : `Select Amount`;
+        const amt = rawVal;
+        if (amt >= 100) {
+            const formattedAmt = amt.toLocaleString('en-IN');
+            if (footerBtn) {
+                footerBtn.classList.add('ready');
+                footerBtn.classList.remove('disabled');
+                footerBtn.textContent = `Deposit ₹${formattedAmt}`;
+            }
+            if (cardBtn) {
+                cardBtn.classList.add('ready');
+                cardBtn.classList.remove('disabled');
+                cardBtn.textContent = `⚡ Deposit ₹${formattedAmt}`;
+            }
+        } else {
+            if (footerBtn) {
+                footerBtn.classList.remove('ready');
+                footerBtn.classList.add('disabled');
+                footerBtn.textContent = amt > 0 ? `Min ₹100` : `Deposit`;
+            }
+            if (cardBtn) {
+                cardBtn.classList.remove('ready');
+                cardBtn.classList.add('disabled');
+                cardBtn.textContent = amt > 0 ? `Deposit (Min ₹100)` : `Select Amount`;
+            }
         }
     }
 }
@@ -2096,7 +2201,7 @@ window.updateDepositButtonState = updateDepositButtonState;
 function clearDepositAmount() {
     const inp = document.getElementById('recharge-amount-input');
     if (inp) inp.value = '';
-    document.querySelectorAll('.dep-amt-btn, .recharge-pill').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.dep-amt-btn, .recharge-pill, .dep-usdt-btn').forEach(b => b.classList.remove('active'));
     updateDepositButtonState();
 }
 window.clearDepositAmount = clearDepositAmount;
@@ -2106,9 +2211,12 @@ window._livePaymentDetails = {
     upi_name: 'AKSHIT KUMAR SAXENA',
     arpay_upi: 'manusaxena465267@ikwik',
     usdt_address: 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t',
+    usdt_rate: 90.0,
+    usdt_network: 'TRC20',
     qr_url: '/assets/deposit-qr.jpg'
 };
 window._depCheckoutAmount = 500;
+window._depCheckoutUsdtAmount = null;
 window._depCheckoutSlot = 1;
 
 async function fetchLivePaymentDetails() {
@@ -2121,8 +2229,12 @@ async function fetchLivePaymentDetails() {
                 upi_name: d.upi_name || 'AKSHIT KUMAR SAXENA',
                 arpay_upi: d.arpay_upi || 'manusaxena465267@ikwik',
                 usdt_address: d.usdt_address || 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t',
+                usdt_rate: parseFloat(d.usdt_rate) || 90.0,
+                usdt_network: d.usdt_network || 'TRC20',
                 qr_url: d.qr_url || '/assets/deposit-qr.jpg'
             };
+            const rateBadge = document.getElementById('dep-usdt-live-rate-badge');
+            if (rateBadge) rateBadge.textContent = `1 USDT = ₹${(window._livePaymentDetails.usdt_rate).toFixed(2)} Coins`;
         }
     } catch (e) {}
     return window._livePaymentDetails;
@@ -2249,22 +2361,38 @@ function openUpiAppIntent(appType = 'any') {
 async function openDepositCheckoutSheet() {
     const sm = window.stateManager;
     const inp = document.getElementById('recharge-amount-input');
-    const amt = parseFloat(inp?.value || '0');
+    const isUsdt = window._selectedDepositMethod === 'USDT';
+    const pay = await fetchLivePaymentDetails();
+    const usdtRate = pay.usdt_rate || 90.0;
+    const rawAmt = parseFloat(inp?.value || '0');
+
     if (!sm || !sm.token) {
-        if (amt >= 100) localStorage.setItem('asg_pending_deposit_amt', amt);
+        if (rawAmt >= (isUsdt ? 2 : 100)) localStorage.setItem('asg_pending_deposit_amt', rawAmt);
         if (sm) sm.showToast('Please login / register first to complete deposit!', 'warning');
         openAuthModal('login');
         return;
     }
-    if (!amt || amt < 100) {
-        sm.showToast('Please select or enter at least ₹100 to deposit.', 'warning');
-        return;
-    }
-    window._depCheckoutAmount = amt;
 
-    const pay = await fetchLivePaymentDetails();
+    let coinAmt = rawAmt;
+    let usdtAmt = rawAmt;
+    if (isUsdt) {
+        if (!usdtAmt || usdtAmt < 2) {
+            sm.showToast(`Please enter at least 2 USDT (approx ₹${(2 * usdtRate).toFixed(0)} coins).`, 'warning');
+            return;
+        }
+        coinAmt = Math.round(usdtAmt * usdtRate * 100) / 100;
+        window._depCheckoutUsdtAmount = usdtAmt;
+        window._depCheckoutAmount = coinAmt;
+    } else {
+        if (!rawAmt || rawAmt < 100) {
+            sm.showToast('Please select or enter at least ₹100 to deposit.', 'warning');
+            return;
+        }
+        window._depCheckoutAmount = rawAmt;
+        window._depCheckoutUsdtAmount = null;
+    }
+
     const ch = window._selectedDepositChannel || window._selectedDepositMethod || 'UPI-QR';
-    const isUsdt = window._selectedDepositMethod === 'USDT';
     const isArPay = window._selectedDepositMethod === 'ARPay';
 
     const chLbl = document.getElementById('dep-pay-channel-lbl');
@@ -2273,19 +2401,33 @@ async function openDepositCheckoutSheet() {
     const idVal = document.getElementById('dep-pay-id-val');
     const qrImg = document.getElementById('dep-pay-qr-img');
     const switcher = document.getElementById('dep-upi-switcher');
+    const usdtInfoBox = document.getElementById('dep-checkout-usdt-info');
 
     if (chLbl) chLbl.textContent = ch;
-    if (amtLbl) amtLbl.textContent = `₹${amt.toFixed(2)}`;
 
     if (isUsdt) {
+        if (amtLbl) amtLbl.innerHTML = `<span style="color:#10b981;">${usdtAmt.toFixed(2)} USDT ₮</span>`;
+        if (usdtInfoBox) {
+            usdtInfoBox.style.display = 'block';
+            const rateEl = document.getElementById('dep-chk-rate');
+            const coinsEl = document.getElementById('dep-chk-coins');
+            if (rateEl) rateEl.textContent = `1 USDT = ₹${usdtRate.toFixed(2)} Coins`;
+            if (coinsEl) coinsEl.textContent = `₹${coinAmt.toLocaleString('en-IN', { minimumFractionDigits: 2 })} Coins`;
+        }
         if (switcher) switcher.style.display = 'none';
         const usdtAddr = pay.usdt_address || 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t';
-        if (idLbl) idLbl.textContent = 'Official USDT (TRC20) Address';
+        if (idLbl) idLbl.textContent = `Official ${ch || 'USDT-TRC20'} Wallet Address`;
         if (idVal) idVal.textContent = usdtAddr;
         if (qrImg) qrImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&margin=6&data=${encodeURIComponent(usdtAddr)}`;
+        const utrInp = document.getElementById('recharge-utr-input');
+        if (utrInp) utrInp.placeholder = 'Paste Blockchain TxID / Transaction Hash after transfer';
     } else {
+        if (amtLbl) amtLbl.textContent = `₹${rawAmt.toFixed(2)}`;
+        if (usdtInfoBox) usdtInfoBox.style.display = 'none';
         if (switcher) switcher.style.display = (pay.arpay_upi && pay.arpay_upi !== pay.upi_id) ? 'grid' : 'none';
         selectDepositUpiSlot(isArPay ? 2 : 1);
+        const utrInp = document.getElementById('recharge-utr-input');
+        if (utrInp) utrInp.placeholder = 'Paste 12-digit UTR after payment';
     }
 
     if (typeof updateUpiIntentLinks === 'function') {

@@ -1168,8 +1168,25 @@ def api_recharge():
     utr = str(data.get('utr', '')).strip()
     channel = str(data.get('channel', 'UPI')).strip()
     details = str(data.get('details', '')).strip()
+    usdt_amount = float(data.get('usdt_amount', 0))
+    usdt_rate_in = float(data.get('usdt_rate', 0))
 
-    if not details and utr:
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute('SELECT value FROM settings WHERE key = "deposit_usdt_rate"')
+        rate_row = cursor.fetchone()
+        live_usdt_rate = float(rate_row['value']) if rate_row and rate_row['value'] else 90.0
+
+    is_usdt = ('USDT' in channel.upper()) or (usdt_amount > 0)
+    if is_usdt:
+        rate = usdt_rate_in if usdt_rate_in > 0 else live_usdt_rate
+        if usdt_amount <= 0 and amount > 0:
+            usdt_amount = round(amount / rate, 2)
+        if usdt_amount <= 0:
+            return jsonify({'success': False, 'message': 'Please enter valid USDT amount (Min: 2 USDT)'}), 400
+        amount = round(usdt_amount * rate, 2)
+        details = f"₮ USDT Deposit: {usdt_amount} USDT @ ₹{rate}/USDT = ₹{amount:.2f} Coins | Network: {channel or 'USDT-TRC20'} | TxID: {utr}"
+    elif not details and utr:
         details = f"Channel: {channel} | UTR: {utr}"
     elif not details:
         details = f"Channel: {channel} | UPI Deposit Request"
@@ -1177,7 +1194,7 @@ def api_recharge():
     if amount < 100:
         return jsonify({'success': False, 'message': 'Minimum deposit is ₹100'}), 400
     if utr and len(utr) < 6:
-        return jsonify({'success': False, 'message': 'Please enter a valid 12-digit UTR / Transaction ID'}), 400
+        return jsonify({'success': False, 'message': 'Please enter a valid 12-digit UTR / Blockchain TxID'}), 400
 
     tx_id = f"DEP{int(time.time()*1000)}"
     now_iso = datetime.now().isoformat()
@@ -1186,33 +1203,34 @@ def api_recharge():
     with get_db() as conn:
         cursor = conn.cursor()
 
-        # Check if pre-captured by MacroDroid
-        cursor.execute('SELECT * FROM macrodroid_payments WHERE status = "unclaimed" AND utr = ?', (clean_utr,))
-        pre = cursor.fetchone()
-        if pre and clean_utr:
-            credit_amt = float(pre['amount']) if float(pre['amount'] or 0) > 0 else amount
-            cursor.execute(
-                'UPDATE macrodroid_payments SET status = "matched", matched_user_id = ?, matched_tx_id = ? WHERE id = ?',
-                (user['id'], tx_id, pre['id'])
-            )
-            cursor.execute(
-                'INSERT INTO transactions (id, user_id, type, amount, status, details, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
-                (tx_id, user['id'], 'deposit', credit_amt, 'completed', f"Channel: {channel} | UTR: {clean_utr} | Auto-verified via MacroDroid", now_iso)
-            )
-            apply_user_wallet_delta(conn, user['id'], credit_amt, 'deposit')
-            distribute_deposit_commissions(conn, user['id'], credit_amt)
-            cursor.execute(
-                'INSERT INTO macrodroid_logs (utr, amount, action, user_id, details, raw) VALUES (?, ?, ?, ?, ?, ?)',
-                (clean_utr, credit_amt, 'INSTANT_AUTO_CREDITED', user['id'], f"Player submitted UTR {clean_utr}. Matched existing bank payment! Credited ₹{credit_amt} instantly.", f"TxID: {tx_id}")
-            )
-            conn.commit()
-            return jsonify({
-                'success': True,
-                'instant_credited': True,
-                'amount': credit_amt,
-                'message': f'🎉 Payment Verified! ₹{credit_amt:.2f} has been credited to your wallet instantly!',
-                'tx_id': tx_id
-            })
+        # Check if pre-captured by MacroDroid (Only for non-USDT UPI deposits)
+        if not is_usdt and clean_utr:
+            cursor.execute('SELECT * FROM macrodroid_payments WHERE status = "unclaimed" AND utr = ?', (clean_utr,))
+            pre = cursor.fetchone()
+            if pre:
+                credit_amt = float(pre['amount']) if float(pre['amount'] or 0) > 0 else amount
+                cursor.execute(
+                    'UPDATE macrodroid_payments SET status = "matched", matched_user_id = ?, matched_tx_id = ? WHERE id = ?',
+                    (user['id'], tx_id, pre['id'])
+                )
+                cursor.execute(
+                    'INSERT INTO transactions (id, user_id, type, amount, status, details, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+                    (tx_id, user['id'], 'deposit', credit_amt, 'completed', f"Channel: {channel} | UTR: {clean_utr} | Auto-verified via MacroDroid", now_iso)
+                )
+                apply_user_wallet_delta(conn, user['id'], credit_amt, 'deposit')
+                distribute_deposit_commissions(conn, user['id'], credit_amt)
+                cursor.execute(
+                    'INSERT INTO macrodroid_logs (utr, amount, action, user_id, details, raw) VALUES (?, ?, ?, ?, ?, ?)',
+                    (clean_utr, credit_amt, 'INSTANT_AUTO_CREDITED', user['id'], f"Player submitted UTR {clean_utr}. Matched existing bank payment! Credited ₹{credit_amt} instantly.", f"TxID: {tx_id}")
+                )
+                conn.commit()
+                return jsonify({
+                    'success': True,
+                    'instant_credited': True,
+                    'amount': credit_amt,
+                    'message': f'🎉 Payment Verified! ₹{credit_amt:.2f} has been credited to your wallet instantly!',
+                    'tx_id': tx_id
+                })
 
         cursor.execute(
             'INSERT INTO transactions (id, user_id, type, amount, status, details, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
@@ -1220,7 +1238,8 @@ def api_recharge():
         )
         conn.commit()
 
-    return jsonify({'success': True, 'message': 'Deposit submitted! Balance will update after admin approval.', 'tx_id': tx_id})
+    msg = f"USDT Deposit of {usdt_amount} USDT (₹{amount:.2f} Coins) submitted! Balance will update after admin approval." if is_usdt else 'Deposit submitted! Balance will update after admin approval.'
+    return jsonify({'success': True, 'message': msg, 'tx_id': tx_id})
 
 def is_withdrawal_time_open():
     # Indian Standard Time is UTC + 5.5 hours
@@ -2362,15 +2381,22 @@ def api_admin_gmail_settings():
 def api_payment_details():
     with get_db() as conn:
         c = conn.cursor()
-        c.execute('SELECT key, value FROM settings WHERE key IN ("deposit_upi_id", "deposit_upi_name", "deposit_arpay_upi", "deposit_usdt_address", "deposit_qr_url")')
+        c.execute('SELECT key, value FROM settings WHERE key IN ("deposit_upi_id", "deposit_upi_name", "deposit_arpay_upi", "deposit_usdt_address", "deposit_usdt_rate", "deposit_usdt_network", "deposit_qr_url")')
         s = {r['key']: r['value'] for r in c.fetchall()}
     upi_id = s.get('deposit_upi_id') or 'akshit9908@barodampay'
+    try:
+        usdt_rate = float(s.get('deposit_usdt_rate') or 90.0)
+    except Exception:
+        usdt_rate = 90.0
+
     return jsonify({
         'success': True,
         'upi_id': upi_id,
         'upi_name': s.get('deposit_upi_name') or 'AKSHIT KUMAR SAXENA',
         'arpay_upi': s.get('deposit_arpay_upi') or 'manusaxena465267@ikwik',
         'usdt_address': s.get('deposit_usdt_address') or 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t',
+        'usdt_rate': usdt_rate,
+        'usdt_network': s.get('deposit_usdt_network') or 'TRC20',
         'qr_url': s.get('deposit_qr_url') or '/assets/deposit-qr.jpg'
     })
 
@@ -2384,6 +2410,11 @@ def api_admin_payment_details():
     upi_name = str(data.get('upi_name', 'ASGames')).strip() or 'ASGames'
     arpay_upi = str(data.get('arpay_upi', '')).strip()
     usdt_address = str(data.get('usdt_address', '')).strip()
+    try:
+        usdt_rate = float(data.get('usdt_rate') or 90.0)
+    except Exception:
+        usdt_rate = 90.0
+    usdt_network = str(data.get('usdt_network', 'TRC20')).strip()
     qr_url = str(data.get('qr_url', '')).strip()
     if not upi_id:
         return jsonify({'success': False, 'message': 'Official UPI ID is required.'}), 400
@@ -2394,6 +2425,8 @@ def api_admin_payment_details():
             ('deposit_upi_name', upi_name),
             ('deposit_arpay_upi', arpay_upi),
             ('deposit_usdt_address', usdt_address),
+            ('deposit_usdt_rate', str(usdt_rate)),
+            ('deposit_usdt_network', usdt_network),
             ('deposit_qr_url', qr_url),
         ]:
             c.execute('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', (k, v))

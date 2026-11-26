@@ -1207,59 +1207,93 @@ app.post('/api/referral/claim', requireAuth, async (req, res) => {
 // ========================================================
 app.post('/api/wallet/deposit', requireAuth, async (req, res) => {
     try {
-        const { amount, utr, channel } = req.body;
-        const depositAmt = parseFloat(amount);
+        const { amount, utr, channel, usdt_amount, usdt_rate } = req.body;
+        const s = DB.data.settings || {};
+        const liveUsdtRate = parseFloat(s.deposit_usdt_rate) || 90.0;
+
+        let depositAmt = parseFloat(amount);
+        let usdtVal = parseFloat(usdt_amount);
+        const isUsdtChannel = (channel && String(channel).toUpperCase().includes('USDT')) || (usdtVal > 0);
+
+        if (isUsdtChannel) {
+            const rate = parseFloat(usdt_rate) || liveUsdtRate;
+            if (!usdtVal || isNaN(usdtVal) || usdtVal <= 0) {
+                if (depositAmt > 0) {
+                    usdtVal = Math.round((depositAmt / rate) * 100) / 100;
+                }
+            }
+            if (usdtVal <= 0) {
+                return res.json({ success: false, message: 'Please enter valid USDT amount (Min: 2 USDT)' });
+            }
+            // Computed Coins / Rupees (1 USDT = ₹rate Coins)
+            depositAmt = Math.round(usdtVal * rate * 100) / 100;
+        }
+
         if (!depositAmt || depositAmt < 100) {
             return res.json({ success: false, message: 'Minimum deposit is ₹100' });
         }
         if (!utr || utr.length < 6) {
-            return res.json({ success: false, message: 'Please provide valid 12-digit UTR / Transaction ID' });
+            return res.json({ success: false, message: 'Please provide valid 12-digit UTR / Blockchain TxID' });
         }
 
         const txId = 'DEP' + Date.now();
         const cleanUtr = String(utr || '').replace(/\D/g, '');
 
-        // Check if this UTR was already captured by MacroDroid!
-        if (!Array.isArray(DB.data.macrodroid_payments)) DB.data.macrodroid_payments = [];
-        const prePayment = DB.data.macrodroid_payments.find(p => p.status === 'unclaimed' && p.utr && p.utr === cleanUtr);
+        // Check if this UTR was already captured by MacroDroid! (Only for non-USDT UPI deposits)
+        if (!isUsdtChannel && cleanUtr) {
+            if (!Array.isArray(DB.data.macrodroid_payments)) DB.data.macrodroid_payments = [];
+            const prePayment = DB.data.macrodroid_payments.find(p => p.status === 'unclaimed' && p.utr && p.utr === cleanUtr);
 
-        if (prePayment) {
-            // INSTANT AUTO-CREDIT!
-            prePayment.status = 'matched';
-            prePayment.matched_user_id = req.user.id;
-            prePayment.matched_tx_id = txId;
+            if (prePayment) {
+                // INSTANT AUTO-CREDIT!
+                prePayment.status = 'matched';
+                prePayment.matched_user_id = req.user.id;
+                prePayment.matched_tx_id = txId;
 
-            const creditAmt = prePayment.amount > 0 ? prePayment.amount : depositAmt;
-            await DB.run(`INSERT INTO transactions (id, user_id, type, amount, status, details) VALUES (?, ?, ?, ?, ?, ?)`,
-                [txId, req.user.id, 'deposit', creditAmt, 'approved', `Channel: ${channel || 'UPI'} | UTR: ${cleanUtr} | Auto-verified via MacroDroid`]);
-            await DB.run('UPDATE users SET balance = balance + ? WHERE id = ?', [creditAmt, req.user.id, 'deposit']);
-            await distributeDepositCommission(req.user.id, creditAmt);
+                const creditAmt = prePayment.amount > 0 ? prePayment.amount : depositAmt;
+                await DB.run(`INSERT INTO transactions (id, user_id, type, amount, status, details) VALUES (?, ?, ?, ?, ?, ?)`,
+                    [txId, req.user.id, 'deposit', creditAmt, 'approved', `Channel: ${channel || 'UPI'} | UTR: ${cleanUtr} | Auto-verified via MacroDroid`]);
+                await DB.run('UPDATE users SET balance = balance + ? WHERE id = ?', [creditAmt, req.user.id, 'deposit']);
+                await distributeDepositCommission(req.user.id, creditAmt);
 
-            if (!Array.isArray(DB.data.macrodroid_logs)) DB.data.macrodroid_logs = [];
-            DB.data.macrodroid_logs.unshift({
-                time: new Date().toISOString(),
-                utr: cleanUtr,
-                amount: creditAmt,
-                action: 'INSTANT_AUTO_CREDITED',
-                user_id: req.user.id,
-                details: `Player submitted UTR ${cleanUtr}. Matched existing bank payment! ₹${creditAmt} credited instantly.`,
-                raw: `TxID: ${txId}`
-            });
-            if (DB.data.macrodroid_logs.length > 100) DB.data.macrodroid_logs.length = 100;
-            DB.save();
+                if (!Array.isArray(DB.data.macrodroid_logs)) DB.data.macrodroid_logs = [];
+                DB.data.macrodroid_logs.unshift({
+                    time: new Date().toISOString(),
+                    utr: cleanUtr,
+                    amount: creditAmt,
+                    action: 'INSTANT_AUTO_CREDITED',
+                    user_id: req.user.id,
+                    details: `Player submitted UTR ${cleanUtr}. Matched existing bank payment! ₹${creditAmt} credited instantly.`,
+                    raw: `TxID: ${txId}`
+                });
+                if (DB.data.macrodroid_logs.length > 100) DB.data.macrodroid_logs.length = 100;
+                DB.save();
 
-            return res.json({
-                success: true,
-                instant_credited: true,
-                amount: creditAmt,
-                message: `🎉 Payment Verified! ₹${creditAmt.toFixed(2)} has been credited to your wallet instantly!`
-            });
+                return res.json({
+                    success: true,
+                    instant_credited: true,
+                    amount: creditAmt,
+                    message: `🎉 Payment Verified! ₹${creditAmt.toFixed(2)} has been credited to your wallet instantly!`
+                });
+            }
+        }
+
+        let detailStr = '';
+        if (isUsdtChannel) {
+            const rate = parseFloat(usdt_rate) || liveUsdtRate;
+            detailStr = `₮ USDT Deposit: ${usdtVal} USDT @ ₹${rate}/USDT = ₹${depositAmt.toFixed(2)} Coins | Network: ${channel || 'USDT-TRC20'} | TxID: ${utr}`;
+        } else {
+            detailStr = `Channel: ${channel || 'UPI'} | UTR: ${utr}`;
         }
 
         await DB.run(`INSERT INTO transactions (id, user_id, type, amount, status, details) VALUES (?, ?, ?, ?, ?, ?)`,
-            [txId, req.user.id, 'deposit', depositAmt, 'pending', `Channel: ${channel || 'UPI'} | UTR: ${utr}`]);
+            [txId, req.user.id, 'deposit', depositAmt, 'pending', detailStr]);
 
-        res.json({ success: true, message: 'Deposit submitted! Balance will update after admin approval.' });
+        const successMsg = isUsdtChannel
+            ? `USDT Deposit of ${usdtVal} USDT (₹${depositAmt.toFixed(2)} Coins) submitted! Balance will update after admin approval.`
+            : 'Deposit submitted! Balance will update after admin approval.';
+
+        res.json({ success: true, message: successMsg });
     } catch (e) {
         res.status(500).json({ success: false, message: e.message });
     }
@@ -2048,6 +2082,8 @@ app.get('/api/payment-details', async (req, res) => {
         upi_name: s.deposit_upi_name || 'AKSHIT KUMAR SAXENA',
         arpay_upi: s.deposit_arpay_upi || 'manusaxena465267@ikwik',
         usdt_address: s.deposit_usdt_address || 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t',
+        usdt_rate: parseFloat(s.deposit_usdt_rate) || 90.0,
+        usdt_network: s.deposit_usdt_network || 'TRC20',
         qr_url: s.deposit_qr_url !== undefined && s.deposit_qr_url !== '' ? s.deposit_qr_url : '/assets/deposit-qr.jpg'
     });
 });
@@ -2058,6 +2094,8 @@ app.post('/api/admin/payment-details', requireAdmin, async (req, res) => {
         const upi_name = String(req.body.upi_name || 'ASGames').trim();
         const arpay_upi = String(req.body.arpay_upi || '').trim();
         const usdt_address = String(req.body.usdt_address || '').trim();
+        const usdt_rate = parseFloat(req.body.usdt_rate) || 90.0;
+        const usdt_network = String(req.body.usdt_network || 'TRC20').trim();
         const qr_url = String(req.body.qr_url || '').trim();
 
         if (!upi_id) return res.json({ success: false, message: 'Official UPI ID is required.' });
@@ -2066,6 +2104,8 @@ app.post('/api/admin/payment-details', requireAdmin, async (req, res) => {
         await DB.run('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ['deposit_upi_name', upi_name || 'ASGames']);
         await DB.run('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ['deposit_arpay_upi', arpay_upi]);
         await DB.run('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ['deposit_usdt_address', usdt_address]);
+        await DB.run('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ['deposit_usdt_rate', String(usdt_rate)]);
+        await DB.run('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ['deposit_usdt_network', usdt_network]);
         await DB.run('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ['deposit_qr_url', qr_url]);
 
         res.json({ success: true, message: 'Payment details updated! All players will now see your new UPI/QR/USDT details.' });
