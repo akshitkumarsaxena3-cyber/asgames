@@ -573,8 +573,42 @@ class StateManager {
                     this.showToast('Minimum withdrawal is ₹110', 'warning');
                     return;
                 }
+
+                // 2. Withdrawal timings check (10:00 AM to 08:00 PM IST)
+                const now = new Date();
+                const ist = new Date(now.getTime() + (5.5 * 60 * 60 * 1000));
+                const h = ist.getUTCHours();
+                const m = ist.getUTCMinutes();
+                const isOpen = (h >= 10 && (h < 20 || (h === 20 && m === 0)));
+                if (!isOpen) {
+                    this.showToast('Withdrawals are allowed only between 10:00 AM and 08:00 PM IST!', 'warning');
+                    return;
+                }
+
+                // 3. Daily withdrawal limit check
+                if (window._currentTurnoverInfo && window._currentTurnoverInfo.remaining_withdrawals !== undefined && window._currentTurnoverInfo.remaining_withdrawals <= 0) {
+                    this.showToast('Daily withdrawal limit reached! Ek din me maximum 3 withdrawal requests allow hain.', 'warning');
+                    return;
+                }
+
                 if (amt > this.balance) {
                     this.showToast('Insufficient wallet balance!', 'error');
+                    return;
+                }
+
+                // 4. Winning balance check (Only won money can be withdrawn, not deposited money)
+                const winBal = (window._currentTurnoverInfo && typeof window._currentTurnoverInfo.winning_balance === 'number')
+                    ? window._currentTurnoverInfo.winning_balance
+                    : (this.user && typeof this.user.winning_balance === 'number' ? this.user.winning_balance : this.balance);
+                if (amt > winBal) {
+                    this.showToast(`Sirf game se jeete hue paise hi withdraw ho sakte hain! Aapka withdrawable jeeta hua balance ₹${winBal.toFixed(2)} hai.`, 'warning');
+                    return;
+                }
+
+                // 5. 30-Minute Win Cooldown check
+                if (window._currentTurnoverInfo && window._currentTurnoverInfo.win_cooldown_remaining_sec > 0) {
+                    const remMin = Math.ceil(window._currentTurnoverInfo.win_cooldown_remaining_sec / 60);
+                    this.showToast(`Game jeetne ke 30 minute baad hi withdrawal lag sakti hai! Kripya ${remMin} minute baad koshish karein.`, 'warning');
                     return;
                 }
 
@@ -2747,25 +2781,36 @@ async function fetchUserTurnoverStatus() {
 
 function updateWithdrawSummary() {
     const sm = window.stateManager;
+    const info = window._currentTurnoverInfo || {};
     const bal = sm ? Number(sm.balance || 0) : 0;
+    const winBal = (typeof info.winning_balance === 'number')
+        ? info.winning_balance
+        : (sm && typeof sm.winning_balance === 'number' ? Number(sm.winning_balance) : bal);
+
     const amt = parseFloat(document.getElementById('withdraw-amount-input')?.value || '0') || 0;
     const acc = (document.getElementById('withdraw-account-input')?.value || '').trim();
 
     const wBalEl = document.getElementById('wd-withdrawable-val');
     const recvEl = document.getElementById('wd-received-val');
     const timeEl = document.getElementById('wd-time-val');
-    const depEl = document.getElementById('wd-deposit-bal-val');
+    const dailyLimitEl = document.getElementById('wd-daily-limit-lbl');
     const btn = document.getElementById('btn-submit-withdraw');
 
     const tds = Math.round(amt * 0.18 * 100) / 100;
     const net = Math.max(0, Math.round((amt - tds) * 100) / 100);
     const tdsEl = document.getElementById('wd-tds-val');
 
-    if (wBalEl) wBalEl.textContent = `₹${bal.toFixed(2)}`;
+    if (wBalEl) wBalEl.textContent = `₹${winBal.toFixed(2)}`;
     if (tdsEl) tdsEl.textContent = `-₹${tds.toFixed(2)}`;
     if (recvEl) recvEl.textContent = `₹${net.toFixed(2)}`;
 
-    // Banking payout window info (24/7 requests open)
+    const remWds = (info.remaining_withdrawals !== undefined) ? info.remaining_withdrawals : 3;
+    if (dailyLimitEl) {
+        dailyLimitEl.textContent = String(remWds);
+        dailyLimitEl.style.color = remWds > 0 ? '#10b981' : '#ef4444';
+    }
+
+    // Strict 10:00 AM to 08:00 PM IST
     const now = new Date();
     const ist = new Date(now.getTime() + (5.5 * 60 * 60 * 1000));
     const h = ist.getUTCHours();
@@ -2774,24 +2819,29 @@ function updateWithdrawSummary() {
 
     if (timeEl) {
         timeEl.innerHTML = isOpen ?
-            '<span style="color:#10b981; font-weight:700;">24/7 Requests Open • Banking Payouts: 10:00 - 20:00 IST (Active Now)</span>' :
-            '<span style="color:#60a5fa; font-weight:700;">24/7 Requests Open • Banking Settlement: 10:00 AM - 08:00 PM IST</span>';
+            '<span style="color:#10b981; font-weight:700;">🟢 Open Now (10:00 AM - 08:00 PM IST)</span>' :
+            '<span style="color:#ef4444; font-weight:700;">🔴 Closed (Allowed only 10:00 AM - 08:00 PM IST)</span>';
     }
 
     if (btn) {
-        if (amt >= 110 && amt <= bal && acc) btn.classList.add('ready');
+        if (amt >= 110 && amt <= winBal && acc && isOpen && remWds > 0) btn.classList.add('ready');
         else btn.classList.remove('ready');
     }
 }
 
 function fillAllWithdrawBalance() {
     const sm = window.stateManager;
+    const info = window._currentTurnoverInfo || {};
     const bal = sm ? Number(sm.balance || 0) : 0;
-    const withdrawable = Math.floor(bal);
+    const winBal = (typeof info.winning_balance === 'number')
+        ? info.winning_balance
+        : (sm && typeof sm.winning_balance === 'number' ? Number(sm.winning_balance) : bal);
+
+    const withdrawable = Math.floor(winBal);
     const inp = document.getElementById('withdraw-amount-input');
     if (inp) inp.value = withdrawable > 0 ? String(withdrawable) : '';
     if (withdrawable < 110 && sm) {
-        sm.showToast(`Minimum withdrawal ₹110 hai! Aapka balance ₹${bal.toFixed(2)} hai.`, 'warning');
+        sm.showToast(`Minimum withdrawal ₹110 hai! Aapka jeeta hua (withdrawable) balance ₹${winBal.toFixed(2)} hai.`, 'warning');
     }
     updateWithdrawSummary();
 }

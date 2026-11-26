@@ -791,15 +791,25 @@ app.post('/api/auth/register', async (req, res) => {
         }
 
         const finalName = cleanName || ('Player ' + cleanPhone.slice(-4));
-        const result = await DB.run(`INSERT INTO users (phone, password, balance, invite_code, referred_by, email, email_verified, name) VALUES (?, ?, 100.0, ?, ?, ?, ?, ?)`,
+        const result = await DB.run(`INSERT INTO users (phone, password, balance, invite_code, referred_by, email, email_verified, name) VALUES (?, ?, 50.0, ?, ?, ?, ?, ?)`,
             [cleanPhone, password, myInviteCode, referrerCode, cleanEmail, 1, finalName]);
 
         const newUser = await DB.get('SELECT * FROM users WHERE id = ?', [result.id]);
+        if (newUser) {
+            newUser.deposit_balance = 50.0;
+            newUser.winning_balance = 0.0;
+            DB.save();
+        }
+
+        // Record welcome bonus transaction
+        await DB.run(`INSERT INTO transactions (id, user_id, type, amount, status, details) VALUES (?, ?, 'bonus', 50.0, 'approved', 'Welcome Registration Bonus ₹50')`,
+            ['BON' + Date.now(), result.id]);
+
         const token = generateToken(newUser.id, newUser.phone);
 
         res.json({
             success: true,
-            message: 'Gmail verified & Registered successfully! ₹100 Welcome Bonus credited.',
+            message: 'Gmail verified & Registered successfully! ₹50 Welcome Bonus credited.',
             token,
             user: {
                 id: newUser.id,
@@ -1314,31 +1324,123 @@ function isWithdrawalTimeOpen() {
 
 function applyUserWalletDelta(user, delta, type = null) {
     if (!user) return;
+    const isDeposit = (type === 'deposit');
+    const isWithdraw = (type === 'withdraw');
     const d = parseFloat(delta);
-    user.balance = Math.max(0, Math.round(((parseFloat(user.balance) || 0) + d) * 100) / 100);
-    user.winning_balance = user.balance;
-    user.deposit_balance = 0;
+    let depBal = Math.max(0, parseFloat(user.deposit_balance || 0));
+    let winBal = Math.max(0, parseFloat(user.winning_balance || 0));
+    let curBal = Math.max(0, parseFloat(user.balance || 0));
+
+    if (Math.round((depBal + winBal) * 100) !== Math.round(curBal * 100)) {
+        winBal = Math.max(0, Math.round((curBal - depBal) * 100) / 100);
+    }
+
+    if (d > 0) {
+        if (isDeposit) {
+            depBal = Math.round((depBal + d) * 100) / 100;
+        } else {
+            winBal = Math.round((winBal + d) * 100) / 100;
+            user.last_win_time = new Date().toISOString();
+        }
+    } else if (d < 0) {
+        const deduct = Math.abs(d);
+        if (isWithdraw) {
+            winBal = Math.max(0, Math.round((winBal - deduct) * 100) / 100);
+        } else {
+            const fromDep = Math.min(depBal, deduct);
+            const fromWin = Math.max(0, deduct - fromDep);
+            depBal = Math.max(0, Math.round((depBal - fromDep) * 100) / 100);
+            winBal = Math.max(0, Math.round((winBal - fromWin) * 100) / 100);
+        }
+    }
+
+    user.balance = Math.max(0, Math.round((depBal + winBal) * 100) / 100);
+    user.deposit_balance = depBal;
+    user.winning_balance = winBal;
     return user;
 }
 
 app.post('/api/wallet/withdraw', requireAuth, async (req, res) => {
     try {
-        // Note: 24/7 withdrawal submissions accepted, banking settlement window is 10:00 AM to 08:00 PM IST
-        const isOpenHours = isWithdrawalTimeOpen();
+        // 1. Withdrawal timing check: Strictly 10:00 AM to 08:00 PM IST
+        if (!isWithdrawalTimeOpen()) {
+            return res.json({
+                success: false,
+                message: 'Withdrawal timings are from 10:00 AM to 08:00 PM IST only. Withdrawals are closed right now!'
+            });
+        }
+
+        // 2. Daily withdrawal limit check: Maximum 3 requests per day (including approved, pending, rejected)
+        const now = new Date();
+        const istTime = new Date(now.getTime() + (5.5 * 60 * 60 * 1000));
+        const todayIstStr = istTime.toISOString().slice(0, 10);
+        const uid = Number(req.user.id);
+        const altUid = uid < 100000 ? uid + 100000 : uid - 100000;
+
+        const allUserTx = (DB.data.transactions || []).filter(t => 
+            (Number(t.user_id) === uid || Number(t.user_id) === altUid) &&
+            String(t.type).toLowerCase() === 'withdraw'
+        );
+
+        const todayWds = allUserTx.filter(t => {
+            if (!t.created_at) return false;
+            const tDate = new Date(new Date(t.created_at).getTime() + (5.5 * 60 * 60 * 1000));
+            return tDate.toISOString().slice(0, 10) === todayIstStr;
+        });
+
+        if (todayWds.length >= 3) {
+            return res.json({
+                success: false,
+                message: 'Daily withdrawal limit reached! Ek din me maximum 3 withdrawal requests allow hain (Chahe approved, pending ya rejected ho).'
+            });
+        }
 
         const { amount, bank_info } = req.body;
         const withdrawAmt = parseFloat(amount);
         if (!withdrawAmt || withdrawAmt < 110) {
             return res.json({ success: false, message: 'Minimum withdrawal amount is ₹110' });
         }
+
+        DB.reconcileUserWallet(req.user);
+
+        // 3. Balance check
         if (req.user.balance < withdrawAmt) {
             return res.json({ success: false, message: 'Insufficient wallet balance!' });
         }
 
-        // Single unified wallet: user can withdraw from their wallet balance
-        DB.reconcileUserWallet(req.user);
+        // 4. Winning balance check: Only won money can be withdrawn, NOT deposited money
+        const winBal = Math.max(0, Math.round((parseFloat(req.user.winning_balance) || 0) * 100) / 100);
+        if (withdrawAmt > winBal) {
+            return res.json({
+                success: false,
+                message: `Sirf game se jeete hue paise hi withdraw ho sakte hain! Aapka withdrawable jeeta hua balance ₹${winBal.toFixed(2)} hai. Deposit balance game me khel kar jeetne ke baad hi withdraw hoga.`
+            });
+        }
 
-        // Deduct from Wallet Balance
+        // 5. 30-Minute Win Cooldown check: Game jeetne ke 30 minute baad hi jeete hue paise withdraw ho sakein
+        let lastWinTs = req.user.last_win_time ? new Date(req.user.last_win_time).getTime() : 0;
+        if (!lastWinTs) {
+            const latestWinTx = (DB.data.transactions || []).find(t => 
+                (Number(t.user_id) === uid || Number(t.user_id) === altUid) &&
+                String(t.type).toLowerCase() === 'win'
+            );
+            if (latestWinTx && latestWinTx.created_at) {
+                lastWinTs = new Date(latestWinTx.created_at).getTime();
+            }
+        }
+
+        if (lastWinTs > 0) {
+            const elapsedMinutes = (Date.now() - lastWinTs) / (1000 * 60);
+            if (elapsedMinutes < 30) {
+                const remainingMinutes = Math.ceil(30 - elapsedMinutes);
+                return res.json({
+                    success: false,
+                    message: `Game jeetne ke 30 minute baad hi jeete hue paise withdraw ho sakte hain! Kripya ${remainingMinutes} minute baad dobara koshish karein.`
+                });
+            }
+        }
+
+        // Deduct from Winning Balance
         applyUserWalletDelta(req.user, -withdrawAmt, 'withdraw');
         DB.save();
 
@@ -1368,9 +1470,9 @@ app.post('/api/wallet/withdraw', requireAuth, async (req, res) => {
         res.json({
             success: true,
             balance: req.user.balance,
-            winning_balance: req.user.balance,
-            deposit_balance: 0,
-            withdrawable_balance: req.user.balance,
+            winning_balance: req.user.winning_balance,
+            deposit_balance: req.user.deposit_balance,
+            withdrawable_balance: req.user.winning_balance,
             gross_amount: withdrawAmt,
             tds_amount: tdsAmt,
             net_amount: netAmt,
@@ -1385,14 +1487,60 @@ app.post('/api/wallet/withdraw', requireAuth, async (req, res) => {
 app.get('/api/wallet/turnover-status', requireAuth, async (req, res) => {
     try {
         DB.reconcileUserWallet(req.user);
+
+        const now = new Date();
+        const istTime = new Date(now.getTime() + (5.5 * 60 * 60 * 1000));
+        const todayIstStr = istTime.toISOString().slice(0, 10);
+        const uid = Number(req.user.id);
+        const altUid = uid < 100000 ? uid + 100000 : uid - 100000;
+
+        const allUserTx = (DB.data.transactions || []).filter(t => 
+            (Number(t.user_id) === uid || Number(t.user_id) === altUid) &&
+            String(t.type).toLowerCase() === 'withdraw'
+        );
+
+        const todayWds = allUserTx.filter(t => {
+            if (!t.created_at) return false;
+            const tDate = new Date(new Date(t.created_at).getTime() + (5.5 * 60 * 60 * 1000));
+            return tDate.toISOString().slice(0, 10) === todayIstStr;
+        });
+
+        const todayCount = todayWds.length;
+        const remainingWds = Math.max(0, 3 - todayCount);
+
+        let lastWinTs = req.user.last_win_time ? new Date(req.user.last_win_time).getTime() : 0;
+        if (!lastWinTs) {
+            const latestWinTx = (DB.data.transactions || []).find(t => 
+                (Number(t.user_id) === uid || Number(t.user_id) === altUid) &&
+                String(t.type).toLowerCase() === 'win'
+            );
+            if (latestWinTx && latestWinTx.created_at) {
+                lastWinTs = new Date(latestWinTx.created_at).getTime();
+            }
+        }
+
+        let winCooldownRemainingSec = 0;
+        if (lastWinTs > 0) {
+            const elapsedSec = (Date.now() - lastWinTs) / 1000;
+            if (elapsedSec < 1800) {
+                winCooldownRemainingSec = Math.ceil(1800 - elapsedSec);
+            }
+        }
+
         res.json({
             success: true,
             balance: req.user.balance,
-            deposit_balance: 0,
-            winning_balance: req.user.balance,
-            withdrawable_balance: req.user.balance,
-            withdrawableBalance: req.user.balance,
-            isTimeOpen: isWithdrawalTimeOpen()
+            deposit_balance: req.user.deposit_balance || 0,
+            winning_balance: req.user.winning_balance || 0,
+            withdrawable_balance: req.user.winning_balance || 0,
+            withdrawableBalance: req.user.winning_balance || 0,
+            isTimeOpen: isWithdrawalTimeOpen(),
+            is_time_open: isWithdrawalTimeOpen(),
+            today_withdrawals_count: todayCount,
+            daily_limit: 3,
+            remaining_withdrawals: remainingWds,
+            last_win_time: req.user.last_win_time || null,
+            win_cooldown_remaining_sec: winCooldownRemainingSec
         });
     } catch (e) {
         res.status(500).json({ success: false, message: e.message });

@@ -427,15 +427,17 @@ def apply_user_wallet_delta(conn, user_id, delta, tx_type=None):
 
 def reconcile_user_wallet_sqlite(conn, user_id):
     c = conn.cursor()
-    c.execute('SELECT balance FROM users WHERE id = ?', (user_id,))
+    c.execute('SELECT balance, deposit_balance, winning_balance FROM users WHERE id = ?', (user_id,))
     u = c.fetchone()
     if not u:
         return 0.0, 0.0, 0.0
     bal = max(0.0, float(u['balance'] or 0))
-    dep_bal = 0.0
-    win_bal = bal
+    dep_bal = max(0.0, float(u['deposit_balance'] or 0))
+    win_bal = max(0.0, float(u['winning_balance'] or 0))
+    if round(dep_bal + win_bal, 2) != round(bal, 2):
+        win_bal = max(0.0, round(bal - dep_bal, 2))
     try:
-        c.execute('UPDATE users SET balance = ?, deposit_balance = 0, winning_balance = ? WHERE id = ?', (bal, bal, user_id))
+        c.execute('UPDATE users SET balance = ?, deposit_balance = ?, winning_balance = ? WHERE id = ?', (bal, dep_bal, win_bal, user_id))
     except Exception:
         pass
     return bal, dep_bal, win_bal
@@ -1027,18 +1029,22 @@ def api_register():
         created_at = datetime.now().isoformat()
         final_name = name or f"Player {phone[-4:]}"
         cursor.execute(
-            'INSERT INTO users (name, phone, email, email_verified, password, balance, invite_code, referred_by, vip_level, is_banned, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-            (final_name, phone, email, 1, password, 100.0, user_invite, invite_code, 1, 0, created_at)
+            'INSERT INTO users (name, phone, email, email_verified, password, balance, deposit_balance, winning_balance, invite_code, referred_by, vip_level, is_banned, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            (final_name, phone, email, 1, password, 50.0, 50.0, 0.0, user_invite, invite_code, 1, 0, created_at)
         )
         user_id = cursor.lastrowid
+        cursor.execute(
+            'INSERT INTO transactions (id, user_id, type, amount, status, details, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+            (f"BON{int(time.time()*1000)}", user_id, 'bonus', 50.0, 'approved', 'Welcome Registration Bonus ₹50', created_at)
+        )
         conn.commit()
 
     token = f"asg_user_{user_id}"
     return jsonify({
         'success': True,
-        'message': 'Gmail verified & Registration successful! ₹100 Welcome Bonus credited.',
+        'message': 'Gmail verified & Registration successful! ₹50 Welcome Bonus credited.',
         'token': token,
-        'user': {'id': user_id, 'phone': phone, 'email': email, 'balance': 100.0, 'invite_code': user_invite}
+        'user': {'id': user_id, 'phone': phone, 'email': email, 'balance': 50.0, 'deposit_balance': 50.0, 'winning_balance': 0.0, 'invite_code': user_invite}
     })
 
 # Special VIP Superpower Phone Helper
@@ -1261,8 +1267,62 @@ def api_turnover_status():
     if not user:
         return jsonify({'success': False, 'message': 'Unauthorized'}), 401
 
+    uid = int(user['id'])
+    alt_uid = uid + 100000 if uid < 100000 else uid - 100000
+
+    utc_now = datetime.utcnow()
+    ist_now = utc_now + timedelta(hours=5, minutes=30)
+    today_ist_str = ist_now.strftime('%Y-%m-%d')
+
     with get_db() as conn:
         bal, dep_bal, win_bal = reconcile_user_wallet_sqlite(conn, user['id'])
+
+        cursor = conn.cursor()
+        cursor.execute(
+            'SELECT created_at FROM transactions WHERE user_id IN (?, ?) AND type = "withdraw"',
+            (uid, alt_uid)
+        )
+        all_wds = cursor.fetchall()
+        today_count = 0
+        for row in all_wds:
+            c_at = row['created_at']
+            if c_at:
+                try:
+                    tx_dt = datetime.fromisoformat(str(c_at).replace('Z', '+00:00'))
+                    tx_ist = tx_dt + timedelta(hours=5, minutes=30)
+                    if tx_ist.strftime('%Y-%m-%d') == today_ist_str:
+                        today_count += 1
+                except Exception:
+                    if str(c_at)[:10] == today_ist_str:
+                        today_count += 1
+
+        remaining_wds = max(0, 3 - today_count)
+
+        last_win_time = user.get('last_win_time')
+        last_win_ts = 0
+        if last_win_time:
+            try:
+                last_win_ts = datetime.fromisoformat(str(last_win_time).replace('Z', '+00:00')).timestamp()
+            except Exception:
+                pass
+        if not last_win_ts:
+            cursor.execute(
+                'SELECT created_at FROM transactions WHERE user_id IN (?, ?) AND type = "win" ORDER BY created_at DESC LIMIT 1',
+                (uid, alt_uid)
+            )
+            last_win_row = cursor.fetchone()
+            if last_win_row and last_win_row['created_at']:
+                try:
+                    last_win_ts = datetime.fromisoformat(str(last_win_row['created_at']).replace('Z', '+00:00')).timestamp()
+                except Exception:
+                    pass
+
+        win_cooldown_remaining_sec = 0
+        if last_win_ts > 0:
+            elapsed_sec = time.time() - last_win_ts
+            if elapsed_sec < 1800:
+                win_cooldown_remaining_sec = int(1800 - elapsed_sec) + 1
+
         conn.commit()
 
     return jsonify({
@@ -1272,7 +1332,12 @@ def api_turnover_status():
         'winning_balance': win_bal,
         'withdrawable_balance': win_bal,
         'withdrawableBalance': win_bal,
-        'is_time_open': is_withdrawal_time_open()
+        'is_time_open': is_withdrawal_time_open(),
+        'isTimeOpen': is_withdrawal_time_open(),
+        'today_withdrawals_count': today_count,
+        'daily_limit': 3,
+        'remaining_withdrawals': remaining_wds,
+        'win_cooldown_remaining_sec': win_cooldown_remaining_sec
     })
 
 @app.route('/api/wallet/withdraw', methods=['POST'])
@@ -1281,7 +1346,13 @@ def api_withdraw():
     if not user:
         return jsonify({'success': False, 'message': 'Unauthorized'}), 401
 
-    # 24/7 withdrawal requests accepted; banking payouts processed during working hours (10:00 AM - 08:00 PM IST)
+    # 1. 10:00 AM to 08:00 PM IST timing check
+    if not is_withdrawal_time_open():
+        return jsonify({
+            'success': False,
+            'message': 'Withdrawal timings are from 10:00 AM to 08:00 PM IST only. Withdrawals are closed right now!'
+        }), 400
+
     data = request.get_json(silent=True) or {}
     amount = float(data.get('amount', 0))
     details = str(data.get('bank_info') or data.get('details') or 'Bank / UPI Withdrawal').strip()
@@ -1289,15 +1360,88 @@ def api_withdraw():
     if amount < 110:
         return jsonify({'success': False, 'message': 'Minimum withdrawal is ₹110'}), 400
 
+    uid = int(user['id'])
+    alt_uid = uid + 100000 if uid < 100000 else uid - 100000
+
+    utc_now = datetime.utcnow()
+    ist_now = utc_now + timedelta(hours=5, minutes=30)
+    today_ist_str = ist_now.strftime('%Y-%m-%d')
+
     with get_db() as conn:
         cursor = conn.cursor()
+
+        # 2. Maximum 3 withdrawals per day check (including approved, pending, rejected)
+        cursor.execute(
+            'SELECT created_at FROM transactions WHERE user_id IN (?, ?) AND type = "withdraw"',
+            (uid, alt_uid)
+        )
+        all_wds = cursor.fetchall()
+        today_count = 0
+        for row in all_wds:
+            c_at = row['created_at']
+            if c_at:
+                try:
+                    tx_dt = datetime.fromisoformat(str(c_at).replace('Z', '+00:00'))
+                    tx_ist = tx_dt + timedelta(hours=5, minutes=30)
+                    if tx_ist.strftime('%Y-%m-%d') == today_ist_str:
+                        today_count += 1
+                except Exception:
+                    if str(c_at)[:10] == today_ist_str:
+                        today_count += 1
+
+        if today_count >= 3:
+            return jsonify({
+                'success': False,
+                'message': 'Daily withdrawal limit reached! Ek din me maximum 3 withdrawal requests allow hain (Chahe approved, pending ya rejected ho).'
+            }), 400
+
         current_bal, dep_bal, win_bal = reconcile_user_wallet_sqlite(conn, user['id'])
 
+        # 3. Balance check
         if current_bal < amount:
             return jsonify({'success': False, 'message': f'Insufficient wallet balance! You have ₹{current_bal:.2f}'}), 400
 
-        new_bal = round(current_bal - amount, 2)
-        cursor.execute('UPDATE users SET balance = ?, winning_balance = ? WHERE id = ?', (new_bal, new_bal, user['id']))
+        # 4. Winning balance check: Only won money can be withdrawn, NOT deposited money
+        if amount > win_bal:
+            return jsonify({
+                'success': False,
+                'message': f'Sirf game se jeete hue paise hi withdraw ho sakte hain! Aapka withdrawable jeeta hua balance ₹{win_bal:.2f} hai. Deposit balance game me khel kar jeetne ke baad hi withdraw hoga.'
+            }), 400
+
+        # 5. 30-Minute Win Cooldown check: Game jeetne ke 30 minute baad hi jeete hue paise withdraw ho sakein
+        last_win_time = user.get('last_win_time')
+        last_win_ts = 0
+        if last_win_time:
+            try:
+                last_win_ts = datetime.fromisoformat(str(last_win_time).replace('Z', '+00:00')).timestamp()
+            except Exception:
+                pass
+        if not last_win_ts:
+            cursor.execute(
+                'SELECT created_at FROM transactions WHERE user_id IN (?, ?) AND type = "win" ORDER BY created_at DESC LIMIT 1',
+                (uid, alt_uid)
+            )
+            last_win_row = cursor.fetchone()
+            if last_win_row and last_win_row['created_at']:
+                try:
+                    last_win_ts = datetime.fromisoformat(str(last_win_row['created_at']).replace('Z', '+00:00')).timestamp()
+                except Exception:
+                    pass
+
+        if last_win_ts > 0:
+            elapsed_minutes = (time.time() - last_win_ts) / 60.0
+            if elapsed_minutes < 30.0:
+                rem_min = int(30.0 - elapsed_minutes) + 1
+                return jsonify({
+                    'success': False,
+                    'message': f'Game jeetne ke 30 minute baad hi jeete hue paise withdraw ho sakte hain! Kripya {rem_min} minute baad dobara koshish karein.'
+                }), 400
+
+        # Deduct from Winning Balance
+        new_win_bal = max(0.0, round(win_bal - amount, 2))
+        new_bal = max(0.0, round(current_bal - amount, 2))
+        cursor.execute('UPDATE users SET balance = ?, winning_balance = ? WHERE id = ?', (new_bal, new_win_bal, user['id']))
+
         tds_amt = round(amount * 0.18, 2)
         net_amt = round(amount - tds_amt, 2)
         full_details = f"{details} | Gross: ₹{amount:.2f} | TDS 18%: -₹{tds_amt:.2f} | Net: ₹{net_amt:.2f}"
@@ -1309,7 +1453,17 @@ def api_withdraw():
         )
         conn.commit()
 
-    return jsonify({'success': True, 'balance': new_bal, 'winning_balance': new_bal, 'deposit_balance': 0, 'gross_amount': amount, 'tds_amount': tds_amt, 'net_amount': net_amt, 'message': f'Withdrawal of ₹{amount:.2f} requested! (18% TDS: -₹{tds_amt:.2f} | Net to receive: ₹{net_amt:.2f}). Processing within working hours (10:00 AM - 08:00 PM).', 'tx_id': tx_id})
+    return jsonify({
+        'success': True,
+        'balance': new_bal,
+        'winning_balance': new_win_bal,
+        'deposit_balance': dep_bal,
+        'gross_amount': amount,
+        'tds_amount': tds_amt,
+        'net_amount': net_amt,
+        'message': f'Withdrawal of ₹{amount:.2f} requested! (18% TDS: -₹{tds_amt:.2f} | Net to receive: ₹{net_amt:.2f}). Processing within working hours (10:00 AM - 08:00 PM).',
+        'tx_id': tx_id
+    })
 
 @app.route('/api/wallet/transactions', methods=['GET'])
 def api_my_transactions():

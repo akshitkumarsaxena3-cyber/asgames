@@ -411,8 +411,13 @@ class DataStore {
         if (!user) return user;
         const currentBal = Math.max(0, Math.round((parseFloat(user.balance || 0)) * 100) / 100);
         user.balance = currentBal;
-        user.winning_balance = currentBal;
-        user.deposit_balance = 0;
+        let depBal = Math.max(0, parseFloat(user.deposit_balance || 0));
+        let winBal = Math.max(0, parseFloat(user.winning_balance || 0));
+        if (Math.round((depBal + winBal) * 100) !== Math.round(currentBal * 100)) {
+            winBal = Math.max(0, Math.round((currentBal - depBal) * 100) / 100);
+        }
+        user.deposit_balance = depBal;
+        user.winning_balance = winBal;
         return user;
     }
 
@@ -695,9 +700,36 @@ class DataStore {
         const applyUserWallet = (user, delta, isDeposit = false, isWithdraw = false) => {
             if (!user) return;
             const d = parseFloat(delta);
-            user.balance = Math.max(0, Math.round(((parseFloat(user.balance) || 0) + d) * 100) / 100);
-            user.winning_balance = user.balance;
-            user.deposit_balance = 0;
+            let depBal = Math.max(0, parseFloat(user.deposit_balance || 0));
+            let winBal = Math.max(0, parseFloat(user.winning_balance || 0));
+            let curBal = Math.max(0, parseFloat(user.balance || 0));
+
+            if (Math.round((depBal + winBal) * 100) !== Math.round(curBal * 100)) {
+                winBal = Math.max(0, Math.round((curBal - depBal) * 100) / 100);
+            }
+
+            if (d > 0) {
+                if (isDeposit) {
+                    depBal = Math.round((depBal + d) * 100) / 100;
+                } else {
+                    winBal = Math.round((winBal + d) * 100) / 100;
+                    user.last_win_time = new Date().toISOString();
+                }
+            } else if (d < 0) {
+                const deduct = Math.abs(d);
+                if (isWithdraw) {
+                    winBal = Math.max(0, Math.round((winBal - deduct) * 100) / 100);
+                } else {
+                    const fromDep = Math.min(depBal, deduct);
+                    const fromWin = Math.max(0, deduct - fromDep);
+                    depBal = Math.max(0, Math.round((depBal - fromDep) * 100) / 100);
+                    winBal = Math.max(0, Math.round((winBal - fromWin) * 100) / 100);
+                }
+            }
+
+            user.balance = Math.max(0, Math.round((depBal + winBal) * 100) / 100);
+            user.deposit_balance = depBal;
+            user.winning_balance = winBal;
         };
 
         const findUserById = (targetId) => {
