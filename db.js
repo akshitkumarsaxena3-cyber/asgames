@@ -870,8 +870,10 @@ class DataStore {
 
         // 8. Insert Transaction
         if (sql.includes('INSERT INTO transactions')) {
-            let id, user_id, type, amount, status, details;
-            if (params.length === 6) {
+            let id, user_id, type, amount, status, details, screenshot;
+            if (params.length >= 7) {
+                [id, user_id, type, amount, status, details, screenshot] = params;
+            } else if (params.length === 6) {
                 [id, user_id, type, amount, status, details] = params;
             } else if (params.length === 4) {
                 [id, user_id, amount, details] = params;
@@ -887,9 +889,10 @@ class DataStore {
                 amount: parseFloat(amount) || 0,
                 status: status || 'pending',
                 details: details || '',
+                screenshot: screenshot || null,
                 created_at: new Date().toISOString()
             };
-            this.data.transactions.push(tx);
+            this.data.transactions.unshift(tx);
             this.save();
             return { changes: 1 };
         }

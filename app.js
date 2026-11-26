@@ -514,9 +514,25 @@ class StateManager {
                     }
                 }
 
-                if (!utr || utr.length < 6) {
-                    this.showToast(isUsdt ? 'Please enter valid Blockchain TxID / Hash' : 'Please enter your 12-digit UTR/Transaction ID', 'warning');
-                    return;
+                let finalUtr = utr;
+                let screenshotData = null;
+
+                if (isUsdt) {
+                    screenshotData = window._usdtScreenshotDataUrl || null;
+                    const txIdInp = (document.getElementById('recharge-usdt-txid-input')?.value || '').trim();
+                    if (txIdInp) {
+                        finalUtr = txIdInp;
+                    } else if (screenshotData) {
+                        finalUtr = 'SCREENSHOT_ATTACHED';
+                    } else if (!finalUtr || finalUtr.length < 6) {
+                        this.showToast('Please upload USDT Transfer Screenshot or enter TxID / Hash!', 'warning');
+                        return;
+                    }
+                } else {
+                    if (!utr || utr.length < 6) {
+                        this.showToast('Please enter your 12-digit UTR/Transaction ID', 'warning');
+                        return;
+                    }
                 }
 
                 try {
@@ -531,7 +547,8 @@ class StateManager {
                             usdt_amount: isUsdt ? usdtAmt : null,
                             usdt_rate: isUsdt ? usdtRate : null,
                             channel: window._selectedDepositChannel || (isUsdt ? 'USDT-TRC20' : 'UPI-QR'),
-                            utr: utr
+                            utr: finalUtr,
+                            screenshot: screenshotData
                         })
                     });
                     const d = await res.json();
@@ -544,6 +561,9 @@ class StateManager {
                         if (typeof closeDepositCheckoutSheet === 'function') closeDepositCheckoutSheet();
                         if (typeof loadDepositPageHistory === 'function') loadDepositPageHistory();
                         if (utrInput) utrInput.value = '';
+                        if (typeof clearUsdtScreenshot === 'function') clearUsdtScreenshot();
+                        const txIdInp = document.getElementById('recharge-usdt-txid-input');
+                        if (txIdInp) txIdInp.value = '';
                     } else {
                         this.showToast(d.message, 'error');
                     }
@@ -2309,6 +2329,58 @@ function copyUsdtAddress() {
 window.copyUsdtAddress = copyUsdtAddress;
 window.copyAddress = copyUsdtAddress;
 
+window._usdtScreenshotDataUrl = null;
+
+function handleUsdtScreenshotSelect(input) {
+    const file = input.files && input.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+            const canvas = document.createElement('canvas');
+            const maxDim = 900;
+            const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+            canvas.width = Math.round(img.width * scale);
+            canvas.height = Math.round(img.height * scale);
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.82);
+
+            window._usdtScreenshotDataUrl = dataUrl;
+
+            const placeholder = document.getElementById('dep-usdt-ss-placeholder');
+            const previewWrap = document.getElementById('dep-usdt-ss-preview-wrap');
+            const previewImg = document.getElementById('dep-usdt-ss-preview-img');
+
+            if (previewImg) previewImg.src = dataUrl;
+            if (placeholder) placeholder.style.display = 'none';
+            if (previewWrap) previewWrap.style.display = 'block';
+
+            if (window.stateManager) window.stateManager.showToast('USDT Transfer Screenshot attached! ✓', 'success');
+        };
+        img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+}
+window.handleUsdtScreenshotSelect = handleUsdtScreenshotSelect;
+
+function clearUsdtScreenshot() {
+    window._usdtScreenshotDataUrl = null;
+    const fileInp = document.getElementById('recharge-usdt-screenshot-file');
+    if (fileInp) fileInp.value = '';
+    const placeholder = document.getElementById('dep-usdt-ss-placeholder');
+    const previewWrap = document.getElementById('dep-usdt-ss-preview-wrap');
+    const previewImg = document.getElementById('dep-usdt-ss-preview-img');
+    if (previewImg) previewImg.src = '';
+    if (placeholder) placeholder.style.display = 'block';
+    if (previewWrap) previewWrap.style.display = 'none';
+}
+window.clearUsdtScreenshot = clearUsdtScreenshot;
+
 window._livePaymentDetails = {
     upi_id: 'akshit9908@barodampay',
     upi_name: 'AKSHIT KUMAR SAXENA',
@@ -2328,7 +2400,59 @@ async function fetchLivePaymentDetails() {
         const res = await fetch('/api/payment-details', { cache: 'no-store' });
         const d = await res.json();
         if (d.success) {
-            window._livePaymentDetails = {
+            window._usdtScreenshotDataUrl = null;
+
+function handleUsdtScreenshotSelect(input) {
+    const file = input.files && input.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+            const canvas = document.createElement('canvas');
+            const maxDim = 900;
+            const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+            canvas.width = Math.round(img.width * scale);
+            canvas.height = Math.round(img.height * scale);
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.82);
+
+            window._usdtScreenshotDataUrl = dataUrl;
+
+            const placeholder = document.getElementById('dep-usdt-ss-placeholder');
+            const previewWrap = document.getElementById('dep-usdt-ss-preview-wrap');
+            const previewImg = document.getElementById('dep-usdt-ss-preview-img');
+
+            if (previewImg) previewImg.src = dataUrl;
+            if (placeholder) placeholder.style.display = 'none';
+            if (previewWrap) previewWrap.style.display = 'block';
+
+            if (window.stateManager) window.stateManager.showToast('USDT Transfer Screenshot attached! ✓', 'success');
+        };
+        img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+}
+window.handleUsdtScreenshotSelect = handleUsdtScreenshotSelect;
+
+function clearUsdtScreenshot() {
+    window._usdtScreenshotDataUrl = null;
+    const fileInp = document.getElementById('recharge-usdt-screenshot-file');
+    if (fileInp) fileInp.value = '';
+    const placeholder = document.getElementById('dep-usdt-ss-placeholder');
+    const previewWrap = document.getElementById('dep-usdt-ss-preview-wrap');
+    const previewImg = document.getElementById('dep-usdt-ss-preview-img');
+    if (previewImg) previewImg.src = '';
+    if (placeholder) placeholder.style.display = 'block';
+    if (previewWrap) previewWrap.style.display = 'none';
+}
+window.clearUsdtScreenshot = clearUsdtScreenshot;
+
+window._livePaymentDetails = {
                 upi_id: d.upi_id || 'akshit9908@barodampay',
                 upi_name: d.upi_name || 'AKSHIT KUMAR SAXENA',
                 arpay_upi: d.arpay_upi || 'manusaxena465267@ikwik',
@@ -2532,6 +2656,11 @@ async function openDepositCheckoutSheet() {
         if (upiRow) upiRow.style.display = 'none';
         if (usdtNetBox) usdtNetBox.style.display = 'block';
 
+        const upiUtrGrp = document.getElementById('dep-upi-utr-group');
+        const usdtSsGrp = document.getElementById('dep-usdt-screenshot-group');
+        if (upiUtrGrp) upiUtrGrp.style.display = 'none';
+        if (usdtSsGrp) usdtSsGrp.style.display = 'block';
+
         updateUsdtWalletNetwork();
 
         const utrInp = document.getElementById('recharge-utr-input');
@@ -2540,6 +2669,12 @@ async function openDepositCheckoutSheet() {
         if (amtLbl) amtLbl.textContent = `₹${rawAmt.toFixed(2)}`;
         if (usdtInfoBox) usdtInfoBox.style.display = 'none';
         if (usdtNetBox) usdtNetBox.style.display = 'none';
+
+        const upiUtrGrp = document.getElementById('dep-upi-utr-group');
+        const usdtSsGrp = document.getElementById('dep-usdt-screenshot-group');
+        if (upiUtrGrp) upiUtrGrp.style.display = 'block';
+        if (usdtSsGrp) usdtSsGrp.style.display = 'none';
+
         if (qrDiv) qrDiv.style.display = 'flex';
         if (qrWrap) qrWrap.style.display = 'block';
         if (upiRow) upiRow.style.display = 'flex';

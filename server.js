@@ -1217,7 +1217,7 @@ app.post('/api/referral/claim', requireAuth, async (req, res) => {
 // ========================================================
 app.post('/api/wallet/deposit', requireAuth, async (req, res) => {
     try {
-        const { amount, utr, channel, usdt_amount, usdt_rate } = req.body;
+        const { amount, utr, channel, usdt_amount, usdt_rate, screenshot } = req.body;
         const s = DB.data.settings || {};
         const liveUsdtRate = parseFloat(s.deposit_usdt_rate) || 90.0;
 
@@ -1242,8 +1242,16 @@ app.post('/api/wallet/deposit', requireAuth, async (req, res) => {
         if (!depositAmt || depositAmt < 100) {
             return res.json({ success: false, message: 'Minimum deposit is ₹100' });
         }
-        if (!utr || utr.length < 6) {
-            return res.json({ success: false, message: 'Please provide valid 12-digit UTR / Blockchain TxID' });
+
+        // For USDT, either screenshot OR TxID/Hash is accepted!
+        if (isUsdtChannel) {
+            if ((!utr || utr.length < 6) && !screenshot) {
+                return res.json({ success: false, message: 'Please upload USDT Payment Screenshot or enter Blockchain TxID / Hash' });
+            }
+        } else {
+            if (!utr || utr.length < 6) {
+                return res.json({ success: false, message: 'Please provide valid 12-digit UTR' });
+            }
         }
 
         const txId = 'DEP' + Date.now();
@@ -1261,8 +1269,8 @@ app.post('/api/wallet/deposit', requireAuth, async (req, res) => {
                 prePayment.matched_tx_id = txId;
 
                 const creditAmt = prePayment.amount > 0 ? prePayment.amount : depositAmt;
-                await DB.run(`INSERT INTO transactions (id, user_id, type, amount, status, details) VALUES (?, ?, ?, ?, ?, ?)`,
-                    [txId, req.user.id, 'deposit', creditAmt, 'approved', `Channel: ${channel || 'UPI'} | UTR: ${cleanUtr} | Auto-verified via MacroDroid`]);
+                await DB.run(`INSERT INTO transactions (id, user_id, type, amount, status, details, screenshot) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+                    [txId, req.user.id, 'deposit', creditAmt, 'approved', `Channel: ${channel || 'UPI'} | UTR: ${cleanUtr} | Auto-verified via MacroDroid`, null]);
                 await DB.run('UPDATE users SET balance = balance + ? WHERE id = ?', [creditAmt, req.user.id, 'deposit']);
                 await distributeDepositCommission(req.user.id, creditAmt);
 
@@ -1291,13 +1299,14 @@ app.post('/api/wallet/deposit', requireAuth, async (req, res) => {
         let detailStr = '';
         if (isUsdtChannel) {
             const rate = parseFloat(usdt_rate) || liveUsdtRate;
-            detailStr = `₮ USDT Deposit: ${usdtVal} USDT @ ₹${rate}/USDT = ₹${depositAmt.toFixed(2)} Coins | Network: ${channel || 'USDT-TRC20'} | TxID: ${utr}`;
+            const ssBadge = screenshot ? ' | 📸 Screenshot Attached' : '';
+            detailStr = `₮ USDT Deposit: ${usdtVal} USDT @ ₹${rate}/USDT = ₹${depositAmt.toFixed(2)} Coins | Network: ${channel || 'USDT-TRC20'} | TxID: ${utr || 'SCREENSHOT'}${ssBadge}`;
         } else {
             detailStr = `Channel: ${channel || 'UPI'} | UTR: ${utr}`;
         }
 
-        await DB.run(`INSERT INTO transactions (id, user_id, type, amount, status, details) VALUES (?, ?, ?, ?, ?, ?)`,
-            [txId, req.user.id, 'deposit', depositAmt, 'pending', detailStr]);
+        await DB.run(`INSERT INTO transactions (id, user_id, type, amount, status, details, screenshot) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+            [txId, req.user.id, 'deposit', depositAmt, 'pending', detailStr, screenshot || null]);
 
         const successMsg = isUsdtChannel
             ? `USDT Deposit of ${usdtVal} USDT (₹${depositAmt.toFixed(2)} Coins) submitted! Balance will update after admin approval.`

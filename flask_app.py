@@ -1176,6 +1176,7 @@ def api_recharge():
     details = str(data.get('details', '')).strip()
     usdt_amount = float(data.get('usdt_amount', 0))
     usdt_rate_in = float(data.get('usdt_rate', 0))
+    screenshot = data.get('screenshot')
 
     with get_db() as conn:
         cursor = conn.cursor()
@@ -1191,7 +1192,8 @@ def api_recharge():
         if usdt_amount <= 0:
             return jsonify({'success': False, 'message': 'Please enter valid USDT amount (Min: 2 USDT)'}), 400
         amount = round(usdt_amount * rate, 2)
-        details = f"₮ USDT Deposit: {usdt_amount} USDT @ ₹{rate}/USDT = ₹{amount:.2f} Coins | Network: {channel or 'USDT-TRC20'} | TxID: {utr}"
+        ss_badge = ' | 📸 Screenshot Attached' if screenshot else ''
+        details = f"₮ USDT Deposit: {usdt_amount} USDT @ ₹{rate}/USDT = ₹{amount:.2f} Coins | Network: {channel or 'USDT-TRC20'} | TxID: {utr or 'SCREENSHOT'}{ss_badge}"
     elif not details and utr:
         details = f"Channel: {channel} | UTR: {utr}"
     elif not details:
@@ -1199,8 +1201,13 @@ def api_recharge():
 
     if amount < 100:
         return jsonify({'success': False, 'message': 'Minimum deposit is ₹100'}), 400
-    if utr and len(utr) < 6:
-        return jsonify({'success': False, 'message': 'Please enter a valid 12-digit UTR / Blockchain TxID'}), 400
+
+    if is_usdt:
+        if (not utr or len(utr) < 6) and not screenshot:
+            return jsonify({'success': False, 'message': 'Please upload USDT Payment Screenshot or enter Blockchain TxID / Hash'}), 400
+    else:
+        if not utr or len(utr) < 6:
+            return jsonify({'success': False, 'message': 'Please enter a valid 12-digit UTR'}), 400
 
     tx_id = f"DEP{int(time.time()*1000)}"
     now_iso = datetime.now().isoformat()
@@ -1208,6 +1215,10 @@ def api_recharge():
 
     with get_db() as conn:
         cursor = conn.cursor()
+        try:
+            cursor.execute('ALTER TABLE transactions ADD COLUMN screenshot TEXT')
+        except Exception:
+            pass
 
         # Check if pre-captured by MacroDroid (Only for non-USDT UPI deposits)
         if not is_usdt and clean_utr:
@@ -1220,8 +1231,8 @@ def api_recharge():
                     (user['id'], tx_id, pre['id'])
                 )
                 cursor.execute(
-                    'INSERT INTO transactions (id, user_id, type, amount, status, details, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
-                    (tx_id, user['id'], 'deposit', credit_amt, 'completed', f"Channel: {channel} | UTR: {clean_utr} | Auto-verified via MacroDroid", now_iso)
+                    'INSERT INTO transactions (id, user_id, type, amount, status, details, screenshot, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+                    (tx_id, user['id'], 'deposit', credit_amt, 'completed', f"Channel: {channel} | UTR: {clean_utr} | Auto-verified via MacroDroid", None, now_iso)
                 )
                 apply_user_wallet_delta(conn, user['id'], credit_amt, 'deposit')
                 distribute_deposit_commissions(conn, user['id'], credit_amt)
@@ -1239,8 +1250,8 @@ def api_recharge():
                 })
 
         cursor.execute(
-            'INSERT INTO transactions (id, user_id, type, amount, status, details, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
-            (tx_id, user['id'], 'deposit', amount, 'pending', details, now_iso)
+            'INSERT INTO transactions (id, user_id, type, amount, status, details, screenshot, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+            (tx_id, user['id'], 'deposit', amount, 'pending', details, screenshot, now_iso)
         )
         conn.commit()
 
