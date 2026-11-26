@@ -120,6 +120,11 @@ def init_db():
             cols = [r[1] for r in cursor.execute('PRAGMA table_info(bets)').fetchall()]
             if 'period' not in cols:
                 cursor.execute('DROP TABLE bets')
+            elif 'game_mode' not in cols:
+                try:
+                    cursor.execute('ALTER TABLE bets ADD COLUMN game_mode TEXT DEFAULT "30s"')
+                except:
+                    pass
 
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS users (
@@ -742,6 +747,163 @@ def seed_initial_history_if_needed(mode='30s'):
                         (p, num, determine_color(num), 5000 + num * 100, now_iso)
                     )
             conn.commit()
+
+
+# ========================================================
+# SYNCHRONIZED AVIATOR ENGINE (SERVER-WIDE LIVE FLIGHTS)
+# ========================================================
+AVIATOR_CONFIG = {
+    'betting_duration': 5.0,
+    'crashed_duration': 3.0
+}
+
+def generate_aviator_crash(mode='smart_profit', active_bets=None):
+    active_bets = active_bets or []
+    total_wager = sum(float(b.get('amount', 0)) for b in active_bets)
+    if mode == 'early_crash':
+        return round(1.02 + random.random() * 0.24, 2)
+    if mode == 'high_flight':
+        return round(8.00 + random.random() * 22.0, 2)
+    if mode == 'random':
+        u = min(0.992, max(0.001, random.random()))
+        if random.random() < 0.04:
+            return 1.00
+        return min(50.00, max(1.01, round((0.96 / (1.0 - u)), 2)))
+    # smart_profit:
+    if total_wager > 0:
+        r = random.random()
+        if r < 0.40:
+            return round(1.02 + random.random() * 0.18, 2)
+        if r < 0.75:
+            return round(1.20 + random.random() * 0.35, 2)
+        if r < 0.92:
+            return round(1.55 + random.random() * 0.65, 2)
+        return round(2.20 + random.random() * 1.50, 2)
+    r = random.random()
+    if r < 0.15:
+        return round(1.02 + random.random() * 0.25, 2)
+    if r < 0.50:
+        return round(1.30 + random.random() * 1.40, 2)
+    if r < 0.80:
+        return round(2.70 + random.random() * 4.80, 2)
+    if r < 0.95:
+        return round(7.50 + random.random() * 12.50, 2)
+    return round(20.00 + random.random() * 28.00, 2)
+
+_AVIATOR_ENGINE = {
+    'round_num': 1,
+    'round_id': f"AV-{datetime.now().strftime('%Y%m%d')}-0001",
+    'state': 'betting',
+    'state_start_ts': time.time(),
+    'crash_multiplier': 2.15,
+    'last_crash': 1.84,
+    'history': [1.84, 3.42, 1.15, 6.78, 2.10, 1.05, 14.50, 2.45],
+    'active_bets': [],
+    'forced_crash': None
+}
+
+def calc_aviator_multiplier(elapsed):
+    if elapsed <= 0:
+        return 1.00
+    m = 1.00 + 0.08 * elapsed + 0.015 * math.pow(elapsed, 1.75)
+    return math.floor(m * 100.0) / 100.0
+
+def calc_aviator_flight_duration(crash_multiplier):
+    if crash_multiplier <= 1.00:
+        return 0.5
+    low, high = 0.1, 60.0
+    for _ in range(24):
+        mid = (low + high) / 2.0
+        if calc_aviator_multiplier(mid) < crash_multiplier:
+            low = mid
+        else:
+            high = mid
+    return (low + high) / 2.0
+
+def update_aviator_engine():
+    now = time.time()
+    elapsed = now - _AVIATOR_ENGINE['state_start_ts']
+
+    try:
+        with get_db() as conn:
+            c = conn.cursor()
+            c.execute('SELECT value FROM settings WHERE key="aviator_mode"')
+            mr = c.fetchone()
+            mode = mr['value'] if mr else 'smart_profit'
+            c.execute('SELECT value FROM settings WHERE key="aviator_crash"')
+            cr = c.fetchone()
+            forced = float(cr['value']) if (cr and cr['value']) else None
+            if forced and forced >= 1.00:
+                _AVIATOR_ENGINE['forced_crash'] = forced
+    except:
+        mode = 'smart_profit'
+
+    if _AVIATOR_ENGINE['state'] == 'betting':
+        if elapsed >= AVIATOR_CONFIG['betting_duration']:
+            _AVIATOR_ENGINE['state'] = 'flying'
+            _AVIATOR_ENGINE['state_start_ts'] = now
+            if _AVIATOR_ENGINE['forced_crash'] and _AVIATOR_ENGINE['forced_crash'] >= 1.00:
+                _AVIATOR_ENGINE['crash_multiplier'] = _AVIATOR_ENGINE['forced_crash']
+            else:
+                _AVIATOR_ENGINE['crash_multiplier'] = generate_aviator_crash(mode, _AVIATOR_ENGINE['active_bets'])
+    elif _AVIATOR_ENGINE['state'] == 'flying':
+        flight_dur = calc_aviator_flight_duration(_AVIATOR_ENGINE['crash_multiplier'])
+        if elapsed >= flight_dur:
+            _AVIATOR_ENGINE['state'] = 'crashed'
+            _AVIATOR_ENGINE['state_start_ts'] = now
+            _AVIATOR_ENGINE['last_crash'] = _AVIATOR_ENGINE['crash_multiplier']
+            _AVIATOR_ENGINE['history'].insert(0, _AVIATOR_ENGINE['crash_multiplier'])
+            if len(_AVIATOR_ENGINE['history']) > 25:
+                _AVIATOR_ENGINE['history'].pop()
+            for b in _AVIATOR_ENGINE['active_bets']:
+                if b.get('status') == 'in_flight':
+                    b['status'] = 'crashed'
+    elif _AVIATOR_ENGINE['state'] == 'crashed':
+        if elapsed >= AVIATOR_CONFIG['crashed_duration']:
+            _AVIATOR_ENGINE['state'] = 'betting'
+            _AVIATOR_ENGINE['state_start_ts'] = now
+            _AVIATOR_ENGINE['round_num'] += 1
+            ymd = datetime.now().strftime('%Y%m%d')
+            pad = str(_AVIATOR_ENGINE['round_num']).zfill(4)
+            _AVIATOR_ENGINE['round_id'] = f"AV-{ymd}-{pad}"
+            _AVIATOR_ENGINE['active_bets'] = []
+
+def get_aviator_public_state(is_admin=False):
+    update_aviator_engine()
+    now = time.time()
+    elapsed = max(0.0, now - _AVIATOR_ENGINE['state_start_ts'])
+
+    if _AVIATOR_ENGINE['state'] == 'betting':
+        cur_mult = 1.00
+        rem_sec = max(0, int(math.ceil(AVIATOR_CONFIG['betting_duration'] - elapsed)))
+    elif _AVIATOR_ENGINE['state'] == 'flying':
+        cur_mult = min(_AVIATOR_ENGINE['crash_multiplier'], calc_aviator_multiplier(elapsed))
+        rem_sec = max(0, int(math.floor(elapsed)))
+    else:
+        cur_mult = _AVIATOR_ENGINE['crash_multiplier']
+        rem_sec = max(0, int(math.ceil(AVIATOR_CONFIG['crashed_duration'] - elapsed)))
+
+    total_bet = sum(float(b.get('amount', 0)) for b in _AVIATOR_ENGINE['active_bets'])
+    res = {
+        'success': True,
+        'round_id': _AVIATOR_ENGINE['round_id'],
+        'round_num': _AVIATOR_ENGINE['round_num'],
+        'state': _AVIATOR_ENGINE['state'],
+        'current_multiplier': cur_mult,
+        'last_crash': _AVIATOR_ENGINE['last_crash'],
+        'history': _AVIATOR_ENGINE['history'][:15],
+        'remaining_seconds': rem_sec,
+        'elapsed_seconds': round(elapsed, 1),
+        'active_bets': _AVIATOR_ENGINE['active_bets'],
+        'total_bets_amount': total_bet,
+        'active_players_count': len(_AVIATOR_ENGINE['active_bets']),
+        'forced_crash': _AVIATOR_ENGINE['forced_crash'],
+        'forced_target': _AVIATOR_ENGINE['forced_crash'] if _AVIATOR_ENGINE.get('mode') == 'manual' else None,
+        'mode': _AVIATOR_ENGINE.get('mode', 'smart_profit')
+    }
+    if is_admin:
+        res['crash_multiplier'] = _AVIATOR_ENGINE['crash_multiplier']
+    return res
 
 
 # ========================================================
@@ -1445,7 +1607,10 @@ def api_admin_overview():
     if not ok:
         return jsonify({'success': False, 'message': 'Unauthorized'}), 403
 
-    period, remaining, is_locked = get_current_period_info()
+    info_30s = get_current_period_info('30s')
+    period = info_30s['period']
+    remaining = info_30s['remainingSeconds']
+    is_locked = info_30s['isLocked']
 
     with get_db() as conn:
         cursor = conn.cursor()
@@ -1488,11 +1653,11 @@ def api_admin_overview():
                 m_man = ''
 
             # Wagers on current period for mode m
-            cursor.execute('SELECT select_val, SUM(amount) as amt FROM bets WHERE (period = ? OR id LIKE ?) AND (game_mode = ? OR game_mode IS NULL) GROUP BY select_val', (inf['period'], f"%{inf['period']}%", m))
+            cursor.execute('SELECT select_val, SUM(amount) as amt FROM bets WHERE period = ? GROUP BY select_val', (inf['period'],))
             wager_rows = cursor.fetchall()
             m_wagers = {
-                'green': 0, 'red': 0, 'violet': 0, 'big': 0, 'small': 0,
-                'numbers': {str(i): 0 for i in range(10)}
+                'green': 0.0, 'red': 0.0, 'violet': 0.0, 'big': 0.0, 'small': 0.0,
+                'numbers': {str(i): 0.0 for i in range(10)}
             }
             for r in wager_rows:
                 s_val = str(r['select_val']).lower()
@@ -1501,16 +1666,27 @@ def api_admin_overview():
                     m_wagers[s_val] = amt
                 elif s_val in m_wagers['numbers']:
                     m_wagers['numbers'][s_val] = amt
+                elif s_val.isdigit() and 0 <= int(s_val) <= 9:
+                    m_wagers['numbers'][str(int(s_val))] = amt
+
+            cursor.execute('''
+                SELECT b.id, b.select_type, b.select_val, b.amount, b.created_at, u.phone as user_phone, u.name as user_name
+                FROM bets b LEFT JOIN users u ON b.user_id = u.id
+                WHERE b.period = ?
+                ORDER BY b.created_at DESC LIMIT 50
+            ''', (inf['period'],))
+            m_bets = [dict(r) for r in cursor.fetchall()]
 
             wingo_modes[m] = {
                 'mode': m,
                 'period': inf['period'],
-                'remainingSeconds': inf['remaining_seconds'],
-                'isLocked': inf['is_locked'],
+                'remainingSeconds': inf.get('remainingSeconds', 0),
+                'isLocked': inf.get('isLocked', False),
                 'duration': inf['duration'],
                 'gameMode': m_mode,
                 'manualNumber': m_man,
-                'wagers': m_wagers
+                'wagers': m_wagers,
+                'activeBets': m_bets
             }
 
         def30 = wingo_modes.get('30s', {})
@@ -1523,9 +1699,11 @@ def api_admin_overview():
         'gameMode': def30.get('gameMode', 'house_edge'),
         'manualNumber': def30.get('manualNumber', ''),
         'wagers': def30.get('wagers', {}),
+        'activeBets': def30.get('activeBets', []),
         'wingoModes': wingo_modes,
         'aviatorMode': all_sets.get('aviator_mode', 'smart_profit'),
         'aviatorCrash': all_sets.get('aviator_crash', '2.00'),
+        'aviatorState': get_aviator_public_state(is_admin=True),
         'minesMode': all_sets.get('mines_mode', 'random'),
         'minesMaxSafe': all_sets.get('mines_max_safe', '1'),
         'k3Mode': all_sets.get('k3_mode', 'random'),
@@ -1606,7 +1784,168 @@ def api_admin_control():
                 cursor.execute('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', (db_key, str(data[body_key])))
         conn.commit()
 
+    if 'aviator_crash' in data and data['aviator_crash'] is not None:
+        try:
+            val = float(data['aviator_crash'])
+            if val >= 1.00:
+                _AVIATOR_ENGINE['forced_crash'] = val
+                _AVIATOR_ENGINE['crash_multiplier'] = val
+        except:
+            pass
+
     return jsonify({'success': True, 'message': f'Controls updated for Win Go [{target_game}] and other games successfully!'})
+
+# ========================================================
+# AVIATOR PUBLIC / PLAYER / ADMIN APIS
+# ========================================================
+
+@app.route('/api/aviator/state', methods=['GET'])
+def api_aviator_state():
+    is_admin = False
+    admin_key = request.headers.get('x-admin-key') or request.args.get('adminKey') or ''
+    if admin_key:
+        ok, _ = verify_admin(request)
+        is_admin = ok
+    return jsonify(get_aviator_public_state(is_admin=is_admin))
+
+@app.route('/api/aviator/bet', methods=['POST'])
+def api_aviator_bet():
+    user = get_current_user(request)
+    if not user:
+        return jsonify({'success': False, 'message': 'Unauthorized'}), 401
+
+    update_aviator_engine()
+    if _AVIATOR_ENGINE['state'] in ('flying', 'crashed'):
+        return jsonify({'success': False, 'message': 'Flight has already taken off! Please wait for next round countdown.'}), 400
+
+    data = request.get_json(silent=True) or {}
+    try:
+        amount = max(10.0, float(data.get('amount', 0)))
+    except:
+        amount = 10.0
+    try:
+        auto_cashout = float(data.get('auto_cashout', 0))
+    except:
+        auto_cashout = 0.0
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute('SELECT balance, phone, name FROM users WHERE id = ?', (user['id'],))
+        row = cursor.fetchone()
+        if not row or float(row['balance'] or 0) < amount:
+            return jsonify({'success': False, 'message': 'Insufficient balance! Please deposit.'}), 400
+
+        new_bal, new_dep, new_win = apply_user_wallet_delta(conn, user['id'], -amount, 'bet')
+        bet_id = f"AVB{int(time.time()*1000)}{random.randint(100, 999)}"
+        now_iso = datetime.now().isoformat()
+
+        cursor.execute(
+            'INSERT INTO transactions (id, user_id, type, amount, status, details, created_at) VALUES (?, ?, "bet", ?, "approved", ?, ?)',
+            (bet_id, user['id'], amount, f"Aviator Bet #{_AVIATOR_ENGINE['round_id']}", now_iso)
+        )
+        conn.commit()
+
+    bet_obj = {
+        'id': bet_id,
+        'user_id': user['id'],
+        'phone': user.get('phone') or '9999999999',
+        'name': user.get('name') or 'Player',
+        'amount': amount,
+        'auto_cashout': auto_cashout if auto_cashout > 1.0 else 0.0,
+        'status': 'in_flight',
+        'cashout_mult': 0.0,
+        'win_amount': 0.0,
+        'created_at': now_iso
+    }
+    _AVIATOR_ENGINE['active_bets'].append(bet_obj)
+
+    return jsonify({
+        'success': True,
+        'message': 'Aviator bet placed!',
+        'balance': new_bal,
+        'round_id': _AVIATOR_ENGINE['round_id'],
+        'bet_id': bet_id
+    })
+
+@app.route('/api/aviator/cashout', methods=['POST'])
+def api_aviator_cashout():
+    user = get_current_user(request)
+    if not user:
+        return jsonify({'success': False, 'message': 'Unauthorized'}), 401
+
+    update_aviator_engine()
+    if _AVIATOR_ENGINE['state'] != 'flying':
+        return jsonify({'success': False, 'message': 'Flight is not in the air!'}), 400
+
+    bet = next((b for b in _AVIATOR_ENGINE['active_bets'] if b['user_id'] == user['id'] and b['status'] == 'in_flight'), None)
+    if not bet:
+        return jsonify({'success': False, 'message': 'No active flight bet found!'}), 400
+
+    now = time.time()
+    elapsed = max(0.0, now - _AVIATOR_ENGINE['state_start_ts'])
+    live_mult = min(_AVIATOR_ENGINE['crash_multiplier'], calc_aviator_multiplier(elapsed))
+
+    data = request.get_json(silent=True) or {}
+    try:
+        req_mult = float(data.get('multiplier', live_mult))
+    except:
+        req_mult = live_mult
+
+    mult = max(1.01, min(live_mult, req_mult))
+    won_amount = math.floor(bet['amount'] * mult * 100.0) / 100.0
+
+    bet['status'] = 'cashed_out'
+    bet['cashout_mult'] = mult
+    bet['win_amount'] = won_amount
+
+    with get_db() as conn:
+        new_bal, new_dep, new_win = apply_user_wallet_delta(conn, user['id'], won_amount, 'win')
+        tx_id = f"AVW{int(time.time()*1000)}{random.randint(100, 999)}"
+        cursor = conn.cursor()
+        cursor.execute(
+            'INSERT INTO transactions (id, user_id, type, amount, status, details, created_at) VALUES (?, ?, "win", ?, "approved", ?, ?)',
+            (tx_id, user['id'], won_amount, f"Aviator Cashout @ {mult:.2f}x", datetime.now().isoformat())
+        )
+        conn.commit()
+
+    return jsonify({
+        'success': True,
+        'won_amount': won_amount,
+        'multiplier': mult,
+        'balance': new_bal
+    })
+
+@app.route('/api/admin/aviator-force', methods=['POST'])
+def api_admin_aviator_force():
+    ok, _ = verify_admin(request)
+    if not ok:
+        return jsonify({'success': False, 'message': 'Unauthorized'}), 403
+
+    data = request.get_json(silent=True) or {}
+    try:
+        crash_point = float(data.get('crash') or data.get('multiplier') or data.get('target_multiplier') or data.get('aviator_crash') or 1.50)
+    except:
+        crash_point = 1.50
+
+    if crash_point < 1.00:
+        return jsonify({'success': False, 'message': 'Invalid crash multiplier'}), 400
+
+    _AVIATOR_ENGINE['forced_crash'] = crash_point
+    _AVIATOR_ENGINE['crash_multiplier'] = crash_point
+    _AVIATOR_ENGINE['mode'] = 'manual'
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute('INSERT OR REPLACE INTO settings (key, value) VALUES ("aviator_crash", ?)', (str(crash_point),))
+        cursor.execute('INSERT OR REPLACE INTO settings (key, value) VALUES ("aviator_mode", "manual")')
+        conn.commit()
+
+    return jsonify({
+        'success': True,
+        'target': crash_point,
+        'message': f"Next Aviator flight locked at {crash_point:.2f}x!",
+        'forced_crash': crash_point
+    })
 
 # ========================================================
 # SPECIAL VIP SUPERPOWER CONTROLLER APIS (User: 9720955287)

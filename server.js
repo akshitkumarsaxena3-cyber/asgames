@@ -458,6 +458,163 @@ async function distributeReferralCommissions(userId, betAmount) {
     }
 }
 
+// ========================================================
+// SYNCHRONIZED AVIATOR ENGINE (SERVER-WIDE LIVE FLIGHTS)
+// ========================================================
+const AVIATOR_CONFIG = {
+    betting_duration: 5,   // 5s countdown
+    crashed_duration: 3,   // 3s display after crash
+};
+
+function generateAviatorCrash(mode = 'smart_profit', activeBets = []) {
+    const totalWager = activeBets.reduce((a, b) => a + (parseFloat(b.amount) || 0), 0);
+    if (mode === 'early_crash') {
+        return +(1.02 + Math.random() * 0.24).toFixed(2);
+    }
+    if (mode === 'high_flight') {
+        return +(8.00 + Math.random() * 22.0).toFixed(2);
+    }
+    if (mode === 'random') {
+        const u = Math.min(0.992, Math.max(0.001, Math.random()));
+        if (Math.random() < 0.04) return 1.00;
+        return Math.min(50.00, Math.max(1.01, Math.floor((0.96 / (1 - u)) * 100) / 100));
+    }
+    // smart_profit:
+    if (totalWager > 0) {
+        const r = Math.random();
+        if (r < 0.40) return +(1.02 + Math.random() * 0.18).toFixed(2);
+        if (r < 0.75) return +(1.20 + Math.random() * 0.35).toFixed(2);
+        if (r < 0.92) return +(1.55 + Math.random() * 0.65).toFixed(2);
+        return +(2.20 + Math.random() * 1.50).toFixed(2);
+    }
+    const r = Math.random();
+    if (r < 0.15) return +(1.02 + Math.random() * 0.25).toFixed(2);
+    if (r < 0.50) return +(1.30 + Math.random() * 1.40).toFixed(2);
+    if (r < 0.80) return +(2.70 + Math.random() * 4.80).toFixed(2);
+    if (r < 0.95) return +(7.50 + Math.random() * 12.50).toFixed(2);
+    return +(20.00 + Math.random() * 28.00).toFixed(2);
+}
+
+let aviatorEngine = {
+    round_num: 1,
+    round_id: 'AV-' + new Date().toISOString().slice(0, 10).replace(/-/g, '') + '-0001',
+    state: 'betting', // 'betting' | 'flying' | 'crashed'
+    state_start_ts: Date.now(),
+    crash_multiplier: 2.15,
+    last_crash: 1.84,
+    history: [1.84, 3.42, 1.15, 6.78, 2.10, 1.05, 14.50, 2.45],
+    active_bets: [],
+    forced_crash: null
+};
+
+function calcAviatorMultiplier(elapsedSeconds) {
+    if (elapsedSeconds <= 0) return 1.00;
+    const m = 1.00 + 0.08 * elapsedSeconds + 0.015 * Math.pow(elapsedSeconds, 1.75);
+    return Math.floor(m * 100) / 100;
+}
+
+function calcAviatorFlightDuration(crashMultiplier) {
+    if (crashMultiplier <= 1.00) return 0.5;
+    let low = 0.1, high = 60.0;
+    for (let i = 0; i < 24; i++) {
+        const mid = (low + high) / 2;
+        if (calcAviatorMultiplier(mid) < crashMultiplier) low = mid;
+        else high = mid;
+    }
+    return (low + high) / 2;
+}
+
+function updateAviatorEngine() {
+    const now = Date.now();
+    const elapsed = (now - aviatorEngine.state_start_ts) / 1000;
+
+    const s = (DB && DB.data && DB.data.settings) || {};
+    const mode = s.aviator_mode || 'smart_profit';
+    let forced = (s.aviator_crash && parseFloat(s.aviator_crash) >= 1.00) ? parseFloat(s.aviator_crash) : null;
+    if (forced && aviatorEngine.forced_crash !== forced) {
+        aviatorEngine.forced_crash = forced;
+    }
+
+    if (aviatorEngine.state === 'betting') {
+        if (elapsed >= AVIATOR_CONFIG.betting_duration) {
+            aviatorEngine.state = 'flying';
+            aviatorEngine.state_start_ts = now;
+            if (aviatorEngine.forced_crash && aviatorEngine.forced_crash >= 1.00) {
+                aviatorEngine.crash_multiplier = aviatorEngine.forced_crash;
+            } else {
+                aviatorEngine.crash_multiplier = generateAviatorCrash(mode, aviatorEngine.active_bets);
+            }
+        }
+    } else if (aviatorEngine.state === 'flying') {
+        const flightDuration = calcAviatorFlightDuration(aviatorEngine.crash_multiplier);
+        if (elapsed >= flightDuration) {
+            aviatorEngine.state = 'crashed';
+            aviatorEngine.state_start_ts = now;
+            aviatorEngine.last_crash = aviatorEngine.crash_multiplier;
+            aviatorEngine.history.unshift(aviatorEngine.crash_multiplier);
+            if (aviatorEngine.history.length > 25) aviatorEngine.history.pop();
+
+            for (const b of aviatorEngine.active_bets) {
+                if (b.status === 'in_flight') {
+                    b.status = 'crashed';
+                }
+            }
+        }
+    } else if (aviatorEngine.state === 'crashed') {
+        if (elapsed >= AVIATOR_CONFIG.crashed_duration) {
+            aviatorEngine.state = 'betting';
+            aviatorEngine.state_start_ts = now;
+            aviatorEngine.round_num++;
+            const ymd = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+            const padNum = String(aviatorEngine.round_num).padStart(4, '0');
+            aviatorEngine.round_id = `AV-${ymd}-${padNum}`;
+            aviatorEngine.active_bets = [];
+        }
+    }
+}
+
+setInterval(updateAviatorEngine, 200);
+
+function getAviatorPublicState(isAdmin = false) {
+    updateAviatorEngine();
+    const now = Date.now();
+    const elapsed = Math.max(0, (now - aviatorEngine.state_start_ts) / 1000);
+
+    let currentMultiplier = 1.00;
+    let remainingSeconds = 0;
+
+    if (aviatorEngine.state === 'betting') {
+        currentMultiplier = 1.00;
+        remainingSeconds = Math.max(0, Math.ceil(AVIATOR_CONFIG.betting_duration - elapsed));
+    } else if (aviatorEngine.state === 'flying') {
+        currentMultiplier = Math.min(aviatorEngine.crash_multiplier, calcAviatorMultiplier(elapsed));
+        remainingSeconds = Math.max(0, Math.floor(elapsed));
+    } else if (aviatorEngine.state === 'crashed') {
+        currentMultiplier = aviatorEngine.crash_multiplier;
+        remainingSeconds = Math.max(0, Math.ceil(AVIATOR_CONFIG.crashed_duration - elapsed));
+    }
+
+    const totalBetAmount = aviatorEngine.active_bets.reduce((a, b) => a + (parseFloat(b.amount) || 0), 0);
+
+    return {
+        success: true,
+        round_id: aviatorEngine.round_id,
+        round_num: aviatorEngine.round_num,
+        state: aviatorEngine.state,
+        current_multiplier: currentMultiplier,
+        last_crash: aviatorEngine.last_crash,
+        history: aviatorEngine.history.slice(0, 15),
+        remaining_seconds: remainingSeconds,
+        elapsed_seconds: Math.floor(elapsed * 10) / 10,
+        active_bets: aviatorEngine.active_bets,
+        total_bets_amount: totalBetAmount,
+        active_players_count: aviatorEngine.active_bets.length,
+        forced_crash: aviatorEngine.forced_crash,
+        mode: (DB && DB.data && DB.data.settings && DB.data.settings.aviator_mode) || 'smart_profit',
+        crash_multiplier: isAdmin ? aviatorEngine.crash_multiplier : undefined
+    };
+}
+
 async function distributeDepositCommission(userId, depositAmount) {
     try {
         const depAmt = parseFloat(depositAmount || 0);
@@ -1323,7 +1480,10 @@ app.get('/api/admin/overview', requireAdmin, async (req, res) => {
             for (const b of mBets) {
                 if (b.select_type === 'color') wagers[b.select_value] += (b.amount || 0);
                 else if (b.select_type === 'size') wagers[b.select_value.toLowerCase()] += (b.amount || 0);
-                else if (b.select_type === 'number') wagers.numbers[b.select_value] += (b.amount || 0);
+                else if (b.select_type === 'number') {
+                    const sk = String(b.select_value);
+                    wagers.numbers[sk] = (wagers.numbers[sk] || 0) + (b.amount || 0);
+                }
             }
 
             wingoModes[m] = {
@@ -1354,6 +1514,7 @@ app.get('/api/admin/overview', requireAdmin, async (req, res) => {
             wingoModes,
             aviatorMode: (DB.data.settings && DB.data.settings.aviator_mode) || 'smart_profit',
             aviatorCrash: (DB.data.settings && DB.data.settings.aviator_crash) || '2.00',
+            aviatorState: getAviatorPublicState(true),
             minesMode: (DB.data.settings && DB.data.settings.mines_mode) || 'house_profit',
             minesMaxSafe: (DB.data.settings && DB.data.settings.mines_max_safe) || '1',
             k3Mode: (DB.data.settings && DB.data.settings.k3_mode) || 'random',
@@ -1424,8 +1585,17 @@ app.post('/api/admin/control', requireAdmin, async (req, res) => {
             await DB.run('UPDATE settings SET value = ? WHERE key = ?', [lock_force ? '1' : '0', `wingo_${targetGame}_lock`]);
         }
 
-        if (aviator_mode) await DB.run('UPDATE settings SET value = ? WHERE key = ?', [aviator_mode, 'aviator_mode']);
-        if (aviator_crash !== undefined) await DB.run('UPDATE settings SET value = ? WHERE key = ?', [String(aviator_crash), 'aviator_crash']);
+        if (aviator_mode) {
+            await DB.run('UPDATE settings SET value = ? WHERE key = ?', [aviator_mode, 'aviator_mode']);
+        }
+        if (aviator_crash !== undefined) {
+            await DB.run('UPDATE settings SET value = ? WHERE key = ?', [String(aviator_crash), 'aviator_crash']);
+            const val = parseFloat(aviator_crash);
+            if (!isNaN(val) && val >= 1.00) {
+                aviatorEngine.forced_crash = val;
+                aviatorEngine.crash_multiplier = val;
+            }
+        }
         if (aviator_force_ts !== undefined) await DB.run('UPDATE settings SET value = ? WHERE key = ?', [String(aviator_force_ts), 'aviator_force_ts']);
         if (mines_mode) await DB.run('UPDATE settings SET value = ? WHERE key = ?', [mines_mode, 'mines_mode']);
         if (mines_max_safe !== undefined) await DB.run('UPDATE settings SET value = ? WHERE key = ?', [String(mines_max_safe), 'mines_max_safe']);
@@ -1434,6 +1604,129 @@ app.post('/api/admin/control', requireAdmin, async (req, res) => {
         if (ludo_mode) await DB.run('UPDATE settings SET value = ? WHERE key = ?', [ludo_mode, 'ludo_mode']);
 
         res.json({ success: true, message: `Control updated successfully for Win Go [${targetGame}] and platform settings!` });
+    } catch (e) {
+        res.status(500).json({ success: false, message: e.message });
+    }
+});
+
+// ========================================================
+// AVIATOR PUBLIC / PLAYER / ADMIN APIS
+// ========================================================
+
+app.get('/api/aviator/state', (req, res) => {
+    try {
+        const isAdmin = Boolean(req.headers['x-admin-key'] || req.query.admin === '1');
+        res.json(getAviatorPublicState(isAdmin));
+    } catch (e) {
+        res.status(500).json({ success: false, message: e.message });
+    }
+});
+
+app.post('/api/aviator/bet', requireAuth, async (req, res) => {
+    try {
+        updateAviatorEngine();
+        if (aviatorEngine.state === 'flying' || aviatorEngine.state === 'crashed') {
+            return res.json({ success: false, message: 'Flight has already taken off! Please wait for next round countdown.' });
+        }
+        const amount = Math.max(10, Math.floor(parseFloat(req.body.amount || 0)));
+        const autoCashout = parseFloat(req.body.auto_cashout || 0);
+
+        const user = await DB.get('SELECT balance, phone, name FROM users WHERE id = ?', [req.user.id]);
+        if (!user || user.balance < amount) {
+            return res.json({ success: false, message: 'Insufficient balance! Please deposit.' });
+        }
+
+        await DB.run('UPDATE users SET balance = balance - ? WHERE id = ?', [amount, req.user.id]);
+
+        const betId = 'AVB' + Date.now() + Math.floor(Math.random() * 999);
+        const betObj = {
+            id: betId,
+            user_id: req.user.id,
+            phone: user.phone || '9999999999',
+            name: user.name || 'Player',
+            amount,
+            auto_cashout: autoCashout > 1.0 ? autoCashout : 0,
+            status: 'in_flight',
+            cashout_mult: 0,
+            win_amount: 0,
+            created_at: new Date().toISOString()
+        };
+        aviatorEngine.active_bets.push(betObj);
+
+        // Record into transactions table
+        await DB.run(`INSERT INTO transactions (id, user_id, type, amount, status, details) VALUES (?, ?, 'bet', ?, 'approved', ?)`,
+            [betId, req.user.id, amount, `Aviator Bet #${aviatorEngine.round_id}`]);
+
+        const updated = await DB.get('SELECT balance FROM users WHERE id = ?', [req.user.id]);
+        res.json({
+            success: true,
+            message: 'Aviator bet placed!',
+            balance: updated.balance,
+            round_id: aviatorEngine.round_id,
+            bet_id: betId
+        });
+    } catch (e) {
+        res.status(500).json({ success: false, message: e.message });
+    }
+});
+
+app.post('/api/aviator/cashout', requireAuth, async (req, res) => {
+    try {
+        updateAviatorEngine();
+        if (aviatorEngine.state !== 'flying') {
+            return res.json({ success: false, message: 'Flight is not in the air!' });
+        }
+        const bet = aviatorEngine.active_bets.find(b => b.user_id === req.user.id && b.status === 'in_flight');
+        if (!bet) {
+            return res.json({ success: false, message: 'No active flight bet found!' });
+        }
+
+        const now = Date.now();
+        const elapsed = Math.max(0, (now - aviatorEngine.state_start_ts) / 1000);
+        const liveMult = Math.min(aviatorEngine.crash_multiplier, calcAviatorMultiplier(elapsed));
+
+        const mult = Math.max(1.01, Math.min(liveMult, parseFloat(req.body.multiplier || liveMult)));
+        const wonAmount = Math.floor(bet.amount * mult * 100) / 100;
+
+        bet.status = 'cashed_out';
+        bet.cashout_mult = mult;
+        bet.win_amount = wonAmount;
+
+        await DB.run('UPDATE users SET balance = balance + ? WHERE id = ?', [wonAmount, req.user.id]);
+
+        const txId = 'AVW' + Date.now() + Math.floor(Math.random() * 999);
+        await DB.run(`INSERT INTO transactions (id, user_id, type, amount, status, details) VALUES (?, ?, 'win', ?, 'approved', ?)`,
+            [txId, req.user.id, wonAmount, `Aviator Cashout @ ${mult.toFixed(2)}x`]);
+
+        const updated = await DB.get('SELECT balance FROM users WHERE id = ?', [req.user.id]);
+        res.json({
+            success: true,
+            won_amount: wonAmount,
+            multiplier: mult,
+            balance: updated.balance
+        });
+    } catch (e) {
+        res.status(500).json({ success: false, message: e.message });
+    }
+});
+
+app.post('/api/admin/aviator-force', requireAdmin, async (req, res) => {
+    try {
+        const crashPoint = parseFloat(req.body.crash || req.body.multiplier || req.body.target_multiplier || req.body.aviator_crash || 1.50);
+        if (isNaN(crashPoint) || crashPoint < 1.00) {
+            return res.json({ success: false, message: 'Invalid crash multiplier' });
+        }
+        aviatorEngine.forced_crash = crashPoint;
+        aviatorEngine.crash_multiplier = crashPoint;
+        aviatorEngine.mode = 'manual';
+        await DB.run('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ['aviator_crash', String(crashPoint)]);
+        await DB.run('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ['aviator_mode', 'manual']);
+        res.json({
+            success: true,
+            target: crashPoint,
+            message: `Next Aviator flight locked at ${crashPoint.toFixed(2)}x!`,
+            forced_crash: crashPoint
+        });
     } catch (e) {
         res.status(500).json({ success: false, message: e.message });
     }

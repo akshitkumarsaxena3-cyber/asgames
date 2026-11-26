@@ -126,6 +126,20 @@ class AviatorGame {
     }
 
     async fetchServerCrashPoint() {
+        try {
+            const res = await fetch('/api/aviator/state', { cache: 'no-store' });
+            if (res.ok) {
+                const d = await res.json();
+                if (d && Array.isArray(d.history) && d.history.length > 0) {
+                    this.history = d.history.slice(0, 10);
+                    this.renderHistory();
+                }
+                if (d && d.crash_multiplier && Number(d.crash_multiplier) >= 1.0) {
+                    return parseFloat(d.crash_multiplier);
+                }
+            }
+        } catch (e) {}
+
         let mode = 'smart_profit';
         try {
             const res = await fetch('/api/game/all-rigging', { cache: 'no-store' });
@@ -445,6 +459,21 @@ class AviatorGame {
         if (window.sound) window.sound.chip();
         this.sm.showToast(`Aviator Bet ₹${this.betAmount} placed!`, 'success');
         this.updateBtnState();
+
+        const token = this.sm.token || localStorage.getItem('asg_token');
+        if (token) {
+            fetch('/api/aviator/bet', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({
+                    amount: this.betAmount,
+                    auto_cashout: this.autoCashout > 1 ? this.autoCashout : null
+                })
+            }).catch(e => console.warn('Aviator bet sync err', e));
+        }
     }
 
     cashOut() {
@@ -471,6 +500,20 @@ class AviatorGame {
         if (window.sound) window.sound.win();
         this.sm.showWinModal(wonAmount, `Aviator Cashout @ ${this.multiplier.toFixed(2)}x!`);
         this.updateBtnState();
+
+        const token = this.sm.token || localStorage.getItem('asg_token');
+        if (token) {
+            fetch('/api/aviator/cashout', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({
+                    multiplier: this.multiplier
+                })
+            }).catch(e => console.warn('Aviator cashout sync err', e));
+        }
     }
 
     setBetAmount(amt) {

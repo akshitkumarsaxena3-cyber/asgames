@@ -304,6 +304,24 @@
                     </div>
 
                     <div id="manual-picker-area">
+                        <!-- Active Period & Timer Header Banner -->
+                        <div style="background:rgba(217,172,79,0.12); border:1px solid rgba(217,172,79,0.3); border-radius:10px; padding:12px 16px; margin-bottom:16px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+                            <div>
+                                <div style="font-size:11px; color:#cbd5e1; text-transform:uppercase; letter-spacing:0.5px;">Active Round Being Controlled:</div>
+                                <div style="font-size:17px; font-weight:800; color:#fae59f;" id="ctrl-period-display">Win Go 30s • Period #--</div>
+                            </div>
+                            <div style="display:flex; gap:16px; align-items:center;">
+                                <div style="text-align:right;">
+                                    <div style="font-size:11px; color:#cbd5e1;">Time Left:</div>
+                                    <div style="font-size:18px; font-weight:800; font-family:monospace; color:#10b981;" id="ctrl-timer-display">00:30</div>
+                                </div>
+                                <div style="text-align:right;">
+                                    <div style="font-size:11px; color:#cbd5e1;">Live Bets Total:</div>
+                                    <div style="font-size:18px; font-weight:800; color:#60a5fa;" id="ctrl-total-bets-display">₹0</div>
+                                </div>
+                            </div>
+                        </div>
+
                         <p style="font-size: 13px; color: #fae59f; font-weight: 600; margin-bottom:8px;">1-Click Force Winning Color / Size (Works on 30s, 1m, 3m &amp; 5m!):</p>
                         <div style="display:flex; flex-wrap:wrap; gap:8px; margin-bottom:14px;">
                             <button type="button" class="btn-action" style="background:linear-gradient(135deg,#10b981,#059669); color:#fff; padding:9px 16px; font-size:13px; font-weight:800; border-radius:8px;" onclick="forceWinGoColor('green')">🟢 Force GREEN</button>
@@ -313,19 +331,61 @@
                             <button type="button" class="btn-action" style="background:linear-gradient(135deg,#3b82f6,#1d4ed8); color:#fff; padding:9px 16px; font-size:13px; font-weight:800; border-radius:8px;" onclick="forceWinGoColor('small')">🔵 Force SMALL (0-4)</button>
                         </div>
 
-                        <p style="font-size: 13px; color: #fae59f; font-weight: 600;">Or Force Exact Winning Number (0 - 9):</p>
+                        <p style="font-size: 13px; color: #fae59f; font-weight: 600; margin-bottom:4px;">Force Exact Winning Number (0 - 9) — Live Bet on Each Number:</p>
                         <div class="numbers-picker">
-                            <button type="button" class="num-pick-btn" data-wnum="0" style="border-bottom:3px solid #a855f7;" onclick="setManualNumber(0)">0</button>
-                            <button type="button" class="num-pick-btn" data-wnum="1" style="border-bottom:3px solid #10b981;" onclick="setManualNumber(1)">1</button>
-                            <button type="button" class="num-pick-btn" data-wnum="2" style="border-bottom:3px solid #ef4444;" onclick="setManualNumber(2)">2</button>
-                            <button type="button" class="num-pick-btn" data-wnum="3" style="border-bottom:3px solid #10b981;" onclick="setManualNumber(3)">3</button>
-                            <button type="button" class="num-pick-btn" data-wnum="4" style="border-bottom:3px solid #ef4444;" onclick="setManualNumber(4)">4</button>
-                            <button type="button" class="num-pick-btn" data-wnum="5" style="border-bottom:3px solid #a855f7;" onclick="setManualNumber(5)">5</button>
-                            <button type="button" class="num-pick-btn" data-wnum="6" style="border-bottom:3px solid #ef4444;" onclick="setManualNumber(6)">6</button>
-                            <button type="button" class="num-pick-btn" data-wnum="7" style="border-bottom:3px solid #10b981;" onclick="setManualNumber(7)">7</button>
-                            <button type="button" class="num-pick-btn" data-wnum="8" style="border-bottom:3px solid #ef4444;" onclick="setManualNumber(8)">8</button>
-                            <button type="button" class="num-pick-btn" data-wnum="9" style="border-bottom:3px solid #10b981;" onclick="setManualNumber(9)">9</button>
+                            <button type="button" class="num-pick-btn" data-wnum="0" style="border-bottom:3px solid #a855f7;" onclick="setManualNumber(0)">
+                                <div style="font-size:17px; font-weight:800; line-height:1;">0</div>
+                                <div id="num-wag-0" class="num-wag-val" style="font-size:11px; font-weight:700; margin-top:3px; color:#94a3b8;">₹0</div>
+                            </button>
+                            <button type="button" class="num-pick-btn" data-wnum="1" style="border-bottom:3px solid #10b981;" onclick="setManualNumber(1)">
+                                <div style="font-size:17px; font-weight:800; line-height:1;">1</div>
+                                <div id="num-wag-1" class="num-wag-val" style="font-size:11px; font-weight:700; margin-top:3px; color:#94a3b8;">₹0</div>
+                            </button>
+                            <button type="button" class="num-pick-btn" data-wnum="2" style="border-bottom:3px solid #ef4444;" onclick="setManualNumber(2)">
+                                <div style="font-size:17px; font-weight:800; line-height:1;">2</div>
+                                <div id="num-wag-2" class="num-wag-val" style="font-size:11px; font-weight:700; margin-top:3px; color:#94a3b8;">₹0</div>
+                            </button>
+                            <button type="button" class="num-pick-btn" data-wnum="3" style="border-bottom:3px solid #10b981;" onclick="setManualNumber(3)">
+                                <div style="font-size:17px; font-weight:800; line-height:1;">3</div>
+                                <div id="num-wag-3" class="num-wag-val" style="font-size:11px; font-weight:700; margin-top:3px; color:#94a3b8;">₹0</div>
+                            </button>
+                            <button type="button" class="num-pick-btn" data-wnum="4" style="border-bottom:3px solid #ef4444;" onclick="setManualNumber(4)">
+                                <div style="font-size:17px; font-weight:800; line-height:1;">4</div>
+                                <div id="num-wag-4" class="num-wag-val" style="font-size:11px; font-weight:700; margin-top:3px; color:#94a3b8;">₹0</div>
+                            </button>
+                            <button type="button" class="num-pick-btn" data-wnum="5" style="border-bottom:3px solid #a855f7;" onclick="setManualNumber(5)">
+                                <div style="font-size:17px; font-weight:800; line-height:1;">5</div>
+                                <div id="num-wag-5" class="num-wag-val" style="font-size:11px; font-weight:700; margin-top:3px; color:#94a3b8;">₹0</div>
+                            </button>
+                            <button type="button" class="num-pick-btn" data-wnum="6" style="border-bottom:3px solid #ef4444;" onclick="setManualNumber(6)">
+                                <div style="font-size:17px; font-weight:800; line-height:1;">6</div>
+                                <div id="num-wag-6" class="num-wag-val" style="font-size:11px; font-weight:700; margin-top:3px; color:#94a3b8;">₹0</div>
+                            </button>
+                            <button type="button" class="num-pick-btn" data-wnum="7" style="border-bottom:3px solid #10b981;" onclick="setManualNumber(7)">
+                                <div style="font-size:17px; font-weight:800; line-height:1;">7</div>
+                                <div id="num-wag-7" class="num-wag-val" style="font-size:11px; font-weight:700; margin-top:3px; color:#94a3b8;">₹0</div>
+                            </button>
+                            <button type="button" class="num-pick-btn" data-wnum="8" style="border-bottom:3px solid #ef4444;" onclick="setManualNumber(8)">
+                                <div style="font-size:17px; font-weight:800; line-height:1;">8</div>
+                                <div id="num-wag-8" class="num-wag-val" style="font-size:11px; font-weight:700; margin-top:3px; color:#94a3b8;">₹0</div>
+                            </button>
+                            <button type="button" class="num-pick-btn" data-wnum="9" style="border-bottom:3px solid #10b981;" onclick="setManualNumber(9)">
+                                <div style="font-size:17px; font-weight:800; line-height:1;">9</div>
+                                <div id="num-wag-9" class="num-wag-val" style="font-size:11px; font-weight:700; margin-top:3px; color:#94a3b8;">₹0</div>
+                            </button>
                         </div>
+
+                        <!-- 10 Numbers Live Bet Breakdown Grid -->
+                        <div style="margin-top: 18px; background: rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.08); border-radius:10px; padding:14px;">
+                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; flex-wrap:wrap; gap:8px;">
+                                <span style="font-size:13px; font-weight:800; color:#fae59f;">📊 Live Number Bets Matrix (Har Number Par Kitna Rupya Laga Hai):</span>
+                                <span style="font-size:11px; color:#10b981; font-weight:700;">🟢 Green = ₹0 / Safe Win (Max Profit)</span>
+                            </div>
+                            <div id="numbers-matrix-grid" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap:8px;">
+                                <!-- Filled dynamically by renderCurrentWingoModeUI -->
+                            </div>
+                        </div>
+
                         <div style="margin-top:12px; display:flex; flex-wrap:wrap; gap:12px; align-items:center;">
                             <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:12.5px; color:#fae59f; font-weight:700; background:rgba(0,0,0,0.3); padding:7px 12px; border-radius:8px; border:1px solid rgba(250,229,159,0.3);">
                                 <input type="checkbox" id="chk-continuous-lock" onchange="toggleContinuousLock(this.checked)" style="transform:scale(1.2); cursor:pointer;">
@@ -350,7 +410,7 @@
                     <!-- RECENT PLAYER BETS TABLE (LAST 10-15 BETS WITH WIN / LOSE OUTCOME) -->
                     <div style="margin-top: 24px;">
                         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 10px;">
-                            <h4 style="font-size: 14px; color: #fff; margin:0;">📋 Live Player Bets (Last 10 Bets — Selection &amp; Win/Lose Results):</h4>
+                            <h4 style="font-size: 14px; color: #fff; margin:0;">📋 Live Player Bets (Current Round &amp; Recent Wagers):</h4>
                             <button type="button" class="btn-action" style="background:#334155; color:#fff; font-size:11px; padding:4px 10px;" onclick="loadRecentAdminBets()">↻ Refresh Bets</button>
                         </div>
                         <div class="table-wrap" style="overflow-x:auto;">
@@ -375,12 +435,82 @@
                     </div>
                 </div>
 
-                <!-- AVIATOR CONTROL CARD -->
-                <div class="card" style="border-color: rgba(239,68,68,0.35);">
+                <!-- AVIATOR CRASH CONTROL & LIVE RADAR CARD -->
+                <div class="card" style="border-color: rgba(239,68,68,0.4); background: linear-gradient(180deg, rgba(239,68,68,0.06) 0%, rgba(15,23,42,0.85) 100%);">
                     <div class="card-title">
-                        <span>✈️ Aviator Crash Control</span>
-                        <span id="aviator-mode-badge" style="color: #f87171; font-size: 12px;">Active: RANDOM</span>
+                        <div style="display:flex; align-items:center; gap:8px;">
+                            <span style="font-size:22px;">✈️</span>
+                            <div>
+                                <span style="font-size:16px; font-weight:800; color:#fae59f;">Aviator Live Radar &amp; Crash Control</span>
+                                <div style="font-size:11px; color:#94a3b8; font-weight:normal;">Real-time Flight Multiplier, Last Crash &amp; Target Lock</div>
+                            </div>
+                        </div>
+                        <span id="aviator-mode-badge" style="color: #f87171; font-size: 12px; font-weight:700; background:rgba(239,68,68,0.15); padding:4px 10px; border-radius:6px; border:1px solid rgba(239,68,68,0.3);">Active: SMART MAX-PROFIT</span>
                     </div>
+
+                    <!-- LIVE FLIGHT RADAR STATUS HERO (KAUN SI CHAAL CHAL RAHI HAI) -->
+                    <div style="background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.08); border-radius:12px; padding:16px; margin-bottom:16px;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
+                            <div>
+                                <div style="font-size:11px; color:#94a3b8; text-transform:uppercase; letter-spacing:0.5px;">Current Flight Round:</div>
+                                <div id="avi-round-id" style="font-size:16px; font-weight:800; color:#fff; font-family:monospace;">AV-20261126-0001</div>
+                                <div style="font-size:11px; color:#38bdf8; margin-top:2px;" id="avi-active-players-count">0 Players In Flight</div>
+                            </div>
+                            
+                            <!-- LIVE MULTIPLIER / STATUS DISPLAY -->
+                            <div style="text-align:center;">
+                                <div style="font-size:11px; color:#94a3b8; text-transform:uppercase;">Kaun Si Chaal Chal Rahi Hai (Live Multiplier):</div>
+                                <div id="avi-live-status-badge" style="font-size:30px; font-weight:900; color:#10b981; font-family:monospace; margin-top:2px;">
+                                    1.00x ✈️
+                                </div>
+                                <div id="avi-sub-status" style="font-size:12px; color:#cbd5e1; font-weight:600;">Preparing takeoff...</div>
+                            </div>
+
+                            <!-- LAST CRASH DISPLAY (KITNE PAR GAYA HAI) -->
+                            <div style="text-align:right;">
+                                <div style="font-size:11px; color:#94a3b8; text-transform:uppercase;">Pichla Round Kitne Par Gaya:</div>
+                                <div id="avi-last-crash-val" style="font-size:24px; font-weight:900; color:#f43f5e; font-family:monospace;">
+                                    1.84x 💥
+                                </div>
+                                <div id="avi-forced-target-indicator" style="font-size:11px; color:#fae59f; font-weight:700;">Target: Auto</div>
+                            </div>
+                        </div>
+
+                        <!-- RECENT CRASH HISTORY STRIP (KITNE KITNE PAR GAYA HAI) -->
+                        <div style="margin-top:14px; padding-top:12px; border-top:1px solid rgba(255,255,255,0.08);">
+                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                                <span style="font-size:11.5px; color:#cbd5e1; font-weight:700;">📊 Recent Crash History (Pichli Chaalein Kitne Par Gayi):</span>
+                                <span style="font-size:10.5px; color:#64748b;">Live Flights</span>
+                            </div>
+                            <div id="avi-history-strip" style="display:flex; gap:6px; overflow-x:auto; padding-bottom:4px;">
+                                <!-- Filled dynamically with crash pills -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ACTIVE FLIGHT BETS TABLE -->
+                    <div id="avi-bets-container" style="background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.06); border-radius:10px; padding:12px; margin-bottom:16px;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                            <span style="font-size:12px; font-weight:700; color:#fae59f;">👥 Players Active on Current Flight:</span>
+                            <span id="avi-total-wager-badge" style="font-size:11px; font-weight:700; color:#60a5fa;">Total Wager: ₹0</span>
+                        </div>
+                        <div style="max-height:120px; overflow-y:auto;">
+                            <table style="width:100%; border-collapse:collapse; font-size:11.5px;">
+                                <thead>
+                                    <tr style="color:#94a3b8; text-align:left; border-bottom:1px solid rgba(255,255,255,0.06);">
+                                        <th style="padding:4px 6px;">Player</th>
+                                        <th style="padding:4px 6px;">Bet Amount</th>
+                                        <th style="padding:4px 6px;">Target</th>
+                                        <th style="padding:4px 6px;">Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="avi-active-bets-tbody">
+                                    <tr><td colspan="4" style="text-align:center; padding:10px; color:#64748b;">No player bets on current flight.</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
                     <div class="mode-row">
                         <div class="mode-chip" id="avi-smart" onclick="updateExtraControl({aviator_mode:'smart_profit'})">
                             <h4>💰 Smart Max-Profit (AI)</h4>
@@ -400,11 +530,13 @@
                         </div>
                     </div>
                     <div style="margin-top:12px; display:flex; flex-wrap:wrap; gap:8px; align-items:center;">
-                        <span style="font-size:12px; color:#fae59f; font-weight:600;">Force Exact Crash Point:</span>
+                        <span style="font-size:12px; color:#fae59f; font-weight:600;">Force Next Crash Target:</span>
                         <button class="btn-action" style="background:#ef4444; color:#fff;" onclick="forceAviatorCrash(1.05)">1.05x</button>
+                        <button class="btn-action" style="background:#f97316; color:#fff;" onclick="forceAviatorCrash(1.20)">1.20x</button>
                         <button class="btn-action" style="background:#f97316; color:#fff;" onclick="forceAviatorCrash(1.30)">1.30x</button>
-                        <button class="btn-action" style="background:#eab308; color:#111;" onclick="forceAviatorCrash(2.00)">2.00x</button>
-                        <button class="btn-action" style="background:#10b981; color:#fff;" onclick="forceAviatorCrash(5.00)">5.00x</button>
+                        <button class="btn-action" style="background:#eab308; color:#111;" onclick="forceAviatorCrash(1.50)">1.50x</button>
+                        <button class="btn-action" style="background:#10b981; color:#fff;" onclick="forceAviatorCrash(2.00)">2.00x</button>
+                        <button class="btn-action" style="background:#06b6d4; color:#fff;" onclick="forceAviatorCrash(5.00)">5.00x</button>
                         <button class="btn-action" style="background:#8b5cf6; color:#fff;" onclick="forceAviatorCrash(15.00)">15.00x</button>
                         <input type="number" step="0.1" id="avi-custom-crash" class="input-text" style="width:95px; margin:0; padding:6px 8px;" placeholder="e.g. 1.85">
                         <button class="btn-action btn-approve" onclick="forceAviatorCrash(parseFloat(document.getElementById('avi-custom-crash').value)||1.5)">Set Exact</button>
@@ -937,8 +1069,10 @@
             document.getElementById('login-view').classList.add('hidden');
             document.getElementById('dashboard-view').classList.remove('hidden');
             refreshOverview();
+            pollAviatorLiveState();
             loadRecentAdminBets();
             setInterval(refreshOverview, 2000);
+            setInterval(pollAviatorLiveState, 1000);
             setInterval(() => {
                 if (currentAdminTab === 'control') loadRecentAdminBets();
                 if (currentAdminTab === 'deposits') loadDeposits();
@@ -1001,7 +1135,8 @@
                 gameMode: d.gameMode || 'lowest_bet',
                 manualNumber: d.manualNumber || '',
                 isLockActive: false,
-                wagers: d.wagers || { green: 0, red: 0, violet: 0, big: 0, small: 0 }
+                wagers: d.wagers || { green: 0, red: 0, violet: 0, big: 0, small: 0, numbers: {} },
+                activeBets: []
             };
 
             const currentWingoMode = wm.gameMode || 'lowest_bet';
@@ -1031,6 +1166,69 @@
 
             // Live Wagers for this selected mode
             const wags = wm.wagers || {};
+            const numWags = wags.numbers || {};
+
+            // 1. Update Top Banner: Period, Timer, Total Bets
+            const periodEl = document.getElementById('ctrl-period-display');
+            if (periodEl) periodEl.textContent = `Win Go ${selectedWingoMode.toUpperCase()} • Period #${wm.period || d.currentPeriod}`;
+            const timerEl = document.getElementById('ctrl-timer-display');
+            if (timerEl) {
+                const s = wm.remainingSeconds !== undefined ? wm.remainingSeconds : d.remainingSeconds;
+                const m = Math.floor(s / 60);
+                const sec = s % 60;
+                timerEl.textContent = `${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}` + (wm.isLocked ? ' 🔒' : '');
+                timerEl.style.color = wm.isLocked ? '#ef4444' : '#10b981';
+            }
+
+            let totalRoundBets = (parseFloat(wags.green) || 0) + (parseFloat(wags.violet) || 0) + (parseFloat(wags.red) || 0) + (parseFloat(wags.big) || 0) + (parseFloat(wags.small) || 0);
+            for (let i = 0; i <= 9; i++) {
+                totalRoundBets += parseFloat(numWags[i] !== undefined ? numWags[i] : (numWags[String(i)] || 0)) || 0;
+            }
+            const totalBetsEl = document.getElementById('ctrl-total-bets-display');
+            if (totalBetsEl) totalBetsEl.textContent = `₹${totalRoundBets.toFixed(0)}`;
+
+            // 2. Update each of the 0-9 number buttons with its bet amount
+            for (let i = 0; i <= 9; i++) {
+                const amt = parseFloat(numWags[i] !== undefined ? numWags[i] : (numWags[String(i)] || 0)) || 0;
+                const el = document.getElementById('num-wag-' + i);
+                if (el) {
+                    el.textContent = `₹${amt.toFixed(0)}`;
+                    el.style.color = amt === 0 ? '#10b981' : (amt > 500 ? '#f87171' : '#f5c443');
+                }
+            }
+
+            // 3. Render 10 Numbers Live Bet Breakdown Grid
+            const matrixGrid = document.getElementById('numbers-matrix-grid');
+            if (matrixGrid) {
+                const numColors = {
+                    0: { name: 'Red + Violet', ball: 'linear-gradient(135deg, #ef4444 50%, #8b5cf6 50%)', sz: 'Small' },
+                    1: { name: 'Green', ball: '#10b981', sz: 'Small' },
+                    2: { name: 'Red', ball: '#ef4444', sz: 'Small' },
+                    3: { name: 'Green', ball: '#10b981', sz: 'Small' },
+                    4: { name: 'Red', ball: '#ef4444', sz: 'Small' },
+                    5: { name: 'Green + Violet', ball: 'linear-gradient(135deg, #10b981 50%, #8b5cf6 50%)', sz: 'Big' },
+                    6: { name: 'Red', ball: '#ef4444', sz: 'Big' },
+                    7: { name: 'Green', ball: '#10b981', sz: 'Big' },
+                    8: { name: 'Red', ball: '#ef4444', sz: 'Big' },
+                    9: { name: 'Green', ball: '#10b981', sz: 'Big' },
+                };
+                matrixGrid.innerHTML = Array.from({ length: 10 }, (_, i) => {
+                    const amt = parseFloat(numWags[i] !== undefined ? numWags[i] : (numWags[String(i)] || 0)) || 0;
+                    const meta = numColors[i];
+                    const isManualSel = hasManual && parseInt(wm.manualNumber, 10) === i;
+                    const isZero = amt === 0;
+                    return `
+                        <div style="background:${isManualSel ? 'rgba(245,196,67,0.18)' : 'rgba(0,0,0,0.35)'}; border:1.5px solid ${isManualSel ? '#f5c443' : (isZero ? 'rgba(16,185,129,0.35)' : 'rgba(239,68,68,0.35)')}; border-radius:8px; padding:10px 8px; text-align:center;">
+                            <div style="width:30px; height:30px; border-radius:50%; background:${meta.ball}; margin:0 auto 4px; display:flex; align-items:center; justify-content:center; color:#fff; font-weight:900; font-size:15px; box-shadow:0 2px 6px rgba(0,0,0,0.4);">${i}</div>
+                            <div style="font-size:10px; color:#94a3b8; margin-bottom:4px;">${meta.name} • ${meta.sz}</div>
+                            <div style="font-size:13.5px; font-weight:800; color:${isZero ? '#10b981' : '#f87171'};">₹${amt.toFixed(0)}</div>
+                            <div style="margin-top:2px;">${isZero ? '<span style="font-size:9.5px; color:#10b981; font-weight:800;">SAFE WIN</span>' : '<span style="font-size:9.5px; color:#f87171; font-weight:700;">WAGER</span>'}</div>
+                            <button type="button" class="btn-action" style="margin-top:6px; width:100%; font-size:10.5px; padding:4px 0; background:${isManualSel ? '#f5c443' : '#334155'}; color:${isManualSel ? '#1a1202' : '#fff'}; font-weight:800; border-radius:4px;" onclick="setManualNumber(${i})">${isManualSel ? '✓ FORCED' : '⚡ Set Win'}</button>
+                        </div>
+                    `;
+                }).join('');
+            }
+
             document.getElementById('wag-green').textContent = `₹${wags.green || 0}`;
             document.getElementById('wag-violet').textContent = `₹${wags.violet || 0}`;
             document.getElementById('wag-red').textContent = `₹${wags.red || 0}`;
@@ -1187,6 +1385,8 @@
                 if (aviMode === 'early_crash' || aviMode === 'house_edge') document.getElementById('avi-early')?.classList.add('active');
                 if (aviMode === 'high_flight') document.getElementById('avi-high')?.classList.add('active');
 
+                if (d.aviatorState) renderAviatorLiveUI(d.aviatorState);
+
                 // Mines Active Mode UI
                 const mMode = d.minesMode || 'house_profit';
                 const mBadge = document.getElementById('mines-mode-badge');
@@ -1213,6 +1413,131 @@
                 if (lMode === 'fair') document.getElementById('ludo-fair')?.classList.add('active');
                 if (lMode === 'bot_win') document.getElementById('ludo-bot')?.classList.add('active');
                 if (lMode === 'player_win') document.getElementById('ludo-player')?.classList.add('active');
+            } catch (e) {}
+        }
+
+        function renderAviatorLiveUI(avi) {
+            if (!avi) return;
+            const rEl = document.getElementById('avi-round-id');
+            if (rEl) rEl.textContent = avi.round_id || 'AV-LIVE';
+
+            const pCountEl = document.getElementById('avi-active-players-count');
+            const pCount = avi.active_players_count !== undefined ? avi.active_players_count : (avi.active_bets ? avi.active_bets.length : 0);
+            if (pCountEl) pCountEl.textContent = `${pCount} Player${pCount === 1 ? '' : 's'} In Flight`;
+
+            const badge = document.getElementById('avi-live-status-badge');
+            const sub = document.getElementById('avi-sub-status');
+            const mult = Number(avi.current_multiplier || 1.00);
+
+            if (badge && sub) {
+                if (avi.state === 'IN_FLIGHT') {
+                    badge.textContent = `${mult.toFixed(2)}x ✈️`;
+                    if (mult >= 10.0) badge.style.color = '#c084fc';
+                    else if (mult >= 2.0) badge.style.color = '#38bdf8';
+                    else badge.style.color = '#10b981';
+                    sub.innerHTML = '<span style="color:#10b981;">🟢 AIRBORNE!</span> Climbing live...';
+                } else if (avi.state === 'BETTING') {
+                    badge.textContent = 'WAITING ⏱️';
+                    badge.style.color = '#eab308';
+                    sub.innerHTML = '<span style="color:#eab308;">🟡 BETTING OPEN</span> Takeoff in a few seconds';
+                } else if (avi.state === 'CRASHED') {
+                    badge.textContent = `CRASHED @ ${(avi.last_crash || mult).toFixed(2)}x 💥`;
+                    badge.style.color = '#f43f5e';
+                    sub.innerHTML = '<span style="color:#f43f5e;">🔴 FLEW AWAY!</span> Preparing next flight...';
+                }
+            }
+
+            const lastEl = document.getElementById('avi-last-crash-val');
+            if (lastEl) {
+                const lc = Number(avi.last_crash || 1.00);
+                lastEl.textContent = `${lc.toFixed(2)}x 💥`;
+                if (lc >= 10.0) lastEl.style.color = '#c084fc';
+                else if (lc >= 2.0) lastEl.style.color = '#10b981';
+                else lastEl.style.color = '#f43f5e';
+            }
+
+            const targetInd = document.getElementById('avi-forced-target-indicator');
+            if (targetInd) {
+                if (avi.forced_target) {
+                    targetInd.textContent = `🔒 Locked Target: ${Number(avi.forced_target).toFixed(2)}x`;
+                    targetInd.style.color = '#ef4444';
+                } else {
+                    targetInd.textContent = `Target: Auto (${(avi.mode || 'smart_profit').toUpperCase()})`;
+                    targetInd.style.color = '#fae59f';
+                }
+            }
+
+            // Crash history strip
+            const histEl = document.getElementById('avi-history-strip');
+            if (histEl && Array.isArray(avi.history)) {
+                if (avi.history.length === 0) {
+                    histEl.innerHTML = '<span style="font-size:11px; color:#64748b;">No flight history recorded yet</span>';
+                } else {
+                    histEl.innerHTML = avi.history.slice(-15).reverse().map(c => {
+                        const val = Number(c);
+                        let bg = 'rgba(239,68,68,0.2)';
+                        let border = '#ef4444';
+                        let color = '#f87171';
+                        if (val >= 10.0) {
+                            bg = 'rgba(168,85,247,0.25)';
+                            border = '#a855f7';
+                            color = '#c084fc';
+                        } else if (val >= 2.0) {
+                            bg = 'rgba(16,185,129,0.2)';
+                            border = '#10b981';
+                            color = '#34d399';
+                        } else if (val >= 1.5) {
+                            bg = 'rgba(245,158,11,0.2)';
+                            border = '#f59e0b';
+                            color = '#fbbf24';
+                        }
+                        return `<span style="display:inline-block; padding:3px 8px; border-radius:6px; font-size:11px; font-weight:800; font-family:monospace; background:${bg}; border:1px solid ${border}; color:${color}; white-space:nowrap;">${val.toFixed(2)}x</span>`;
+                    }).join('');
+                }
+            }
+
+            // Total wager badge
+            const totEl = document.getElementById('avi-total-wager-badge');
+            if (totEl) {
+                totEl.textContent = `Total Wager: ₹${Number(avi.total_bets_amount || 0).toFixed(2)}`;
+            }
+
+            // Active bets table
+            const tbody = document.getElementById('avi-active-bets-tbody');
+            if (tbody) {
+                const bets = avi.active_bets || [];
+                if (bets.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; padding:10px; color:#64748b;">No player bets on current flight.</td></tr>';
+                } else {
+                    tbody.innerHTML = bets.map(b => {
+                        let st = '';
+                        if (b.cashed_out) {
+                            st = `<span style="color:#10b981; font-weight:700;">Won ₹${Number(b.win_amount || 0).toFixed(2)} (${Number(b.cashed_at || 1).toFixed(2)}x)</span>`;
+                        } else if (avi.state === 'CRASHED') {
+                            st = `<span style="color:#ef4444; font-weight:700;">Lost (Crashed)</span>`;
+                        } else {
+                            st = `<span style="color:#38bdf8; font-weight:700;">Flying...</span>`;
+                        }
+                        const target = b.auto_cashout ? `${Number(b.auto_cashout).toFixed(2)}x Auto` : 'Manual';
+                        const name = b.username || b.phone || `User #${b.user_id || '?'}`;
+                        return `<tr style="border-bottom:1px solid rgba(255,255,255,0.04);">
+                            <td style="padding:6px; font-weight:600; color:#fff;">${name}</td>
+                            <td style="padding:6px; color:#fbbf24; font-weight:700;">₹${Number(b.amount || 0).toFixed(2)}</td>
+                            <td style="padding:6px; color:#cbd5e1;">${target}</td>
+                            <td style="padding:6px;">${st}</td>
+                        </tr>`;
+                    }).join('');
+                }
+            }
+        }
+
+        async function pollAviatorLiveState() {
+            try {
+                const res = await fetch('/api/aviator/state');
+                if (res.ok) {
+                    const data = await res.json();
+                    renderAviatorLiveUI(data);
+                }
             } catch (e) {}
         }
 
