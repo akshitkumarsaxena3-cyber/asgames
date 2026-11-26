@@ -367,6 +367,10 @@ def init_db():
             cursor.execute("ALTER TABLE commissions ADD COLUMN type TEXT DEFAULT 'deposit'")
         except Exception:
             pass
+        try:
+            cursor.execute("ALTER TABLE users ADD COLUMN name TEXT DEFAULT ''")
+        except Exception:
+            pass
 
         # Ensure all new users automatically receive at least a 6-digit UID (>= 101001)
         cursor.execute('SELECT MAX(id) FROM users')
@@ -827,12 +831,15 @@ def api_send_otp():
 @app.route('/api/auth/register', methods=['POST'])
 def api_register():
     data = request.get_json(silent=True) or {}
+    name = str(data.get('name', '')).strip()
     phone = str(data.get('phone', '')).strip()
     email = str(data.get('email', '')).strip().lower()
     otp = str(data.get('otp', '')).strip()
     password = str(data.get('password', '')).strip()
     invite_code = str(data.get('invite_code', '')).strip()
 
+    if not name:
+        return jsonify({'success': False, 'message': 'Full name is required.'}), 400
     if not phone or len(phone) < 10 or not password:
         return jsonify({'success': False, 'message': 'Valid 10-digit mobile number and password required.'}), 400
     if not email or '@' not in email:
@@ -855,9 +862,10 @@ def api_register():
 
         user_invite = f"ASG{random.randint(10000, 99999)}"
         created_at = datetime.now().isoformat()
+        final_name = name or f"Player {phone[-4:]}"
         cursor.execute(
-            'INSERT INTO users (phone, email, email_verified, password, balance, invite_code, referred_by, vip_level, is_banned, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-            (phone, email, 1, password, 100.0, user_invite, invite_code, 1, 0, created_at)
+            'INSERT INTO users (name, phone, email, email_verified, password, balance, invite_code, referred_by, vip_level, is_banned, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            (final_name, phone, email, 1, password, 100.0, user_invite, invite_code, 1, 0, created_at)
         )
         user_id = cursor.lastrowid
         conn.commit()
@@ -948,6 +956,7 @@ def api_me():
     user['deposit_balance'] = dep
     user['winning_balance'] = win
     user['withdrawable_balance'] = win
+    user['name'] = user.get('name') or f"Player {str(user.get('phone', ''))[-4:]}"
     user['is_special_vip'] = is_special_vip_phone(user.get('phone'))
     return jsonify({'success': True, 'user': user})
 
@@ -1090,12 +1099,7 @@ def api_withdraw():
     if not user:
         return jsonify({'success': False, 'message': 'Unauthorized'}), 401
 
-    if not is_withdrawal_time_open():
-        return jsonify({
-            'success': False,
-            'message': 'Withdrawal service is open only from 10:00 AM to 08:00 PM (IST). Please submit during active hours.'
-        }), 400
-
+    # 24/7 withdrawal requests accepted; banking payouts processed during working hours (10:00 AM - 08:00 PM IST)
     data = request.get_json(silent=True) or {}
     amount = float(data.get('amount', 0))
     details = str(data.get('bank_info') or data.get('details') or 'Bank / UPI Withdrawal').strip()
@@ -1123,7 +1127,7 @@ def api_withdraw():
         )
         conn.commit()
 
-    return jsonify({'success': True, 'balance': new_bal, 'winning_balance': new_bal, 'deposit_balance': 0, 'gross_amount': amount, 'tds_amount': tds_amt, 'net_amount': net_amt, 'message': f'Withdrawal of ₹{amount:.2f} requested! (18% TDS: -₹{tds_amt:.2f} | Net to receive: ₹{net_amt:.2f}). Admin will approve & payout within working hours (10:00 AM - 08:00 PM).', 'tx_id': tx_id})
+    return jsonify({'success': True, 'balance': new_bal, 'winning_balance': new_bal, 'deposit_balance': 0, 'gross_amount': amount, 'tds_amount': tds_amt, 'net_amount': net_amt, 'message': f'Withdrawal of ₹{amount:.2f} requested! (18% TDS: -₹{tds_amt:.2f} | Net to receive: ₹{net_amt:.2f}). Processing within working hours (10:00 AM - 08:00 PM).', 'tx_id': tx_id})
 
 @app.route('/api/wallet/transactions', methods=['GET'])
 def api_my_transactions():
@@ -1131,12 +1135,29 @@ def api_my_transactions():
     if not user:
         return jsonify({'success': False, 'message': 'Unauthorized'}), 401
 
+    tx_type = request.args.get('type')
     with get_db() as conn:
         cursor = conn.cursor()
-        cursor.execute('SELECT * FROM transactions WHERE user_id = ? ORDER BY created_at DESC LIMIT 50', (user['id'],))
+        if tx_type:
+            cursor.execute('SELECT * FROM transactions WHERE user_id = ? AND type = ? ORDER BY created_at DESC LIMIT 100', (user['id'], tx_type))
+        else:
+            cursor.execute('SELECT * FROM transactions WHERE user_id = ? ORDER BY created_at DESC LIMIT 100', (user['id'],))
         rows = [dict(r) for r in cursor.fetchall()]
 
     return jsonify({'success': True, 'transactions': rows})
+
+@app.route('/api/wallet/withdrawals', methods=['GET'])
+def api_my_withdrawals():
+    user = get_current_user(request)
+    if not user:
+        return jsonify({'success': False, 'message': 'Unauthorized'}), 401
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute('SELECT * FROM transactions WHERE user_id = ? AND type = "withdraw" ORDER BY created_at DESC LIMIT 100', (user['id'],))
+        rows = [dict(r) for r in cursor.fetchall()]
+
+    return jsonify({'success': True, 'withdrawals': rows, 'transactions': rows})
 
 @app.route('/api/wallet/sync-game-delta', methods=['POST'])
 def api_sync_game_delta():
@@ -1750,9 +1771,9 @@ def api_admin_deposits():
     with get_db() as conn:
         cursor = conn.cursor()
         cursor.execute('''
-            SELECT t.*, u.phone 
+            SELECT t.*, u.phone, u.name as user_name, u.email as user_email, u.balance as user_balance 
             FROM transactions t 
-            JOIN users u ON t.user_id = u.id 
+            LEFT JOIN users u ON t.user_id = u.id 
             WHERE t.type = "deposit" AND t.status = "pending"
             ORDER BY t.created_at DESC
         ''')
@@ -1810,9 +1831,9 @@ def api_admin_withdrawals():
     with get_db() as conn:
         cursor = conn.cursor()
         cursor.execute('''
-            SELECT t.*, u.phone 
+            SELECT t.*, u.phone, u.name as user_name, u.email as user_email, u.balance as user_balance 
             FROM transactions t 
-            JOIN users u ON t.user_id = u.id 
+            LEFT JOIN users u ON t.user_id = u.id 
             WHERE t.type = "withdraw" AND t.status = "pending"
             ORDER BY t.created_at DESC
         ''')
@@ -1876,7 +1897,7 @@ def api_admin_all_transactions():
     with get_db() as conn:
         cursor = conn.cursor()
         cursor.execute('''
-            SELECT t.*, u.phone 
+            SELECT t.*, u.phone, u.name as user_name, u.email as user_email 
             FROM transactions t 
             LEFT JOIN users u ON t.user_id = u.id 
             ORDER BY t.created_at DESC 

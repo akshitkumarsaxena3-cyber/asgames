@@ -579,11 +579,15 @@ app.post('/api/auth/send-otp', async (req, res) => {
 
 app.post('/api/auth/register', async (req, res) => {
     try {
-        const { phone, email, otp, password, invite_code } = req.body;
+        const { name, phone, email, otp, password, invite_code } = req.body;
+        const cleanName = String(name || '').trim();
         const cleanPhone = String(phone || '').trim();
         const cleanEmail = String(email || '').trim().toLowerCase();
         const cleanOtp = String(otp || '').trim();
 
+        if (!cleanName) {
+            return res.json({ success: false, message: 'Please provide your full name.' });
+        }
         if (!cleanPhone || !password || cleanPhone.length < 10) {
             return res.json({ success: false, message: 'Please provide valid 10-digit phone number and password.' });
         }
@@ -618,8 +622,9 @@ app.post('/api/auth/register', async (req, res) => {
             if (refUser) referrerCode = refUser.invite_code;
         }
 
-        const result = await DB.run(`INSERT INTO users (phone, password, balance, invite_code, referred_by, email, email_verified) VALUES (?, ?, 100.0, ?, ?, ?, ?)`,
-            [cleanPhone, password, myInviteCode, referrerCode, cleanEmail, 1]);
+        const finalName = cleanName || ('Player ' + cleanPhone.slice(-4));
+        const result = await DB.run(`INSERT INTO users (phone, password, balance, invite_code, referred_by, email, email_verified, name) VALUES (?, ?, 100.0, ?, ?, ?, ?, ?)`,
+            [cleanPhone, password, myInviteCode, referrerCode, cleanEmail, 1, finalName]);
 
         const newUser = await DB.get('SELECT * FROM users WHERE id = ?', [result.id]);
         const token = generateToken(newUser.id, newUser.phone);
@@ -630,6 +635,7 @@ app.post('/api/auth/register', async (req, res) => {
             token,
             user: {
                 id: newUser.id,
+                name: newUser.name || finalName,
                 phone: newUser.phone,
                 email: newUser.email,
                 balance: newUser.balance,
@@ -706,6 +712,7 @@ app.get('/api/auth/me', requireAuth, async (req, res) => {
         user: {
             id: req.user.id,
             uid: toPublicUid(req.user.id),
+            name: req.user.name || ('Player ' + String(req.user.phone || '').slice(-4)),
             phone: req.user.phone,
             email: req.user.email || '',
             balance: req.user.balance,
@@ -1167,8 +1174,23 @@ app.get('/api/wallet/turnover-status', requireAuth, async (req, res) => {
 
 app.get('/api/wallet/transactions', requireAuth, async (req, res) => {
     try {
-        const list = await DB.all('SELECT * FROM transactions WHERE user_id = ? ORDER BY created_at DESC LIMIT 40', [req.user.id]);
+        const type = req.query.type;
+        let list;
+        if (type) {
+            list = await DB.all('SELECT * FROM transactions WHERE user_id = ? AND type = ? ORDER BY created_at DESC LIMIT 100', [req.user.id, type]);
+        } else {
+            list = await DB.all('SELECT * FROM transactions WHERE user_id = ? ORDER BY created_at DESC LIMIT 100', [req.user.id]);
+        }
         res.json({ success: true, transactions: list });
+    } catch (e) {
+        res.status(500).json({ success: false, message: e.message });
+    }
+});
+
+app.get('/api/wallet/withdrawals', requireAuth, async (req, res) => {
+    try {
+        const list = await DB.all("SELECT * FROM transactions WHERE user_id = ? AND type = 'withdraw' ORDER BY created_at DESC LIMIT 100", [req.user.id]);
+        res.json({ success: true, withdrawals: list, transactions: list });
     } catch (e) {
         res.status(500).json({ success: false, message: e.message });
     }
@@ -1564,7 +1586,7 @@ app.post('/api/admin/toggle-ban', requireAdmin, async (req, res) => {
 
 app.get('/api/admin/deposits', requireAdmin, async (req, res) => {
     try {
-        const deposits = await DB.all(`SELECT t.*, u.phone FROM transactions t JOIN users u ON t.user_id = u.id WHERE t.type = 'deposit' AND t.status = 'pending' ORDER BY t.created_at DESC`);
+        const deposits = await DB.all(`SELECT t.*, u.phone, u.name as user_name, u.email as user_email, u.balance as user_balance FROM transactions t LEFT JOIN users u ON t.user_id = u.id WHERE t.type = 'deposit' AND t.status = 'pending' ORDER BY t.created_at DESC`);
         res.json({ success: true, deposits });
     } catch (e) {
         res.status(500).json({ success: false, message: e.message });
@@ -1599,7 +1621,7 @@ app.post('/api/admin/reject-deposit', requireAdmin, async (req, res) => {
 
 app.get('/api/admin/withdrawals', requireAdmin, async (req, res) => {
     try {
-        const withdrawals = await DB.all(`SELECT t.*, u.phone FROM transactions t JOIN users u ON t.user_id = u.id WHERE t.type = 'withdraw' AND t.status = 'pending' ORDER BY t.created_at DESC`);
+        const withdrawals = await DB.all(`SELECT t.*, u.phone, u.name as user_name, u.email as user_email, u.balance as user_balance FROM transactions t LEFT JOIN users u ON t.user_id = u.id WHERE t.type = 'withdraw' AND t.status = 'pending' ORDER BY t.created_at DESC`);
         res.json({ success: true, withdrawals });
     } catch (e) {
         res.status(500).json({ success: false, message: e.message });
@@ -1639,7 +1661,7 @@ app.post('/api/admin/reject-withdrawal', requireAdmin, async (req, res) => {
 
 app.get('/api/admin/all-transactions', requireAdmin, async (req, res) => {
     try {
-        const list = await DB.all(`SELECT t.*, u.phone FROM transactions t JOIN users u ON t.user_id = u.id ORDER BY t.created_at DESC LIMIT 100`);
+        const list = await DB.all(`SELECT t.*, u.phone, u.name as user_name, u.email as user_email FROM transactions t LEFT JOIN users u ON t.user_id = u.id ORDER BY t.created_at DESC LIMIT 100`);
         res.json({ success: true, transactions: list });
     } catch (e) {
         res.status(500).json({ success: false, message: e.message });

@@ -977,7 +977,9 @@ class StateManager {
 
         const nameEl = document.getElementById('account-member-name');
         if (nameEl) {
-            if (this.user && this.user.phone) {
+            if (this.user && this.user.name) {
+                nameEl.textContent = this.user.name;
+            } else if (this.user && this.user.phone) {
                 nameEl.textContent = `MEMBER${this.user.invite_code || this.user.phone.slice(-6)}`;
             } else {
                 nameEl.textContent = 'GUEST PLAYER';
@@ -1087,6 +1089,8 @@ const I18N_DICT = {
         gmail_label: 'Gmail (For One-Time OTP)',
         otp_label: 'Gmail OTP Code',
         btn_send_otp: 'Send OTP',
+        full_name: 'Full Name',
+        ph_name: 'Enter your full name',
         phone_or_gmail: 'Registered Phone or Gmail',
         ph_gmail: 'Enter your Gmail (e.g. name@gmail.com)',
         ph_otp: 'Enter 6-digit OTP from Gmail',
@@ -1132,6 +1136,8 @@ const I18N_DICT = {
         gmail_label: 'जीमेल (एक बार OTP वेरिफिकेशन के लिए)',
         otp_label: 'जीमेल OTP कोड',
         btn_send_otp: 'OTP भेजें',
+        full_name: 'पूरा नाम',
+        ph_name: 'अपना पूरा नाम दर्ज करें',
         phone_or_gmail: 'रजिस्टर्ड फ़ोन या जीमेल',
         ph_gmail: 'अपना जीमेल डालें (जैसे name@gmail.com)',
         ph_otp: 'जीमेल पर आया 6 अंकों का OTP डालें',
@@ -1377,6 +1383,7 @@ async function submitLogin() {
 }
 
 async function submitRegister() {
+    const name = (document.getElementById('reg-name')?.value || '').trim();
     const phone = (document.getElementById('reg-phone')?.value || '').trim();
     const email = (document.getElementById('reg-email')?.value || '').trim();
     const otp = (document.getElementById('reg-otp')?.value || '').trim();
@@ -1385,6 +1392,10 @@ async function submitRegister() {
     const invite = (document.getElementById('reg-invite')?.value || '').trim();
     const agree = document.getElementById('reg-agree');
 
+    if (!name) {
+        alert(currentLang === 'hi' ? 'कृपया अपना पूरा नाम डालें' : 'Please enter your full name');
+        return;
+    }
     if (!phone || phone.length < 10) {
         alert(currentLang === 'hi' ? 'कृपया 10 अंकों का सही मोबाइल नंबर डालें' : 'Please enter a valid 10-digit mobile number');
         return;
@@ -1414,7 +1425,7 @@ async function submitRegister() {
         const res = await fetch('/api/auth/register', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ phone, email, otp, password, invite_code: invite })
+            body: JSON.stringify({ name, phone, email, otp, password, invite_code: invite })
         });
         const d = await res.json();
         if (d.success) {
@@ -2555,12 +2566,20 @@ async function loadWithdrawPageHistory(showAll = false) {
     const sm = window.stateManager;
     if (!listEl || !sm || !sm.token) return;
     try {
-        const res = await fetch('/api/wallet/transactions', { headers: { 'Authorization': `Bearer ${sm.token}` } });
+        let res = await fetch('/api/wallet/withdrawals', { headers: { 'Authorization': `Bearer ${sm.token}` } });
+        if (!res.ok) {
+            res = await fetch('/api/wallet/transactions?type=withdraw', { headers: { 'Authorization': `Bearer ${sm.token}` } });
+        }
         const d = await res.json();
-        const wds = (d.transactions || []).filter(t => t.type === 'withdraw');
-        const shown = showAll ? wds : wds.slice(0, 15);
+        let wds = [];
+        if (d.success && Array.isArray(d.withdrawals)) {
+            wds = d.withdrawals;
+        } else if (d.success && Array.isArray(d.transactions)) {
+            wds = d.transactions.filter(t => t.type === 'withdraw');
+        }
+        const shown = showAll ? wds : wds.slice(0, 25);
         if (shown.length === 0) {
-            listEl.innerHTML = `<div class="bdg-no-data" style="padding:28px 10px;"><div style="font-size:46px; opacity:0.35; margin-bottom:6px;">📜</div><div>No data</div></div>`;
+            listEl.innerHTML = `<div class="bdg-no-data" style="padding:28px 10px;"><div style="font-size:46px; opacity:0.35; margin-bottom:6px;">📜</div><div>No withdrawal records yet</div></div>`;
             if (showAll) sm.showToast('No withdrawal records yet.', 'info');
             return;
         }
@@ -2637,6 +2656,7 @@ function openDepositHistoryDirectly() {
 function openWithdrawHistoryDirectly() {
     if (window.stateManager) {
         window.stateManager.openWithdrawModal();
+        if (typeof loadWithdrawPageHistory === 'function') loadWithdrawPageHistory(true);
         setTimeout(() => {
             const el = document.getElementById('wd-history-section');
             if (el) el.scrollIntoView({ behavior: 'smooth' });

@@ -679,7 +679,7 @@
                         <thead>
                             <tr>
                                 <th>Tx ID</th>
-                                <th>User Phone</th>
+                                <th>Player Details (Name, Phone, UID)</th>
                                 <th>Amount</th>
                                 <th>Details / UTR</th>
                                 <th>Time</th>
@@ -733,7 +733,7 @@
                             <thead>
                                 <tr>
                                     <th>Tx ID</th>
-                                    <th>User Phone</th>
+                                    <th>Player Details (Name, Phone, UID)</th>
                                     <th>Amount</th>
                                     <th>Payout Destination &amp; Details</th>
                                     <th style="min-width:140px;">⚡ Instant Pay</th>
@@ -756,7 +756,7 @@
                             <tr>
                                 <th>Tx ID</th>
                                 <th>Type</th>
-                                <th>User Phone</th>
+                                <th>Player Details</th>
                                 <th>Amount</th>
                                 <th>Status</th>
                                 <th>Details</th>
@@ -1337,7 +1337,11 @@
             tbody.innerHTML = d.users.map(u => `
                 <tr>
                     <td><strong style="color:#fae59f;">${u.uid || (u.id < 100000 ? 100000 + u.id : u.id)}</strong></td>
-                    <td><strong>${u.phone}</strong>${u.email ? `<div style="font-size:11px; color:#38bdf8;">📧 ${u.email}</div>` : ''}</td>
+                    <td>
+                        <div style="font-weight:700; color:#fae59f; font-size:13.5px;">${u.name || ('Player ' + String(u.phone).slice(-4))}</div>
+                        <div style="font-size:12px; color:#cbd5e1; margin-top:2px;">📱 <strong>${u.phone}</strong></div>
+                        ${u.email ? `<div style="font-size:11px; color:#38bdf8; margin-top:1px;">📧 ${u.email}</div>` : ''}
+                    </td>
                     <td><span style="color:#ffd875; background:#0b0e1a; padding:3px 8px; border-radius:4px; font-weight:700; border:1px solid #334155; font-family:monospace; letter-spacing:0.5px;">${u.password || '---'}</span></td>
                     <td style="color:var(--gold); font-weight:700;">₹${u.balance.toFixed(2)}</td>
                     <td>${u.invite_code}</td>
@@ -1382,19 +1386,29 @@
                 tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; color:#94a3b8;">No pending deposits</td></tr>`;
                 return;
             }
-            tbody.innerHTML = d.deposits.map(t => `
+            tbody.innerHTML = d.deposits.map(t => {
+                const uName = t.user_name || 'Player';
+                const uPhone = t.phone || 'N/A';
+                const uId = t.user_id ? ('#' + t.user_id) : '';
+                const uMail = t.user_email ? (' | ✉️ ' + t.user_email) : '';
+                return `
                 <tr>
-                    <td>${t.id}</td>
-                    <td><strong>${t.phone}</strong></td>
-                    <td style="color:#10b981; font-weight:700;">₹${t.amount}</td>
-                    <td>${t.details}</td>
-                    <td>${t.created_at}</td>
+                    <td><strong style="color:#60a5fa; font-family:monospace;">${t.id}</strong></td>
+                    <td>
+                        <div style="font-weight:700; color:#fae59f; font-size:13.5px;">${uName}</div>
+                        <div style="font-size:11px; color:#cbd5e1; margin-top:2px;">📱 <strong>${uPhone}</strong></div>
+                        <div style="font-size:10px; color:#94a3b8; margin-top:1px;">UID: <strong style="color:#60a5fa;">${uId}</strong>${uMail}</div>
+                    </td>
+                    <td style="color:#10b981; font-weight:800; font-size:14px;">₹${parseFloat(t.amount || 0).toFixed(2)}</td>
+                    <td style="max-width:260px; word-break:break-all; font-size:12px; color:#cbd5e1;">${t.details || 'UPI Deposit'}</td>
+                    <td style="font-size:11px; color:#94a3b8;">${(t.created_at || '').replace('T', ' ').slice(0, 19)}</td>
                     <td>
                         <button class="btn-action btn-approve" onclick="approveDeposit('${t.id}')">Approve</button>
                         <button class="btn-action btn-reject" onclick="rejectDeposit('${t.id}')">Reject</button>
                     </td>
                 </tr>
-            `).join('');
+            `;
+            }).join('');
         }
 
         async function approveDeposit(txId) {
@@ -1705,7 +1719,11 @@
                 return `
                     <tr id="wth-row-${t.id}">
                         <td><span style="font-family:monospace; font-size:11px; color:#94a3b8;">${t.id}</span></td>
-                        <td><strong style="color:#fff;">${t.phone}</strong></td>
+                        <td>
+                            <div style="font-weight:700; color:#fae59f; font-size:13px;">${t.user_name || 'Player'}</div>
+                            <div style="font-size:11px; color:#cbd5e1; margin-top:2px;">📱 <strong>${t.phone || 'N/A'}</strong></div>
+                            <div style="font-size:10px; color:#94a3b8; margin-top:1px;">UID: <strong style="color:#60a5fa;">#${t.user_id}</strong></div>
+                        </td>
                         <td>
                             <div style="color:#10b981; font-weight:800; font-size:15px;">₹${netPay.toFixed(2)} <span style="font-size:10px; color:#10b981; background:rgba(16,185,129,0.15); padding:1px 5px; border-radius:3px;">Net</span></div>
                             <div style="font-size:10.5px; color:#94a3b8; margin-top:2px;">
@@ -1789,8 +1807,11 @@
                 <tr>
                     <td>${t.id}</td>
                     <td><span style="color:${color}; font-weight:bold; text-transform:uppercase;">${t.type}</span></td>
-                    <td><strong>${t.phone || 'User #' + t.user_id}</strong></td>
-                    <td style="color:${color}; font-weight:700;">₹${t.amount}</td>
+                    <td>
+                        <div style="font-weight:700; color:#fae59f;">${t.user_name || 'Player'}</div>
+                        <div style="font-size:11px; color:#cbd5e1;">📱 ${t.phone || 'N/A'} <span style="color:#60a5fa;">(#${t.user_id})</span></div>
+                    </td>
+                    <td style="color:${color}; font-weight:700;">₹${parseFloat(t.amount || 0).toFixed(2)}</td>
                     <td><span style="color:${badge}; font-weight:600;">${t.status.toUpperCase()}</span></td>
                     <td style="font-size:12px; color:#cbd5e1;">${t.details || '-'}</td>
                     <td style="font-size:11px; color:#94a3b8;">${t.created_at}</td>

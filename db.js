@@ -539,9 +539,17 @@ class DataStore {
         }
 
         // 6. User transactions
-        if (sql.includes('FROM transactions WHERE user_id = ? ORDER BY created_at DESC')) {
+        if (sql.includes('FROM transactions WHERE user_id = ?')) {
             const uid = parseInt(params[0]);
-            return this.data.transactions.filter(t => t.user_id === uid).reverse().slice(0, 40);
+            let list = this.data.transactions.filter(t => parseInt(t.user_id) === uid);
+            if (sql.includes("type = 'withdraw'") || (params.length > 1 && params[1] === 'withdraw')) {
+                list = list.filter(t => t.type === 'withdraw');
+            } else if (sql.includes("type = 'deposit'") || (params.length > 1 && params[1] === 'deposit')) {
+                list = list.filter(t => t.type === 'deposit');
+            } else if (params.length > 1 && typeof params[1] === 'string' && params[1] !== '') {
+                list = list.filter(t => t.type === params[1]);
+            }
+            return list.sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime()).slice(0, 100);
         }
 
         // 7. Admin: All users
@@ -554,10 +562,15 @@ class DataStore {
             return this.data.transactions
                 .filter(t => t.type === 'deposit' && t.status === 'pending')
                 .map(t => {
-                    const u = this.data.users.find(u => u.id === t.user_id);
-                    return Object.assign({}, t, { phone: u ? u.phone : 'Unknown' });
+                    const u = this.data.users.find(u => String(u.id) === String(t.user_id));
+                    return Object.assign({}, t, {
+                        phone: u ? u.phone : (t.phone || 'Unknown'),
+                        user_name: u ? (u.name || ('Player ' + String(u.phone).slice(-4))) : 'Player',
+                        user_email: u ? (u.email || '') : '',
+                        user_balance: u ? u.balance : 0
+                    });
                 })
-                .reverse();
+                .sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
         }
 
         // 9. Admin: Pending withdrawals
@@ -565,20 +578,30 @@ class DataStore {
             return this.data.transactions
                 .filter(t => t.type === 'withdraw' && t.status === 'pending')
                 .map(t => {
-                    const u = this.data.users.find(u => u.id === t.user_id);
-                    return Object.assign({}, t, { phone: u ? u.phone : 'Unknown' });
+                    const u = this.data.users.find(u => String(u.id) === String(t.user_id));
+                    return Object.assign({}, t, {
+                        phone: u ? u.phone : (t.phone || 'Unknown'),
+                        user_name: u ? (u.name || ('Player ' + String(u.phone).slice(-4))) : 'Player',
+                        user_email: u ? (u.email || '') : '',
+                        user_balance: u ? u.balance : 0
+                    });
                 })
-                .reverse();
+                .sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
         }
 
         // 10. Admin: All transactions (Deposits & Withdrawals)
-        if (sql.includes('FROM transactions t JOIN users u') || sql.includes('FROM transactions ORDER BY')) {
+        if (sql.includes('FROM transactions t') || sql.includes('FROM transactions ORDER BY')) {
             return this.data.transactions
                 .map(t => {
-                    const u = this.data.users.find(u => u.id === t.user_id);
-                    return Object.assign({}, t, { phone: u ? u.phone : 'Unknown' });
+                    const u = this.data.users.find(u => String(u.id) === String(t.user_id));
+                    return Object.assign({}, t, {
+                        phone: u ? u.phone : (t.phone || 'Unknown'),
+                        user_name: u ? (u.name || ('Player ' + String(u.phone).slice(-4))) : 'Player',
+                        user_email: u ? (u.email || '') : '',
+                        user_balance: u ? u.balance : 0
+                    });
                 })
-                .reverse()
+                .sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime())
                 .slice(0, 100);
         }
 
@@ -732,18 +755,23 @@ class DataStore {
 
         // 6. Insert User
         if (sql.includes('INSERT INTO users')) {
-            let phone, password, invite_code, referred_by, email, email_verified;
-            if (params.length >= 6) {
+            let phone, password, invite_code, referred_by, email, email_verified, name;
+            if (params.length >= 7) {
+                [phone, password, invite_code, referred_by, email, email_verified, name] = params;
+            } else if (params.length === 6) {
                 [phone, password, invite_code, referred_by, email, email_verified] = params;
             } else {
                 [phone, password, invite_code, referred_by] = params;
                 email = '';
                 email_verified = 1;
             }
+            const cleanPhone = String(phone).trim();
+            const cleanName = name ? String(name).trim() : ('Player ' + cleanPhone.slice(-4));
             const newId = this.data.nextUserId++;
             const user = {
                 id: newId,
-                phone: String(phone).trim(),
+                name: cleanName,
+                phone: cleanPhone,
                 email: email ? String(email).trim().toLowerCase() : '',
                 email_verified: email_verified !== undefined ? parseInt(email_verified) : 1,
                 password: String(password).trim(),
