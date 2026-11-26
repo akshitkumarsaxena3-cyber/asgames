@@ -4158,6 +4158,22 @@ def api_sync_push():
 def serve_index():
     return send_from_directory(BASE_DIR, 'index.html')
 
+@app.route('/manifest.json')
+def serve_manifest():
+    return send_from_directory(BASE_DIR, 'manifest.json', mimetype='application/manifest+json')
+
+@app.route('/sw.js')
+def serve_sw():
+    response = send_from_directory(BASE_DIR, 'sw.js', mimetype='application/javascript')
+    response.headers['Service-Worker-Allowed'] = '/'
+    return response
+
+@app.route('/api/download/apk')
+@app.route('/downloads/<path:filename>')
+def serve_apk_download(filename='BDGWin_v2.4.0.apk'):
+    dl_dir = os.path.join(BASE_DIR, 'downloads')
+    return send_from_directory(dl_dir, filename, as_attachment=True, mimetype='application/vnd.android.package-archive')
+
 @app.route('/admin')
 def serve_admin():
     return send_from_directory(BASE_DIR, 'admin.html')

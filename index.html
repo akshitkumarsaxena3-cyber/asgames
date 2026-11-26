@@ -3,7 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>ASGames - Color Prediction & Lottery Gaming App</title>
+    <title>BDG Win - India's #1 Real Money Color Prediction & Casino App</title>
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#ff7700">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="BDG Win">
+    <link rel="apple-touch-icon" href="assets/icon-192.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="assets/icon-192.png">
+    <link rel="icon" type="image/png" sizes="512x512" href="assets/icon-512.png">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
@@ -1121,6 +1130,10 @@
                         <span class="lang-flag">🇺🇸</span>
                         <span class="lang-code">EN</span>
                     </button>
+                    <button id="header-app-download-btn" class="header-app-btn" onclick="openAppDownloadModal()" title="Download Official Mobile App">
+                        <span class="app-btn-icon">📲</span>
+                        <span class="app-btn-text">APP</span>
+                    </button>
                     <button id="btn-auth-trigger" class="btn-deposit" style="padding:4px 10px; font-size:11px;" onclick="openAuthModal('register')" data-i18n="login_register">Login / Register</button>
                     <button id="sound-toggle-btn" class="icon-btn" title="Toggle Sound">🔊</button>
                     <button id="header-support-btn" class="icon-btn header-support-btn" onclick="openSupportChat()" title="24/7 Live Support Chat">💬<span class="live-dot-mini"></span></button>
@@ -1193,6 +1206,11 @@
 
                 <!-- Luxury In-App Quick Services Hub (Replaces floating rail) -->
                 <div class="home-quick-services">
+                    <div class="qs-item qs-app-download" onclick="openAppDownloadModal()" title="Download Official Mobile App">
+                        <div class="qs-icon-box qs-app" style="background:linear-gradient(135deg, #10b981, #059669); color:#fff;">📲</div>
+                        <div class="qs-label">Download App</div>
+                        <span class="qs-subtag" style="background:linear-gradient(135deg, #ff7700, #d92626); color:#fff;">APK / PWA</span>
+                    </div>
                     <div class="qs-item" onclick="openFirstDepositModal(true)" title="First Deposit Bonus">
                         <div class="qs-icon-box qs-gift">🎁</div>
                         <div class="qs-label">Deposit Bonus</div>
@@ -2523,6 +2541,10 @@
 
                 <!-- Middle List Card (Notification, Gifts, Coupons, Stats, Language) -->
                 <div class="bdg-acc-list-card">
+                    <div class="bdg-acc-row bdg-acc-row-app" onclick="openAppDownloadModal()" style="background:linear-gradient(135deg, rgba(245,196,67,0.18), rgba(255,119,0,0.12)); border:1px solid rgba(245,196,67,0.35); border-radius:12px; margin-bottom:8px;">
+                        <div class="bdg-acc-row-l"><span class="bdg-gold-ico" style="font-size:20px;">📲</span><div><strong style="color:#fae59f;">Download Official App</strong><div style="font-size:11px; color:#cbd5e1;">Android APK &amp; PWA Mobile App</div></div></div>
+                        <span class="bdg-download-pill" style="background:#10b981; color:#fff; font-size:10px; font-weight:800; padding:3px 8px; border-radius:20px;">DOWNLOAD</span>
+                    </div>
                     <div class="bdg-acc-row" onclick="alert('🔔 Welcome to ASGames VIP! Instant UPI Deposits & 1-24h Withdrawals active.')">
                         <div class="bdg-acc-row-l"><span class="bdg-gold-ico">✉️</span><span>Notification</span></div>
                         <span class="bdg-arrow">›</span>
@@ -2575,6 +2597,10 @@
                         <div class="bdg-svc-item" onclick="alert('📖 Beginner Guide:\n1. Register & Verify Gmail OTP.\n2. Deposit via UPI & submit 12-digit UTR.\n3. Play Win Go, Aviator, Mines, K3 or Ludo & win real cash!')">
                             <span class="bdg-svc-ico">📖</span>
                             <span>Beginner's Guide</span>
+                        </div>
+                        <div class="bdg-svc-item" onclick="openAppDownloadModal()">
+                            <span class="bdg-svc-ico">📲</span>
+                            <span>App Download</span>
                         </div>
                         <div class="bdg-svc-item" onclick="handleAboutClick()">
                             <span class="bdg-svc-ico">📦</span>
@@ -2832,6 +2858,108 @@
                     Close
                 </button>
             </div>
+        </div>
+    </div>
+
+    <!-- ============================================== -->
+    <!-- APP DOWNLOAD & INSTALLATION MODAL              -->
+    <!-- ============================================== -->
+    <div id="app-download-modal" class="app-dl-overlay hidden">
+        <div class="app-dl-dialog">
+            <button class="app-dl-close" onclick="closeAppDownloadModal()" title="Close">&times;</button>
+            
+            <div class="app-dl-card">
+                <!-- App Emblem & Header -->
+                <div class="app-dl-top">
+                    <img src="assets/icon-192.png" alt="BDG Win App Logo" class="app-dl-logo">
+                    <div class="app-dl-info">
+                        <h2 class="app-dl-title">BDG Win Official App</h2>
+                        <div class="app-dl-badge-row">
+                            <span class="app-tag-ver">v2.4.0 (2026)</span>
+                            <span class="app-tag-rating">⭐ 4.9 (500K+)</span>
+                            <span class="app-tag-size">📦 1.65 MB</span>
+                        </div>
+                        <div class="app-dl-safe">🛡️ 100% Virus-Free &amp; Verified Safe</div>
+                    </div>
+                </div>
+
+                <!-- Highlight Features -->
+                <div class="app-dl-features">
+                    <div class="app-feat-item">
+                        <span class="app-feat-icon">⚡</span>
+                        <div>
+                            <strong>3x Faster Loading</strong>
+                            <p>Smooth Win Go, Aviator &amp; Mines with zero lag</p>
+                        </div>
+                    </div>
+                    <div class="app-feat-item">
+                        <span class="app-feat-icon">🔔</span>
+                        <div>
+                            <strong>Instant Notifications</strong>
+                            <p>Real-time Deposit &amp; Withdrawal status alerts</p>
+                        </div>
+                    </div>
+                    <div class="app-feat-item">
+                        <span class="app-feat-icon">🎁</span>
+                        <div>
+                            <strong>Exclusive App Bonuses</strong>
+                            <p>Daily Lucky Wheel spins &amp; VIP gifts</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Action Buttons -->
+                <div class="app-dl-actions">
+                    <button type="button" id="btn-pwa-install-trigger" class="btn-app-main-dl" onclick="triggerPwaInstallOrApk()">
+                        <span class="dl-ico">📲</span>
+                        <div style="text-align:left;">
+                            <div style="font-size:15px; font-weight:800;">INSTALL APP ON PHONE</div>
+                            <div style="font-size:11px; opacity:0.85;">Instant Home Screen Install (Zero Lag)</div>
+                        </div>
+                    </button>
+
+                    <a href="downloads/BDGWin_v2.4.0.apk" download="BDGWin_v2.4.0.apk" class="btn-app-sub-apk" onclick="trackApkDownload()">
+                        <span>⬇️ Download Direct Android APK (1.65 MB)</span>
+                    </a>
+                </div>
+
+                <!-- Installation Tabs / Guide -->
+                <div class="app-dl-guide">
+                    <div class="guide-tabs">
+                        <button id="guide-tab-android" class="guide-tab active" onclick="switchGuideTab('android')">🤖 Android</button>
+                        <button id="guide-tab-ios" class="guide-tab" onclick="switchGuideTab('ios')">🍎 iPhone / iOS</button>
+                    </div>
+                    <div id="guide-android" class="guide-content">
+                        <ol>
+                            <li>Tap <strong>"INSTALL APP ON PHONE"</strong> or <strong>"Download Direct Android APK"</strong>.</li>
+                            <li>Confirm <strong>"Install"</strong> or open the downloaded <strong>BDGWin.apk</strong>.</li>
+                            <li>The <strong>BDG Win</strong> icon will appear on your phone's home screen!</li>
+                        </ol>
+                    </div>
+                    <div id="guide-ios" class="guide-content hidden">
+                        <ol>
+                            <li>Open this website in <strong>Safari</strong> on your iPhone.</li>
+                            <li>Tap the <strong>Share</strong> button (box with up arrow ⎋) at the bottom.</li>
+                            <li>Select <strong>"Add to Home Screen ⊞"</strong> and tap <strong>"Add"</strong>.</li>
+                        </ol>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Floating Bottom PWA Install Bar (Sticky for mobile users) -->
+    <div id="pwa-floating-install-bar" class="pwa-floating-bar hidden">
+        <div class="pwa-float-content" onclick="openAppDownloadModal()">
+            <img src="assets/icon-192.png" alt="App Icon" class="pwa-float-icon">
+            <div class="pwa-float-text">
+                <strong>Install BDG Win App</strong>
+                <span>Faster, Smoother &amp; Win Daily Bonuses!</span>
+            </div>
+        </div>
+        <div class="pwa-float-btns">
+            <button class="btn-pwa-quick-install" onclick="triggerPwaInstallOrApk()">INSTALL ⚡</button>
+            <button class="btn-pwa-float-close" onclick="dismissPwaFloatingBar()">&times;</button>
         </div>
     </div>
 

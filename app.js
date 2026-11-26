@@ -4036,3 +4036,125 @@ function showVipFeedback(msg, color) {
         el.style.color = color || '#10b981';
     }
 }
+
+
+// ========================================================
+// PWA & APP DOWNLOAD CONTROLLER v2.4.0
+// ========================================================
+let deferredPwaPrompt = null;
+
+// Register Service Worker
+if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js')
+            .then(reg => console.log('[PWA] Service Worker registered with scope:', reg.scope))
+            .catch(err => console.warn('[PWA] Service Worker registration failed:', err));
+    });
+}
+
+// Capture PWA Install Prompt
+window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    deferredPwaPrompt = e;
+    console.log('[PWA] beforeinstallprompt event captured!');
+    const floatingBar = document.getElementById('pwa-floating-install-bar');
+    if (floatingBar && !sessionStorage.getItem('asg_pwa_banner_dismissed')) {
+        floatingBar.classList.remove('hidden');
+    }
+});
+
+// App Installed Event
+window.addEventListener('appinstalled', () => {
+    console.log('[PWA] App successfully installed!');
+    deferredPwaPrompt = null;
+    const floatingBar = document.getElementById('pwa-floating-install-bar');
+    if (floatingBar) floatingBar.classList.add('hidden');
+    if (window.stateManager) {
+        window.stateManager.showToast('🎉 BDG Win App Installed! Check your home screen.', 'success');
+    }
+});
+
+function openAppDownloadModal() {
+    const modal = document.getElementById('app-download-modal');
+    if (modal) modal.classList.remove('hidden');
+}
+
+function closeAppDownloadModal() {
+    const modal = document.getElementById('app-download-modal');
+    if (modal) modal.classList.add('hidden');
+}
+
+function dismissPwaFloatingBar() {
+    sessionStorage.setItem('asg_pwa_banner_dismissed', '1');
+    const floatingBar = document.getElementById('pwa-floating-install-bar');
+    if (floatingBar) floatingBar.classList.add('hidden');
+}
+
+function switchGuideTab(platform) {
+    const androidTab = document.getElementById('guide-tab-android');
+    const iosTab = document.getElementById('guide-tab-ios');
+    const androidContent = document.getElementById('guide-android');
+    const iosContent = document.getElementById('guide-ios');
+
+    if (platform === 'android') {
+        if (androidTab) androidTab.classList.add('active');
+        if (iosTab) iosTab.classList.remove('active');
+        if (androidContent) androidContent.classList.remove('hidden');
+        if (iosContent) iosContent.classList.add('hidden');
+    } else {
+        if (iosTab) iosTab.classList.add('active');
+        if (androidTab) androidTab.classList.remove('active');
+        if (iosContent) iosContent.classList.remove('hidden');
+        if (androidContent) androidContent.classList.add('hidden');
+    }
+}
+
+async function triggerPwaInstallOrApk() {
+    if (deferredPwaPrompt) {
+        try {
+            deferredPwaPrompt.prompt();
+            const choiceResult = await deferredPwaPrompt.userChoice;
+            if (choiceResult.outcome === 'accepted') {
+                console.log('[PWA] User accepted the install prompt');
+                if (window.stateManager) {
+                    window.stateManager.showToast('📲 Installing BDG Win App...', 'success');
+                }
+                deferredPwaPrompt = null;
+                closeAppDownloadModal();
+            } else {
+                console.log('[PWA] User dismissed the install prompt');
+            }
+        } catch (e) {
+            console.warn('[PWA] Install error, falling back to direct APK download:', e);
+            downloadDirectApk();
+        }
+    } else {
+        // If not in a browser supporting prompt or on iOS or already installed:
+        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+        if (isIOS) {
+            switchGuideTab('ios');
+            if (window.stateManager) {
+                window.stateManager.showToast('iPhone: Tap Share ⎋ → "Add to Home Screen ⊞"', 'info');
+            }
+        } else {
+            // Android direct download
+            downloadDirectApk();
+        }
+    }
+}
+
+function downloadDirectApk() {
+    const a = document.createElement('a');
+    a.href = 'downloads/BDGWin_v2.4.0.apk';
+    a.download = 'BDGWin_v2.4.0.apk';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    trackApkDownload();
+}
+
+function trackApkDownload() {
+    if (window.stateManager) {
+        window.stateManager.showToast('⬇️ BDG Win APK download started! (1.65 MB)', 'success');
+    }
+}

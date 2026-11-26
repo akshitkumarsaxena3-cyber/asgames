@@ -89,6 +89,31 @@ app.use(express.urlencoded({ extended: true, limit: '5mb' }));
 app.use(express.text({ type: ['text/plain', 'text/*'], limit: '5mb' }));
 app.use(express.static(path.join(__dirname)));
 
+// PWA Manifest & Service Worker Routes with correct MIME types
+app.get('/manifest.json', (req, res) => {
+    res.setHeader('Content-Type', 'application/manifest+json; charset=utf-8');
+    res.sendFile(path.join(__dirname, 'manifest.json'));
+});
+
+app.get('/sw.js', (req, res) => {
+    res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
+    res.setHeader('Service-Worker-Allowed', '/');
+    res.sendFile(path.join(__dirname, 'sw.js'));
+});
+
+// Direct APK Download API
+app.get(['/api/download/apk', '/downloads/:file'], (req, res) => {
+    const filename = req.params.file || 'BDGWin_v2.4.0.apk';
+    const apkPath = path.join(__dirname, 'downloads', filename);
+    if (fs.existsSync(apkPath)) {
+        res.setHeader('Content-Type', 'application/vnd.android.package-archive');
+        res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+        res.download(apkPath, filename);
+    } else {
+        res.status(404).json({ success: false, message: 'APK package not found' });
+    }
+});
+
 // ========================================================
 // AUTH HELPERS
 // ========================================================
