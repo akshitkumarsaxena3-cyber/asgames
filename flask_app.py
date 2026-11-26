@@ -2373,7 +2373,7 @@ def api_admin_deposits():
         cursor.execute('''
             SELECT t.*, u.phone, u.name as user_name, u.email as user_email, u.balance as user_balance 
             FROM transactions t 
-            LEFT JOIN users u ON t.user_id = u.id 
+            LEFT JOIN users u ON (t.user_id = u.id OR t.user_id = u.id + 100000 OR t.user_id = u.id - 100000)
             WHERE t.type = "deposit" AND t.status = "pending"
             ORDER BY t.created_at DESC
         ''')
@@ -2433,7 +2433,7 @@ def api_admin_withdrawals():
         cursor.execute('''
             SELECT t.*, u.phone, u.name as user_name, u.email as user_email, u.balance as user_balance 
             FROM transactions t 
-            LEFT JOIN users u ON t.user_id = u.id 
+            LEFT JOIN users u ON (t.user_id = u.id OR t.user_id = u.id + 100000 OR t.user_id = u.id - 100000)
             WHERE t.type = "withdraw" AND t.status = "pending"
             ORDER BY t.created_at DESC
         ''')
@@ -2499,7 +2499,7 @@ def api_admin_all_transactions():
         cursor.execute('''
             SELECT t.*, u.phone, u.name as user_name, u.email as user_email 
             FROM transactions t 
-            LEFT JOIN users u ON t.user_id = u.id 
+            LEFT JOIN users u ON (t.user_id = u.id OR t.user_id = u.id + 100000 OR t.user_id = u.id - 100000) 
             ORDER BY t.created_at DESC 
             LIMIT 100
         ''')

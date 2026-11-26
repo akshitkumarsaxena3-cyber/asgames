@@ -426,6 +426,23 @@ class DataStore {
         this.data.users.forEach(u => this.reconcileUserWallet(u));
     }
 
+    findUserById(targetId) {
+        if (!targetId && targetId !== 0) return null;
+        const tid = parseInt(targetId, 10);
+        if (isNaN(tid)) {
+            return (this.data.users || []).find(u => String(u.id) === String(targetId) || String(u.phone) === String(targetId)) || null;
+        }
+        return (this.data.users || []).find(u => {
+            const uid = parseInt(u.id, 10);
+            return uid === tid || 
+                   (uid < 100000 && uid + 100000 === tid) || 
+                   (uid >= 100000 && uid - 100000 === tid) || 
+                   (tid < 100000 && tid + 100000 === uid) || 
+                   (tid >= 100000 && tid - 100000 === uid) ||
+                   String(u.id) === String(targetId);
+        }) || null;
+    }
+
     async get(sql, params = []) {
         sql = sql.trim();
 
@@ -560,18 +577,37 @@ class DataStore {
             return this.data.commissions.filter(c => c.user_id === uid);
         }
 
-        // 6. User transactions
-        if (sql.includes('FROM transactions WHERE user_id = ?')) {
-            const uid = parseInt(params[0]);
-            let list = this.data.transactions.filter(t => parseInt(t.user_id) === uid);
-            if (sql.includes("type = 'withdraw'") || (params.length > 1 && params[1] === 'withdraw')) {
-                list = list.filter(t => t.type === 'withdraw');
-            } else if (sql.includes("type = 'deposit'") || (params.length > 1 && params[1] === 'deposit')) {
-                list = list.filter(t => t.type === 'deposit');
-            } else if (params.length > 1 && typeof params[1] === 'string' && params[1] !== '') {
-                list = list.filter(t => t.type === params[1]);
+        // 6. User transactions & withdrawals
+        if (sql.includes('FROM transactions') && sql.includes('user_id') && !sql.includes('LEFT JOIN') && !sql.includes('COUNT(')) {
+            const uids = params.map(p => parseInt(p, 10)).filter(p => !isNaN(p));
+            let list = (this.data.transactions || []).filter(t => {
+                const tid = parseInt(t.user_id, 10);
+                return uids.includes(tid) || 
+                       uids.some(u => (u < 100000 && u + 100000 === tid) || (u >= 100000 && u - 100000 === tid));
+            });
+            if (sql.includes("type = 'withdraw'") || sql.includes('type = "withdraw"') || params.includes('withdraw')) {
+                list = list.filter(t => String(t.type).toLowerCase() === 'withdraw');
+            } else if (sql.includes("type = 'deposit'") || sql.includes('type = "deposit"') || params.includes('deposit')) {
+                list = list.filter(t => String(t.type).toLowerCase() === 'deposit');
+            } else {
+                const typeParam = params.find(p => typeof p === 'string' && ['withdraw', 'deposit', 'bet', 'win', 'commission'].includes(p.toLowerCase()));
+                if (typeParam) {
+                    list = list.filter(t => String(t.type).toLowerCase() === typeParam.toLowerCase());
+                }
             }
-            return list.sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime()).slice(0, 100);
+            return list.map(t => {
+                if (!t.user_name || !t.phone) {
+                    const u = this.findUserById(t.user_id);
+                    if (u) {
+                        return Object.assign({}, t, {
+                            phone: t.phone || u.phone || '',
+                            user_name: t.user_name || u.name || '',
+                            user_email: t.user_email || u.email || ''
+                        });
+                    }
+                }
+                return t;
+            }).sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime()).slice(0, 100);
         }
 
         // 7. Admin: All users
@@ -581,15 +617,22 @@ class DataStore {
 
         // 8. Admin: Pending deposits
         if (sql.includes("type = 'deposit' AND t.status = 'pending'") || sql.includes("type='deposit' AND status='pending'")) {
-            return this.data.transactions
-                .filter(t => t.type === 'deposit' && t.status === 'pending')
+            return (this.data.transactions || [])
+                .filter(t => t.type === 'deposit' && (t.status === 'pending' || t.status === 'Pending'))
                 .map(t => {
-                    const u = this.data.users.find(u => String(u.id) === String(t.user_id));
+                    const u = this.findUserById(t.user_id);
+                    const phone = (u && u.phone) || t.phone || 'N/A';
+                    const name = (u && u.name) || t.user_name || (phone !== 'N/A' ? ('Player ' + String(phone).slice(-4)) : 'Player');
+                    const email = (u && u.email) || t.user_email || '';
+                    const bal = (u && typeof u.balance === 'number') ? u.balance : (t.user_balance || 0);
+                    const uid = u ? (u.id < 100000 ? 100000 + u.id : u.id) : (t.user_id < 100000 ? 100000 + t.user_id : t.user_id);
                     return Object.assign({}, t, {
-                        phone: u ? u.phone : (t.phone || 'Unknown'),
-                        user_name: u ? (u.name || ('Player ' + String(u.phone).slice(-4))) : 'Player',
-                        user_email: u ? (u.email || '') : '',
-                        user_balance: u ? u.balance : 0
+                        phone: phone,
+                        user_name: name,
+                        user_email: email,
+                        user_balance: bal,
+                        user_id: uid,
+                        uid: uid
                     });
                 })
                 .sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
@@ -597,15 +640,22 @@ class DataStore {
 
         // 9. Admin: Pending withdrawals
         if (sql.includes("type = 'withdraw' AND t.status = 'pending'") || sql.includes("type='withdraw' AND status='pending'")) {
-            return this.data.transactions
-                .filter(t => t.type === 'withdraw' && t.status === 'pending')
+            return (this.data.transactions || [])
+                .filter(t => t.type === 'withdraw' && (t.status === 'pending' || t.status === 'Pending'))
                 .map(t => {
-                    const u = this.data.users.find(u => String(u.id) === String(t.user_id));
+                    const u = this.findUserById(t.user_id);
+                    const phone = (u && u.phone) || t.phone || 'N/A';
+                    const name = (u && u.name) || t.user_name || (phone !== 'N/A' ? ('Player ' + String(phone).slice(-4)) : 'Player');
+                    const email = (u && u.email) || t.user_email || '';
+                    const bal = (u && typeof u.balance === 'number') ? u.balance : (t.user_balance || 0);
+                    const uid = u ? (u.id < 100000 ? 100000 + u.id : u.id) : (t.user_id < 100000 ? 100000 + t.user_id : t.user_id);
                     return Object.assign({}, t, {
-                        phone: u ? u.phone : (t.phone || 'Unknown'),
-                        user_name: u ? (u.name || ('Player ' + String(u.phone).slice(-4))) : 'Player',
-                        user_email: u ? (u.email || '') : '',
-                        user_balance: u ? u.balance : 0
+                        phone: phone,
+                        user_name: name,
+                        user_email: email,
+                        user_balance: bal,
+                        user_id: uid,
+                        uid: uid
                     });
                 })
                 .sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
@@ -613,14 +663,21 @@ class DataStore {
 
         // 10. Admin: All transactions (Deposits & Withdrawals)
         if (sql.includes('FROM transactions t') || sql.includes('FROM transactions ORDER BY')) {
-            return this.data.transactions
+            return (this.data.transactions || [])
                 .map(t => {
-                    const u = this.data.users.find(u => String(u.id) === String(t.user_id));
+                    const u = this.findUserById(t.user_id);
+                    const phone = (u && u.phone) || t.phone || 'N/A';
+                    const name = (u && u.name) || t.user_name || (phone !== 'N/A' ? ('Player ' + String(phone).slice(-4)) : 'Player');
+                    const email = (u && u.email) || t.user_email || '';
+                    const bal = (u && typeof u.balance === 'number') ? u.balance : (t.user_balance || 0);
+                    const uid = u ? (u.id < 100000 ? 100000 + u.id : u.id) : (t.user_id < 100000 ? 100000 + t.user_id : t.user_id);
                     return Object.assign({}, t, {
-                        phone: u ? u.phone : (t.phone || 'Unknown'),
-                        user_name: u ? (u.name || ('Player ' + String(u.phone).slice(-4))) : 'Player',
-                        user_email: u ? (u.email || '') : '',
-                        user_balance: u ? u.balance : 0
+                        phone: phone,
+                        user_name: name,
+                        user_email: email,
+                        user_balance: bal,
+                        user_id: uid,
+                        uid: uid
                     });
                 })
                 .sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime())
@@ -882,6 +939,7 @@ class DataStore {
             } else {
                 [id, user_id, type, amount, status, details] = params;
             }
+            const u = this.findUserById(user_id);
             const tx = {
                 id: String(id),
                 user_id: parseInt(user_id),
@@ -890,6 +948,9 @@ class DataStore {
                 status: status || 'pending',
                 details: details || '',
                 screenshot: screenshot || null,
+                phone: (u && u.phone) ? u.phone : '',
+                user_name: (u && u.name) ? u.name : '',
+                user_email: (u && u.email) ? u.email : '',
                 created_at: new Date().toISOString()
             };
             this.data.transactions.unshift(tx);

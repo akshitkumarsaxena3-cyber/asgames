@@ -1530,6 +1530,9 @@ app.post('/api/wallet/withdraw', requireAuth, async (req, res) => {
             net_amount: netAmt,
             status: 'pending',
             details: fullDetails,
+            phone: req.user.phone || '',
+            user_name: req.user.name || '',
+            user_email: req.user.email || '',
             created_at: new Date().toISOString()
         };
         if (!Array.isArray(DB.data.transactions)) DB.data.transactions = [];
