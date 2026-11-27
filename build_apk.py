@@ -97,19 +97,22 @@ with zipfile.ZipFile(source_apk, 'r') as z_in:
 
 # 2a. Patch classes.dex
 dex = bytearray(entries['classes.dex'])
-old_url = b'https://github.com/bishwassagar'
-new_url = b'https://asgames.onrender.com/#/'
-pos = dex.find(old_url)
-if pos != -1:
-    assert len(old_url) == len(new_url), 'URL length must match exactly'
-    dex[pos:pos+len(new_url)] = new_url
-    sha1 = hashlib.sha1(dex[32:]).digest()
-    dex[12:32] = sha1
-    adler = zlib.adler32(dex[12:]) & 0xffffffff
-    dex[8:12] = adler.to_bytes(4, 'little')
-    entries['classes.dex'] = bytes(dex)
-    print('classes.dex URL patched to:', new_url.decode())
-elif new_url in dex:
+new_url = b'https://asgame.ascollab.in/?v=1'
+replaced_url = False
+for old_url in [b'https://github.com/bishwassagar', b'https://asgames.onrender.com/#/']:
+    pos = dex.find(old_url)
+    if pos != -1:
+        assert len(old_url) == len(new_url), 'URL length must match exactly'
+        dex[pos:pos+len(new_url)] = new_url
+        sha1 = hashlib.sha1(dex[32:]).digest()
+        dex[12:32] = sha1
+        adler = zlib.adler32(dex[12:]) & 0xffffffff
+        dex[8:12] = adler.to_bytes(4, 'little')
+        entries['classes.dex'] = bytes(dex)
+        print('classes.dex URL patched to:', new_url.decode())
+        replaced_url = True
+        break
+if not replaced_url and new_url in dex:
     print('classes.dex already points to:', new_url.decode())
 
 # 2b. Patch resources.arsc
@@ -203,11 +206,11 @@ offline_html = """<!DOCTYPE html>
     </div>
     <h1>AS Games VIP</h1>
     <p>Connecting to secure live gaming servers... Please check your internet connection.</p>
-    <a href="https://asgames.onrender.com/#/" class="btn-reload">🚀 Open AS Games</a>
+    <a href="https://asgame.ascollab.in/?v=1" class="btn-reload">🚀 Open AS Games</a>
     <script>
         setInterval(function() {
             if (navigator.onLine) {
-                window.location.href = 'https://asgames.onrender.com/#/';
+                window.location.href = 'https://asgame.ascollab.in/?v=1';
             }
         }, 3000);
     </script>
@@ -270,18 +273,29 @@ builder = builder.add_signer(cert, key, hashes.SHA256())
 cert_rsa = builder.sign(serialization.Encoding.DER, [pkcs7.PKCS7Options.DetachedSignature])
 entries['META-INF/CERT.RSA'] = cert_rsa
 
-print('5. Writing APK zip without compression on stored files...')
+print('5. Writing APK zip with 4-byte alignment for stored files (Android 11+ requirement)...')
 zip_buffer = io.BytesIO()
 with zipfile.ZipFile(zip_buffer, 'w', compression=zipfile.ZIP_DEFLATED) as z_out:
     for priority in ['META-INF/MANIFEST.MF', 'META-INF/CERT.SF', 'META-INF/CERT.RSA']:
         z_out.writestr(priority, entries.pop(priority))
     for name in sorted(entries.keys()):
-        comp = zipfile.ZIP_STORED if name == 'resources.arsc' else zipfile.ZIP_DEFLATED
-        z_out.writestr(name, entries[name], compress_type=comp)
+        if name == 'resources.arsc':
+            # Calculate 4-byte alignment padding for ZipInfo.extra
+            cur_pos = zip_buffer.tell()
+            # Local file header is 30 bytes + len(filename) + len(extra)
+            header_end = cur_pos + 30 + len(name.encode('utf-8'))
+            pad = (4 - (header_end % 4)) % 4
+            zi = zipfile.ZipInfo(name, date_time=(2026, 11, 27, 3, 45, 0))
+            zi.compress_type = zipfile.ZIP_STORED
+            if pad > 0:
+                zi.extra = b'\x00' * pad
+            z_out.writestr(zi, entries[name])
+        else:
+            z_out.writestr(name, entries[name], compress_type=zipfile.ZIP_DEFLATED)
 
 raw_apk = zip_buffer.getvalue()
 
-print('6. Generating APK Signature Scheme v2 Block...')
+print('6. Generating APK Signature Scheme v2 Block (Alg ID 0x0103 SHA256withRSA)...')
 eocd_pos = raw_apk.rfind(b'\x50\x4b\x05\x06')
 cd_offset = struct.unpack('<I', raw_apk[eocd_pos+16:eocd_pos+20])[0]
 cd_size = struct.unpack('<I', raw_apk[eocd_pos+12:eocd_pos+16])[0]
@@ -305,20 +319,21 @@ top_digest = hashlib.sha256(b'\x5a' + struct.pack('<I', len(chunk_digests)) + b'
 
 lp = lambda d: struct.pack('<I', len(d)) + d
 
-digests_seq = lp(struct.pack('<I', 0x0101) + lp(top_digest))
-certs_seq = lp(lp(cert_der))
+# 0x0103 = SIGNATURE_RSA_PKCS1_V1_5_WITH_SHA256
+ALG_RSA_PKCS1_SHA256 = 0x0103
+digest_item = lp(struct.pack('<I', ALG_RSA_PKCS1_SHA256) + lp(top_digest))
+cert_item = lp(cert_der)
 attr_seq = struct.pack('<I', 0)
 
-signed_data = lp(digests_seq) + lp(certs_seq) + lp(attr_seq)
+signed_data = lp(digest_item) + lp(cert_item) + attr_seq
 
 sig_bytes = key.sign(signed_data, padding.PKCS1v15(), hashes.SHA256())
-signatures_seq = lp(struct.pack('<I', 0x0101) + lp(sig_bytes))
+sig_item = lp(struct.pack('<I', ALG_RSA_PKCS1_SHA256) + lp(sig_bytes))
 
 pub_bytes = key.public_key().public_bytes(serialization.Encoding.DER, serialization.PublicFormat.SubjectPublicKeyInfo)
-pubkey_seq = lp(pub_bytes)
 
-signer = lp(signed_data) + lp(signatures_seq) + lp(pubkey_seq)
-signers = lp(signer)
+signer = lp(signed_data) + lp(sig_item) + lp(pub_bytes)
+signers = lp(lp(signer))
 
 v2_pair = struct.pack('<I', 0x7109871a) + signers
 v2_pair_lp64 = struct.pack('<Q', len(v2_pair)) + v2_pair
