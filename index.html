@@ -2911,30 +2911,30 @@
 
                 <!-- Action Buttons -->
                 <div class="app-dl-actions">
-                    <a href="downloads/ASGames_v2.4.0.apk" download="ASGames_v2.4.0.apk" class="btn-app-main-dl" style="text-decoration:none;" onclick="trackApkDownload()">
-                        <span class="dl-ico">🤖</span>
+                    <button type="button" id="btn-pwa-install-trigger" class="btn-app-main-dl" onclick="triggerPwaInstallOrApk()">
+                        <span class="dl-ico">📲</span>
                         <div style="text-align:left;">
-                            <div style="font-size:15px; font-weight:800;">DOWNLOAD ANDROID APK (1.56 MB)</div>
-                            <div style="font-size:11px; opacity:0.85;">Official AS Games App with Gold Logo &amp; Real Game</div>
+                            <div style="font-size:15px; font-weight:800;">INSTALL AS GAMES APP</div>
+                            <div style="font-size:11px; opacity:0.85;">Official Home Screen App with Gold Logo (100% Working)</div>
                         </div>
-                    </a>
-
-                    <button type="button" id="btn-pwa-install-trigger" class="btn-app-sub-apk" onclick="triggerPwaInstallOrApk()">
-                        <span>📲 Or Install via Chrome / Browser (Add to Home Screen)</span>
                     </button>
+
+                    <a href="downloads/ASGames_v2.4.0.apk" download="ASGames_v2.4.0.apk" class="btn-app-sub-apk" onclick="trackApkDownload()">
+                        <span>🤖 Direct Android APK (1.56 MB)</span>
+                    </a>
                 </div>
 
                 <!-- Installation Tabs / Guide -->
                 <div class="app-dl-guide">
                     <div class="guide-tabs">
-                        <button id="guide-tab-android" class="guide-tab active" onclick="switchGuideTab('android')">🤖 Android</button>
+                        <button id="guide-tab-android" class="guide-tab active" onclick="switchGuideTab('android')">🤖 Android (Chrome)</button>
                         <button id="guide-tab-ios" class="guide-tab" onclick="switchGuideTab('ios')">🍎 iPhone / iOS</button>
                     </div>
                     <div id="guide-android" class="guide-content">
                         <ol>
-                            <li>Tap <strong>"DOWNLOAD ANDROID APK"</strong> or <strong>"Install via Chrome"</strong>.</li>
-                            <li>Confirm <strong>"Install"</strong> or open the downloaded <strong>ASGames_v2.4.0.apk</strong>.</li>
-                            <li>The <strong>AS Games</strong> icon will appear on your phone's home screen!</li>
+                            <li>Tap <strong>"INSTALL AS GAMES APP"</strong> above (or open Chrome menu <strong>⋮</strong> → <strong>"Install app"</strong>).</li>
+                            <li>Tap <strong>"Install"</strong> in the popup.</li>
+                            <li>The <strong>AS Games</strong> gold icon will appear on your phone's home screen in 5 seconds!</li>
                         </ol>
                     </div>
                     <div id="guide-ios" class="guide-content hidden">

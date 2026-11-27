@@ -4128,11 +4128,12 @@ async function triggerPwaInstallOrApk() {
                 console.log('[PWA] User dismissed the install prompt');
             }
         } catch (e) {
-            console.warn('[PWA] Install error, falling back to direct APK download:', e);
-            downloadDirectApk();
+            console.warn('[PWA] Install prompt error:', e);
+            if (window.stateManager) {
+                window.stateManager.showToast('Chrome menu (⋮) → "Install app" / "Add to Home screen" par tap karein!', 'info');
+            }
         }
     } else {
-        // If not in a browser supporting prompt or on iOS or already installed:
         const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
         if (isIOS) {
             switchGuideTab('ios');
@@ -4140,8 +4141,10 @@ async function triggerPwaInstallOrApk() {
                 window.stateManager.showToast('iPhone: Tap Share ⎋ → "Add to Home Screen ⊞"', 'info');
             }
         } else {
-            // Android direct download
-            downloadDirectApk();
+            switchGuideTab('android');
+            if (window.stateManager) {
+                window.stateManager.showToast('Chrome ke top-right 3 dots (⋮) → "Install app" par tap karein!', 'info');
+            }
         }
     }
 }
