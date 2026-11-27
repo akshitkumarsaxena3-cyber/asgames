@@ -1,5 +1,5 @@
-// AS Games PWA Service Worker v2.4.1
-const CACHE_NAME = 'asgames-cache-v2.4.1';
+// AS Games PWA Service Worker v2.4.2
+const CACHE_NAME = 'asgames-cache-v2.4.2';
 const STATIC_ASSETS = [
   './',
   './index.html',
@@ -64,10 +64,34 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
+  // Network-First for HTML, JS, CSS, and Manifest so updates appear immediately
+  const isCoreAsset = req.mode === 'navigate' ||
+    url.pathname === '/' ||
+    url.pathname.endsWith('.html') ||
+    url.pathname.endsWith('.js') ||
+    url.pathname.endsWith('.css') ||
+    url.pathname.endsWith('manifest.json') ||
+    url.pathname.includes('icon-');
+
+  if (isCoreAsset) {
+    event.respondWith(
+      fetch(req, { cache: 'no-store' }).then((networkResp) => {
+        if (networkResp && networkResp.status === 200) {
+          const respClone = networkResp.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(req, respClone));
+        }
+        return networkResp;
+      }).catch(() => {
+        return caches.match(req).then((cached) => cached || (req.mode === 'navigate' ? caches.match('./index.html') : undefined));
+      })
+    );
+    return;
+  }
+
+  // Cache-First with background refresh for game art images
   event.respondWith(
     caches.match(req).then((cachedResp) => {
       if (cachedResp) {
-        // Return cached and update in background (stale-while-revalidate)
         fetch(req).then((networkResp) => {
           if (networkResp && networkResp.status === 200) {
             caches.open(CACHE_NAME).then((cache) => cache.put(req, networkResp));
@@ -81,10 +105,6 @@ self.addEventListener('fetch', (event) => {
           caches.open(CACHE_NAME).then((cache) => cache.put(req, respClone));
         }
         return networkResp;
-      }).catch(() => {
-        if (req.mode === 'navigate') {
-          return caches.match('./index.html');
-        }
       });
     })
   );
