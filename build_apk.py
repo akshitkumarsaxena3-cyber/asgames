@@ -8,11 +8,16 @@ from cryptography.hazmat.primitives.asymmetric import rsa, padding
 from cryptography.hazmat.primitives.serialization import pkcs7
 
 base_dir = os.path.dirname(os.path.abspath(__file__))
-old_apk_path = os.path.join(base_dir, 'downloads', 'BDGWin_v2.4.0.apk')
 apk_path = os.path.join(base_dir, 'downloads', 'ASGames_v2.4.0.apk')
 assets_dir = os.path.join(base_dir, 'assets')
+orig_cache = os.path.join(base_dir, 'downloads', '.orig_base.apk')
 
-source_apk = apk_path if os.path.exists(apk_path) else old_apk_path
+if not os.path.exists(orig_cache):
+    import urllib.request
+    print('Downloading clean base APK...')
+    urllib.request.urlretrieve('https://raw.githubusercontent.com/bishwassagar/Android-Webview-App/master/app/release/app-release.apk', orig_cache)
+
+source_apk = orig_cache
 
 print('1. Generating high-resolution AS GAMES Gold Casino Icons...')
 def make_icon(size):
@@ -88,12 +93,14 @@ with open(os.path.join(assets_dir, 'icon-maskable.png'), 'wb') as f: f.write(ico
 print('Assets icons updated to AS GAMES!')
 
 print('2. Reading base APK and modifying resources...')
+orig_compress = {}
 with zipfile.ZipFile(source_apk, 'r') as z_in:
     entries = {}
     for item in z_in.infolist():
         if item.filename.startswith('META-INF/') and any(item.filename.endswith(ext) for ext in ['.MF', '.SF', '.RSA', '.DSA', '.EC']):
             continue
         entries[item.filename] = z_in.read(item.filename)
+        orig_compress[item.filename] = item.compress_type
 
 # 2a. Patch classes.dex
 dex = bytearray(entries['classes.dex'])
@@ -262,7 +269,7 @@ def write_aligned_stored(z_out, buf, name, data):
 zip_buffer = io.BytesIO()
 with zipfile.ZipFile(zip_buffer, 'w', compression=zipfile.ZIP_DEFLATED) as z_out:
     for name in sorted(entries.keys()):
-        if name in ('classes.dex', 'resources.arsc'):
+        if orig_compress.get(name, zipfile.ZIP_DEFLATED) == zipfile.ZIP_STORED:
             write_aligned_stored(z_out, zip_buffer, name, entries[name])
         else:
             z_out.writestr(name, entries[name], compress_type=zipfile.ZIP_DEFLATED)
