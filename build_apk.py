@@ -241,61 +241,35 @@ cert = x509.CertificateBuilder().subject_name(
 
 cert_der = cert.public_bytes(serialization.Encoding.DER)
 
-print('4. Creating v1 JAR signature (MANIFEST.MF, CERT.SF, CERT.RSA)...')
-manifest_lines = [b'Manifest-Version: 1.0', b'Created-By: 1.0 (Android)']
-file_digests = {}
-for name in sorted(entries.keys()):
-    digest = base64.b64encode(hashlib.sha256(entries[name]).digest())
-    file_digests[name] = digest
-    manifest_lines.append(b'')
-    manifest_lines.append(f'Name: {name}'.encode())
-    manifest_lines.append(b'SHA-256-Digest: ' + digest)
-manifest_lines.append(b'')
-manifest_mf = b'\r\n'.join(manifest_lines) + b'\r\n'
-entries['META-INF/MANIFEST.MF'] = manifest_mf
+print('4. Preparing APK entries (clean v2-only like original Gradle release)...')
+# Remove any v1 signature files so Android uses pure v2 verification cleanly
+for v1_file in ['META-INF/MANIFEST.MF', 'META-INF/CERT.SF', 'META-INF/CERT.RSA']:
+    entries.pop(v1_file, None)
 
-sf_lines = [
-    b'Signature-Version: 1.0',
-    b'Created-By: 1.0 (Android)',
-    b'SHA-256-Digest-Manifest: ' + base64.b64encode(hashlib.sha256(manifest_mf).digest())
-]
-for name in sorted(file_digests.keys()):
-    entry_data = f'Name: {name}\r\nSHA-256-Digest: {file_digests[name].decode()}\r\n\r\n'.encode()
-    sf_lines.append(b'')
-    sf_lines.append(f'Name: {name}'.encode())
-    sf_lines.append(b'SHA-256-Digest: ' + base64.b64encode(hashlib.sha256(entry_data).digest()))
-sf_lines.append(b'')
-cert_sf = b'\r\n'.join(sf_lines) + b'\r\n'
-entries['META-INF/CERT.SF'] = cert_sf
+print('5. Writing APK zip with 4-byte alignment for classes.dex & resources.arsc...')
+def write_aligned_stored(z_out, buf, name, data):
+    cur_pos = buf.tell()
+    header_end = cur_pos + 30 + len(name.encode('utf-8'))
+    rem = header_end % 4
+    zi = zipfile.ZipInfo(name, date_time=(2026, 11, 27, 4, 15, 0))
+    zi.compress_type = zipfile.ZIP_STORED
+    if rem != 0:
+        pad = (4 - rem) % 4
+        # Valid ZIP extra field [0xD935 (Android zipalign), pad, zero bytes] -> total 4 + pad bytes, shifts by pad mod 4!
+        zi.extra = struct.pack('<HH', 0xD935, pad) + (b'\x00' * pad)
+    z_out.writestr(zi, data)
 
-builder = pkcs7.PKCS7SignatureBuilder().set_data(cert_sf)
-builder = builder.add_signer(cert, key, hashes.SHA256())
-cert_rsa = builder.sign(serialization.Encoding.DER, [pkcs7.PKCS7Options.DetachedSignature])
-entries['META-INF/CERT.RSA'] = cert_rsa
-
-print('5. Writing APK zip with 4-byte alignment for stored files (Android 11+ requirement)...')
 zip_buffer = io.BytesIO()
 with zipfile.ZipFile(zip_buffer, 'w', compression=zipfile.ZIP_DEFLATED) as z_out:
-    for priority in ['META-INF/MANIFEST.MF', 'META-INF/CERT.SF', 'META-INF/CERT.RSA']:
-        z_out.writestr(priority, entries.pop(priority))
     for name in sorted(entries.keys()):
-        if name == 'resources.arsc':
-            # Calculate 4-byte alignment padding for ZipInfo.extra
-            cur_pos = zip_buffer.tell()
-            # Local file header is 30 bytes + len(filename) + len(extra)
-            header_end = cur_pos + 30 + len(name.encode('utf-8'))
-            pad = (4 - (header_end % 4)) % 4
-            zi = zipfile.ZipInfo(name, date_time=(2026, 11, 27, 3, 45, 0))
-            zi.compress_type = zipfile.ZIP_STORED
-            if pad > 0:
-                zi.extra = b'\x00' * pad
-            z_out.writestr(zi, entries[name])
+        if name in ('classes.dex', 'resources.arsc'):
+            write_aligned_stored(z_out, zip_buffer, name, entries[name])
         else:
             z_out.writestr(name, entries[name], compress_type=zipfile.ZIP_DEFLATED)
 
 raw_apk = zip_buffer.getvalue()
 
-print('6. Generating APK Signature Scheme v2 Block (Alg ID 0x0103 SHA256withRSA)...')
+print('6. Generating APK Signature Scheme v2 Block (Alg ID 0x0103 SHA256withRSA + 4KB alignment)...')
 eocd_pos = raw_apk.rfind(b'\x50\x4b\x05\x06')
 cd_offset = struct.unpack('<I', raw_apk[eocd_pos+16:eocd_pos+20])[0]
 cd_size = struct.unpack('<I', raw_apk[eocd_pos+12:eocd_pos+16])[0]
@@ -338,8 +312,21 @@ signers = lp(lp(signer))
 v2_pair = struct.pack('<I', 0x7109871a) + signers
 v2_pair_lp64 = struct.pack('<Q', len(v2_pair)) + v2_pair
 
-block_size = len(v2_pair_lp64) + 8 + 16
-apk_signing_block = struct.pack('<Q', block_size) + v2_pair_lp64 + struct.pack('<Q', block_size) + b'APK Sig Block 42'
+# Add 4096-byte Verity padding block (0x42726577) just like official Android apksigner
+unpadded_total = 8 + len(v2_pair_lp64) + 8 + 16
+rem4k = unpadded_total % 4096
+if rem4k != 0:
+    pad_needed = 4096 - rem4k
+    if pad_needed < 12:
+        pad_needed += 4096
+    pad_val_len = pad_needed - 12  # 8 (uint64 pair_len) + 4 (uint32 id)
+    pad_pair = struct.pack('<QI', 4 + pad_val_len, 0x42726577) + (b'\x00' * pad_val_len)
+else:
+    pad_pair = b''
+
+pairs_bytes = v2_pair_lp64 + pad_pair
+block_size = len(pairs_bytes) + 8 + 16
+apk_signing_block = struct.pack('<Q', block_size) + pairs_bytes + struct.pack('<Q', block_size) + b'APK Sig Block 42'
 
 new_cd_offset = cd_offset + len(apk_signing_block)
 eocd[16:20] = struct.pack('<I', new_cd_offset)

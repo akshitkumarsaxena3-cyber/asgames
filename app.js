@@ -4158,6 +4158,6 @@ function downloadDirectApk() {
 
 function trackApkDownload() {
     if (window.stateManager) {
-        window.stateManager.showToast('⬇️ AS Games APK download started! (1.16 MB)', 'success');
+        window.stateManager.showToast('⬇️ AS Games APK download started! (1.56 MB)', 'success');
     }
 }
