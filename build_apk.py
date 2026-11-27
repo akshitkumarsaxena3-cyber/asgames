@@ -8,10 +8,13 @@ from cryptography.hazmat.primitives.asymmetric import rsa, padding
 from cryptography.hazmat.primitives.serialization import pkcs7
 
 base_dir = os.path.dirname(os.path.abspath(__file__))
-apk_path = os.path.join(base_dir, 'downloads', 'BDGWin_v2.4.0.apk')
+old_apk_path = os.path.join(base_dir, 'downloads', 'BDGWin_v2.4.0.apk')
+apk_path = os.path.join(base_dir, 'downloads', 'ASGames_v2.4.0.apk')
 assets_dir = os.path.join(base_dir, 'assets')
 
-print('1. Generating high-resolution BDG Win Casino Icons...')
+source_apk = apk_path if os.path.exists(apk_path) else old_apk_path
+
+print('1. Generating high-resolution AS GAMES Gold Casino Icons...')
 def make_icon(size):
     img = Image.new('RGBA', (size, size), (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
@@ -42,22 +45,22 @@ def make_icon(size):
     draw.circle((cw - int(cr_w * 1.2), ch - cr_h), max(1, size // 100), fill=(239, 68, 68, 255))
     draw.circle((cw + int(cr_w * 1.2), ch - cr_h), max(1, size // 100), fill=(239, 68, 68, 255))
 
-    # Text BDG
+    # Text AS
     try:
-        f_main = ImageFont.truetype('arialbd.ttf', int(size * 0.26))
-        f_sub = ImageFont.truetype('arialbd.ttf', int(size * 0.15))
+        f_main = ImageFont.truetype('arialbd.ttf', int(size * 0.30))
+        f_sub = ImageFont.truetype('arialbd.ttf', int(size * 0.125))
         f_tag = ImageFont.truetype('arialbd.ttf', int(size * 0.065))
     except:
         f_main = f_sub = f_tag = ImageFont.load_default()
 
-    t1 = 'BDG'
+    t1 = 'AS'
     y1 = int(size * 0.42)
     draw.text((cw + max(1, size//120), y1 + max(1, size//120)), t1, font=f_main, fill=(0, 0, 0, 220), anchor='mm')
     draw.text((cw, y1), t1, font=f_main, fill=(255, 215, 0, 255), anchor='mm')
 
-    # Badge WIN
-    t2 = 'WIN'
-    bw, bh = int(size * 0.50), int(size * 0.16)
+    # Badge GAMES
+    t2 = 'GAMES'
+    bw, bh = int(size * 0.62), int(size * 0.17)
     bx = (size - bw) // 2
     by = int(size * 0.58)
     draw.rounded_rectangle([bx, by, bx + bw, by + bh], radius=bh // 2, fill=(217, 38, 38, 255), outline=(245, 196, 67, 255), width=max(1, size // 100))
@@ -65,7 +68,7 @@ def make_icon(size):
 
     # Subtext (if size >= 96)
     if size >= 96:
-        draw.text((cw, int(size * 0.84)), 'CASINO', font=f_tag, fill=(245, 196, 67, 230), anchor='mm')
+        draw.text((cw, int(size * 0.84)), 'VIP CASINO', font=f_tag, fill=(245, 196, 67, 230), anchor='mm')
 
     buf = io.BytesIO()
     img.save(buf, format='PNG')
@@ -82,13 +85,12 @@ icon_512 = make_icon(512)
 with open(os.path.join(assets_dir, 'icon-192.png'), 'wb') as f: f.write(icon_192)
 with open(os.path.join(assets_dir, 'icon-512.png'), 'wb') as f: f.write(icon_512)
 with open(os.path.join(assets_dir, 'icon-maskable.png'), 'wb') as f: f.write(icon_512)
-print('Assets icons updated!')
+print('Assets icons updated to AS GAMES!')
 
-print('2. Reading original APK and modifying resources...')
-with zipfile.ZipFile(apk_path, 'r') as z_in:
+print('2. Reading base APK and modifying resources...')
+with zipfile.ZipFile(source_apk, 'r') as z_in:
     entries = {}
     for item in z_in.infolist():
-        # Do not keep old META-INF signatures
         if item.filename.startswith('META-INF/') and any(item.filename.endswith(ext) for ext in ['.MF', '.SF', '.RSA', '.DSA', '.EC']):
             continue
         entries[item.filename] = z_in.read(item.filename)
@@ -101,29 +103,30 @@ pos = dex.find(old_url)
 if pos != -1:
     assert len(old_url) == len(new_url), 'URL length must match exactly'
     dex[pos:pos+len(new_url)] = new_url
-    # Update SHA-1
     sha1 = hashlib.sha1(dex[32:]).digest()
     dex[12:32] = sha1
-    # Update Adler32
     adler = zlib.adler32(dex[12:]) & 0xffffffff
     dex[8:12] = adler.to_bytes(4, 'little')
     entries['classes.dex'] = bytes(dex)
-    print('classes.dex URL successfully patched to:', new_url.decode())
-else:
-    print('Warning: old_url not found in classes.dex')
+    print('classes.dex URL patched to:', new_url.decode())
+elif new_url in dex:
+    print('classes.dex already points to:', new_url.decode())
 
 # 2b. Patch resources.arsc
 arsc = bytearray(entries['resources.arsc'])
-old_name = b'My Application'
-new_name = b'BDG Win Casino'
-pos = arsc.find(old_name)
-if pos != -1:
-    assert len(old_name) == len(new_name), 'Name length must match exactly'
-    arsc[pos:pos+len(new_name)] = new_name
-    entries['resources.arsc'] = bytes(arsc)
-    print('resources.arsc App Name successfully patched to:', new_name.decode())
-else:
-    print('Warning: old_name not found in resources.arsc')
+new_name = b'AS Games - VIP'
+replaced = False
+for old_name in [b'My Application', b'BDG Win Casino']:
+    pos = arsc.find(old_name)
+    if pos != -1:
+        assert len(old_name) == len(new_name), 'Name length must match exactly'
+        arsc[pos:pos+len(new_name)] = new_name
+        entries['resources.arsc'] = bytes(arsc)
+        print('resources.arsc App Name patched to:', new_name.decode())
+        replaced = True
+        break
+if not replaced and new_name in arsc:
+    print('resources.arsc already has App Name:', new_name.decode())
 
 # 2c. Replace icons
 for n in ['res/Gc.png', 'res/o-.png']:
@@ -136,7 +139,7 @@ for n in ['res/8c.png', 'res/Pb.png', 'res/yn.png']:
     if n in entries: entries[n] = icon_72
 for n in ['res/6t.png', 'res/zR.png', 'res/7i.png', 'res/9w.png', 'res/KM.png', 'res/RV.png', 'res/Wh.png', 'res/dY.png']:
     if n in entries: entries[n] = icon_48
-print('All icon drawables replaced with BDG Win Gold Icons!')
+print('All icon drawables replaced with AS GAMES Gold Icons!')
 
 # 2d. Update assets/offline.html
 offline_html = """<!DOCTYPE html>
@@ -144,7 +147,7 @@ offline_html = """<!DOCTYPE html>
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>BDG Win - Official Gaming App</title>
+    <title>AS Games - Official Gaming App</title>
     <style>
         * { margin:0; padding:0; box-sizing:border-box; }
         body {
@@ -173,7 +176,7 @@ offline_html = """<!DOCTYPE html>
             margin-bottom: 20px;
         }
         .crown { font-size: 28px; line-height: 1; }
-        .logo-text { font-size: 18px; font-weight: 900; color: #ffd700; letter-spacing: 1px; }
+        .logo-text { font-size: 20px; font-weight: 900; color: #ffd700; letter-spacing: 1px; }
         .logo-sub { font-size: 10px; font-weight: 800; background: #d92626; color: #fff; padding: 2px 8px; border-radius: 8px; margin-top: 2px; }
         h1 { font-size: 20px; font-weight: 800; color: #fae59f; margin-bottom: 8px; }
         p { font-size: 13.5px; color: #cbd5e1; line-height: 1.5; max-width: 320px; margin-bottom: 22px; }
@@ -195,12 +198,12 @@ offline_html = """<!DOCTYPE html>
 <body>
     <div class="logo-box">
         <div class="crown">👑</div>
-        <div class="logo-text">BDG</div>
-        <div class="logo-sub">WIN</div>
+        <div class="logo-text">AS</div>
+        <div class="logo-sub">GAMES</div>
     </div>
-    <h1>BDG Win Casino</h1>
+    <h1>AS Games VIP</h1>
     <p>Connecting to secure live gaming servers... Please check your internet connection.</p>
-    <a href="https://asgames.onrender.com/#/" class="btn-reload">🚀 Open BDG Win</a>
+    <a href="https://asgames.onrender.com/#/" class="btn-reload">🚀 Open AS Games</a>
     <script>
         setInterval(function() {
             if (navigator.onLine) {
@@ -215,8 +218,8 @@ entries['assets/offline.html'] = offline_html.encode('utf-8')
 print('3. Generating RSA Release Key and X.509 Certificate...')
 key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
 subject = issuer = x509.Name([
-    x509.NameAttribute(NameOID.COMMON_NAME, u'BDG Win Android Release'),
-    x509.NameAttribute(NameOID.ORGANIZATION_NAME, u'BDG Win Gaming'),
+    x509.NameAttribute(NameOID.COMMON_NAME, u'AS Games Android Release'),
+    x509.NameAttribute(NameOID.ORGANIZATION_NAME, u'AS Games VIP'),
     x509.NameAttribute(NameOID.COUNTRY_NAME, u'IN'),
 ])
 cert = x509.CertificateBuilder().subject_name(
@@ -262,13 +265,12 @@ sf_lines.append(b'')
 cert_sf = b'\r\n'.join(sf_lines) + b'\r\n'
 entries['META-INF/CERT.SF'] = cert_sf
 
-# Sign CERT.SF to make CERT.RSA
 builder = pkcs7.PKCS7SignatureBuilder().set_data(cert_sf)
 builder = builder.add_signer(cert, key, hashes.SHA256())
 cert_rsa = builder.sign(serialization.Encoding.DER, [pkcs7.PKCS7Options.DetachedSignature])
 entries['META-INF/CERT.RSA'] = cert_rsa
 
-print('5. Writing APK zip without compression on stored files and proper alignment...')
+print('5. Writing APK zip without compression on stored files...')
 zip_buffer = io.BytesIO()
 with zipfile.ZipFile(zip_buffer, 'w', compression=zipfile.ZIP_DEFLATED) as z_out:
     for priority in ['META-INF/MANIFEST.MF', 'META-INF/CERT.SF', 'META-INF/CERT.RSA']:
@@ -332,4 +334,4 @@ final_apk = sec1 + apk_signing_block + sec2 + bytes(eocd)
 with open(apk_path, 'wb') as f:
     f.write(final_apk)
 
-print(f'Done! Successfully built, patched and dual-signed (v1+v2) APK! Total size: {len(final_apk)} bytes')
+print(f'Done! Successfully built ASGames_v2.4.0.apk! Total size: {len(final_apk)} bytes')

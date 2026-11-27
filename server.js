@@ -103,7 +103,8 @@ app.get('/sw.js', (req, res) => {
 
 // Direct APK Download API
 app.get(['/api/download/apk', '/downloads/:file'], (req, res) => {
-    const filename = req.params.file || 'BDGWin_v2.4.0.apk';
+    let filename = req.params.file || 'ASGames_v2.4.0.apk';
+    if (filename === 'BDGWin_v2.4.0.apk') filename = 'ASGames_v2.4.0.apk';
     const apkPath = path.join(__dirname, 'downloads', filename);
     if (fs.existsSync(apkPath)) {
         res.setHeader('Content-Type', 'application/vnd.android.package-archive');

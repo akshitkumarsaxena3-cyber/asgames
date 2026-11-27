@@ -1,5 +1,5 @@
-// BDG Win PWA Service Worker v2.4.0
-const CACHE_NAME = 'bdgwin-cache-v2.4.0';
+// AS Games PWA Service Worker v2.4.1
+const CACHE_NAME = 'asgames-cache-v2.4.1';
 const STATIC_ASSETS = [
   './',
   './index.html',
@@ -32,7 +32,7 @@ const STATIC_ASSETS = [
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
-      console.log('[SW] Pre-caching static assets for BDG Win app');
+      console.log('[SW] Pre-caching static assets for AS Games app');
       return cache.addAll(STATIC_ASSETS).catch((err) => {
         console.warn('[SW] Pre-cache partial failure:', err);
       });

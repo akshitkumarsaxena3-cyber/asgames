@@ -4070,7 +4070,7 @@ window.addEventListener('appinstalled', () => {
     const floatingBar = document.getElementById('pwa-floating-install-bar');
     if (floatingBar) floatingBar.classList.add('hidden');
     if (window.stateManager) {
-        window.stateManager.showToast('🎉 BDG Win App Installed! Check your home screen.', 'success');
+        window.stateManager.showToast('🎉 AS Games App Installed! Check your home screen.', 'success');
     }
 });
 
@@ -4117,7 +4117,7 @@ async function triggerPwaInstallOrApk() {
             if (choiceResult.outcome === 'accepted') {
                 console.log('[PWA] User accepted the install prompt');
                 if (window.stateManager) {
-                    window.stateManager.showToast('📲 Installing BDG Win App...', 'success');
+                    window.stateManager.showToast('📲 Installing AS Games App...', 'success');
                 }
                 deferredPwaPrompt = null;
                 closeAppDownloadModal();
@@ -4145,8 +4145,8 @@ async function triggerPwaInstallOrApk() {
 
 function downloadDirectApk() {
     const a = document.createElement('a');
-    a.href = 'downloads/BDGWin_v2.4.0.apk';
-    a.download = 'BDGWin_v2.4.0.apk';
+    a.href = 'downloads/ASGames_v2.4.0.apk';
+    a.download = 'ASGames_v2.4.0.apk';
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -4155,6 +4155,6 @@ function downloadDirectApk() {
 
 function trackApkDownload() {
     if (window.stateManager) {
-        window.stateManager.showToast('⬇️ BDG Win APK download started! (1.65 MB)', 'success');
+        window.stateManager.showToast('⬇️ AS Games APK download started! (1.16 MB)', 'success');
     }
 }

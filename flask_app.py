@@ -4170,7 +4170,9 @@ def serve_sw():
 
 @app.route('/api/download/apk')
 @app.route('/downloads/<path:filename>')
-def serve_apk_download(filename='BDGWin_v2.4.0.apk'):
+def serve_apk_download(filename='ASGames_v2.4.0.apk'):
+    if filename == 'BDGWin_v2.4.0.apk':
+        filename = 'ASGames_v2.4.0.apk'
     dl_dir = os.path.join(BASE_DIR, 'downloads')
     return send_from_directory(dl_dir, filename, as_attachment=True, mimetype='application/vnd.android.package-archive')
 
