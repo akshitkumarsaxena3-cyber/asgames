@@ -625,10 +625,10 @@ class StateManager {
                     return;
                 }
 
-                // 5. 30-Minute Win Cooldown check
+                // 5. 15-Minute Win Cooldown check
                 if (window._currentTurnoverInfo && window._currentTurnoverInfo.win_cooldown_remaining_sec > 0) {
                     const remMin = Math.ceil(window._currentTurnoverInfo.win_cooldown_remaining_sec / 60);
-                    this.showToast(`Game jeetne ke 30 minute baad hi withdrawal lag sakti hai! Kripya ${remMin} minute baad koshish karein.`, 'warning');
+                    this.showToast(`Game jeetne ke 15 minute baad hi withdrawal lag sakti hai! Kripya ${remMin} minute baad koshish karein.`, 'warning');
                     return;
                 }
 

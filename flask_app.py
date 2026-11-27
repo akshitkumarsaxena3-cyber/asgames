@@ -1373,8 +1373,8 @@ def api_turnover_status():
         win_cooldown_remaining_sec = 0
         if last_win_ts > 0:
             elapsed_sec = time.time() - last_win_ts
-            if elapsed_sec < 1800:
-                win_cooldown_remaining_sec = int(1800 - elapsed_sec) + 1
+            if elapsed_sec < 900:
+                win_cooldown_remaining_sec = int(900 - elapsed_sec) + 1
 
         conn.commit()
 
@@ -1461,7 +1461,7 @@ def api_withdraw():
                 'message': f'Sirf game se jeete hue paise hi withdraw ho sakte hain! Aapka withdrawable jeeta hua balance ₹{win_bal:.2f} hai. Deposit balance game me khel kar jeetne ke baad hi withdraw hoga.'
             }), 400
 
-        # 5. 30-Minute Win Cooldown check: Game jeetne ke 30 minute baad hi jeete hue paise withdraw ho sakein
+        # 5. 15-Minute Win Cooldown check: Game jeetne ke 15 minute baad hi jeete hue paise withdraw ho sakein
         last_win_time = user.get('last_win_time')
         last_win_ts = 0
         if last_win_time:
@@ -1483,11 +1483,11 @@ def api_withdraw():
 
         if last_win_ts > 0:
             elapsed_minutes = (time.time() - last_win_ts) / 60.0
-            if elapsed_minutes < 30.0:
-                rem_min = int(30.0 - elapsed_minutes) + 1
+            if elapsed_minutes < 15.0:
+                rem_min = int(15.0 - elapsed_minutes) + 1
                 return jsonify({
                     'success': False,
-                    'message': f'Game jeetne ke 30 minute baad hi jeete hue paise withdraw ho sakte hain! Kripya {rem_min} minute baad dobara koshish karein.'
+                    'message': f'Game jeetne ke 15 minute baad hi jeete hue paise withdraw ho sakte hain! Kripya {rem_min} minute baad dobara koshish karein.'
                 }), 400
 
         # Deduct from Winning Balance

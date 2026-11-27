@@ -1497,7 +1497,7 @@ app.post('/api/wallet/withdraw', requireAuth, async (req, res) => {
             });
         }
 
-        // 5. 30-Minute Win Cooldown check: Game jeetne ke 30 minute baad hi jeete hue paise withdraw ho sakein
+        // 5. 15-Minute Win Cooldown check: Game jeetne ke 15 minute baad hi jeete hue paise withdraw ho sakein
         let lastWinTs = req.user.last_win_time ? new Date(req.user.last_win_time).getTime() : 0;
         if (!lastWinTs) {
             const latestWinTx = (DB.data.transactions || []).find(t => 
@@ -1511,11 +1511,11 @@ app.post('/api/wallet/withdraw', requireAuth, async (req, res) => {
 
         if (lastWinTs > 0) {
             const elapsedMinutes = (Date.now() - lastWinTs) / (1000 * 60);
-            if (elapsedMinutes < 30) {
-                const remainingMinutes = Math.ceil(30 - elapsedMinutes);
+            if (elapsedMinutes < 15) {
+                const remainingMinutes = Math.ceil(15 - elapsedMinutes);
                 return res.json({
                     success: false,
-                    message: `Game jeetne ke 30 minute baad hi jeete hue paise withdraw ho sakte hain! Kripya ${remainingMinutes} minute baad dobara koshish karein.`
+                    message: `Game jeetne ke 15 minute baad hi jeete hue paise withdraw ho sakte hain! Kripya ${remainingMinutes} minute baad dobara koshish karein.`
                 });
             }
         }
@@ -1605,8 +1605,8 @@ app.get('/api/wallet/turnover-status', requireAuth, async (req, res) => {
         let winCooldownRemainingSec = 0;
         if (lastWinTs > 0) {
             const elapsedSec = (Date.now() - lastWinTs) / 1000;
-            if (elapsedSec < 1800) {
-                winCooldownRemainingSec = Math.ceil(1800 - elapsedSec);
+            if (elapsedSec < 900) {
+                winCooldownRemainingSec = Math.ceil(900 - elapsedSec);
             }
         }
 
