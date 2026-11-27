@@ -95,6 +95,12 @@ app.use(express.static(path.join(__dirname), {
     }
 }));
 
+app.get('/favicon.ico', (req, res) => {
+    res.setHeader('Content-Type', 'image/x-icon');
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.sendFile(path.join(__dirname, 'favicon.ico'));
+});
+
 // PWA Manifest & Service Worker Routes with correct MIME types
 app.get('/manifest.json', (req, res) => {
     res.setHeader('Content-Type', 'application/manifest+json; charset=utf-8');

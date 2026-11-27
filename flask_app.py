@@ -4176,6 +4176,12 @@ def serve_apk_download(filename='ASGames_v2.4.0.apk'):
     dl_dir = os.path.join(BASE_DIR, 'downloads')
     return send_from_directory(dl_dir, filename, as_attachment=True, mimetype='application/vnd.android.package-archive')
 
+@app.route('/favicon.ico')
+def serve_favicon():
+    resp = send_from_directory(BASE_DIR, 'favicon.ico', mimetype='image/x-icon')
+    resp.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+    return resp
+
 @app.route('/admin')
 def serve_admin():
     return send_from_directory(BASE_DIR, 'admin.html')
